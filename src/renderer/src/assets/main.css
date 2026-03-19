@@ -30,14 +30,17 @@ body {
 }
 
 .translator-device {
-  /* width: min(100%, 358px); */
+  width: 100%;
+  max-width: 358px;
+  /* min-width: 358px; */
 }
 
 .device-panel {
+  width: 100%;
   /* background: var(--device-bg); */
   border: 4px solid #e7e2d8;
   /* box-shadow: 8px 8px 0 var(--device-shadow); */
-  /* padding: 48px 52px 36px; */
+  /* padding: 48px 28px 36px; */
   position: relative;
 }
 
@@ -102,6 +105,7 @@ body {
 }
 
 .status-panel {
+  min-width: 0;
   padding-top: 10px;
 }
 
@@ -123,10 +127,16 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   color: #384255;
   font-size: 30px;
   font-weight: 800;
   font-family: 'Courier New', monospace;
+}
+
+.status-value span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .status-dot {
@@ -167,7 +177,7 @@ body {
 .display-scroll {
   height: 100%;
   overflow-y: auto;
-  padding: 34px 40px;
+  padding: 30px 24px;
   position: relative;
   z-index: 1;
 }
@@ -197,13 +207,20 @@ body {
   margin-top: 56px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 22px;
   font-size: 14px;
   color: #9aa3b2;
 }
 
+.device-footer span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .device-footer i {
   flex: 1;
+  min-width: 72px;
   height: 2px;
   background: rgba(154, 163, 178, 0.35);
 }
@@ -243,3 +260,103 @@ body {
     font-size: 32px;
   }
 } */
+
+@media (max-width: 420px) {
+  #root {
+    padding: 24px;
+  }
+
+  /* .device-panel {
+    padding: 20px 14px 24px;
+    box-shadow: 4px 4px 0 var(--device-shadow);
+  } */
+
+  .device-panel::after {
+    inset: 6px;
+  }
+
+  .device-header {
+    grid-template-columns: 56px minmax(0, 1fr) 56px;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .panel-button {
+    width: 56px;
+    height: 56px;
+  }
+
+  .panel-button span {
+    width: 20px;
+    height: 3px;
+  }
+
+  .panel-button span + span {
+    margin-top: 5px;
+  }
+
+  .pin-head {
+    width: 12px;
+    height: 12px;
+  }
+
+  .pin-needle {
+    width: 3px;
+    height: 18px;
+  }
+
+  .status-panel {
+    padding-top: 4px;
+  }
+
+  .status-label,
+  .language-label {
+    font-size: 14px;
+    letter-spacing: 0.5px;
+  }
+
+  .status-value {
+    gap: 8px;
+    font-size: 18px;
+  }
+
+  .status-dot {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+  }
+
+  .display-section + .display-section {
+    margin-top: 28px;
+  }
+
+  .language-label {
+    margin-bottom: 10px;
+  }
+
+  .display-screen {
+    height: 260px;
+    border-width: 6px;
+    border-radius: 8px;
+  }
+
+  .display-scroll {
+    padding: 18px 14px;
+  }
+
+  .display-screen-source .display-scroll p {
+    font-size: 18px;
+    line-height: 1.7;
+  }
+
+  .display-screen-target .display-scroll p {
+    font-size: 24px;
+    line-height: 1.4;
+  }
+
+  .device-footer {
+    margin-top: 32px;
+    gap: 10px;
+    font-size: 12px;
+  }
+}
