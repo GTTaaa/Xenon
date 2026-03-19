@@ -1,34 +1,55 @@
-import Versions from './components/Versions'
-import electronLogo from './assets/electron.svg'
-
 function App(): React.JSX.Element {
-  const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
+  const sourceText = `Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.`
+  const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
 
   return (
-    <>
-      <img alt="logo" className="logo" src={electronLogo} />
-      <div className="creator">Powered by electron-vite</div>
-      <div className="text">
-        Build an Electron app with <span className="react">React</span>
-        &nbsp;and <span className="ts">TypeScript</span>
-      </div>
-      <p className="tip">
-        Please try pressing <code>F12</code> to open the devTool
-      </p>
-      <div className="actions">
-        <div className="action">
-          <a href="https://electron-vite.org/" target="_blank" rel="noreferrer">
-            Documentation
-          </a>
-        </div>
-        <div className="action">
-          <a target="_blank" rel="noreferrer" onClick={ipcHandle}>
-            Send IPC
-          </a>
-        </div>
-      </div>
-      <Versions></Versions>
-    </>
+    <main className="translator-device">
+      <section className="device-panel">
+        <header className="device-header">
+          <button className="panel-button" type="button" aria-label="打开菜单">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+
+          <div className="status-panel">
+            <p className="status-label">SYSTEM STATUS</p>
+            <div className="status-value">
+              <span className="status-dot" />
+              <span>READY_V1.1</span>
+            </div>
+          </div>
+
+          <button className="panel-button pin-button" type="button" aria-label="固定窗口">
+            <span className="pin-head" />
+            <span className="pin-needle" />
+          </button>
+        </header>
+
+        <section className="display-section">
+          <p className="language-label">SOURCE: ENGLISH</p>
+          <div className="display-screen display-screen-source">
+            <div className="display-scroll">
+              <p>{sourceText}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="display-section">
+          <p className="language-label">TARGET: CHINESE (SIM)</p>
+          <div className="display-screen display-screen-target">
+            <div className="display-scroll">
+              <p>{targetText}</p>
+            </div>
+          </div>
+        </section>
+
+        <footer className="device-footer">
+          <span>LABORATORY UNIT #402-B // ANALOG CONVERTER</span>
+          <i />
+        </footer>
+      </section>
+    </main>
   )
 }
 
