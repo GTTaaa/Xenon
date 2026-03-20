@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
 
 function App(): React.JSX.Element {
-  const sourceText = `Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.`
+  const [sourceText, setSourceText] = useState(
+    `Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.`
+  )
   const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
 
   return (
@@ -30,7 +33,14 @@ function App(): React.JSX.Element {
           <p className="language-label">SOURCE: ENGLISH</p>
           <div className="display-screen display-screen-source">
             <div className="display-scroll">
-              <p>{sourceText}</p>
+              <textarea
+                className="display-input"
+                value={sourceText}
+                onChange={(event) => setSourceText(event.target.value)}
+                placeholder="Type text here..."
+                spellCheck={false}
+                aria-label="源文本输入框"
+              />
             </div>
           </div>
         </section>
