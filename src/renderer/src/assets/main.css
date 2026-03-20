@@ -1,7 +1,7 @@
 @import './base.css';
 
 :root {
-  --device-bg: #E5E0D8;
+  --device-bg: #e5e0d8;
   --device-border: #c2b8ab;
   --device-shadow: #b7aea3;
   --panel-line: #657086;
@@ -49,61 +49,37 @@ body {
 
 .device-header {
   display: grid;
-  grid-template-columns: 92px 1fr 92px;
+  grid-template-columns: 38px 1fr 38px;
   align-items: start;
-  gap: 28px;
+  gap: 16px;
   margin-bottom: 42px;
   -webkit-app-region: drag;
 }
 
 .panel-button {
-  width: 92px;
-  height: 92px;
+  width: 38px;
+  height: 38px;
   border: 0;
   background: #d3d7dd;
   box-shadow:
-    inset -4px -4px 0 #4f596b,
-    inset 4px 4px 0 #dfe4ea;
+    inset -3px -3px 0 #4f596b,
+    inset 3px 3px 0 #dfe4ea;
   display: grid;
   place-items: center;
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
-.panel-button span {
+.panel-icon {
+  width: 20px;
+  height: 20px;
   display: block;
-  width: 34px;
-  height: 4px;
-  background: #3d4758;
-}
-
-.panel-button span + span {
-  margin-top: 8px;
-}
-
-.pin-button {
-  position: relative;
-}
-
-.pin-button span {
-  margin: 0;
-}
-
-.pin-head {
-  width: 18px;
-  height: 18px;
-  background: #3d4758;
-}
-
-.pin-needle {
-  width: 4px;
-  height: 28px;
-  background: #3d4758;
+  pointer-events: none;
 }
 
 .status-panel {
   min-width: 0;
-  padding-top: 10px;
+  /* padding-top: 10px; */
 }
 
 .status-label,
@@ -117,7 +93,8 @@ body {
 
 .status-label {
   font-size: 20px;
-  margin-bottom: 6px;
+  /* margin-bottom: 6px; */
+  font-family: 'Space Mono', monospace;
 }
 
 .status-value {
@@ -128,7 +105,7 @@ body {
   color: #384255;
   font-size: 30px;
   font-weight: 800;
-  font-family: 'Courier New', monospace;
+  font-family: 'Space Mono', monospace;
 }
 
 .status-value span:last-child {
@@ -166,7 +143,13 @@ body {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(120, 0, 0, 0.14), transparent 28%, transparent 72%, rgba(0, 0, 0, 0.22)),
+    linear-gradient(
+      180deg,
+      rgba(120, 0, 0, 0.14),
+      transparent 28%,
+      transparent 72%,
+      rgba(0, 0, 0, 0.22)
+    ),
     repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 6px);
   pointer-events: none;
 }
@@ -273,53 +256,42 @@ body {
   }
 
   .device-header {
-    grid-template-columns: 56px minmax(0, 1fr) 56px;
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
     gap: 10px;
-    margin-bottom: 28px;
+    margin-bottom: 16px;
   }
 
   .panel-button {
-    width: 56px;
-    height: 56px;
+    width: 38px;
+    height: 38px;
   }
 
-  .panel-button span {
-    width: 20px;
-    height: 3px;
-  }
-
-  .panel-button span + span {
-    margin-top: 5px;
-  }
-
-  .pin-head {
-    width: 12px;
-    height: 12px;
-  }
-
-  .pin-needle {
-    width: 3px;
+  .panel-icon {
+    width: 18px;
     height: 18px;
   }
 
   .status-panel {
-    padding-top: 4px;
+    /* padding-top: 4px; */
   }
 
   .status-label,
   .language-label {
-    font-size: 14px;
+    font-size: 10px;
     letter-spacing: 0.5px;
   }
 
   .status-value {
-    gap: 8px;
-    font-size: 18px;
+    gap: 4px;
+    font-size: 12px;
+    span {
+      font-weight: bold;
+    }
   }
 
   .status-dot {
-    width: 12px;
-    height: 12px;
+    width: 8px;
+    height: 8px;
     flex-shrink: 0;
   }
 
