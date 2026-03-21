@@ -49,7 +49,7 @@ function App(): React.JSX.Element {
           <p className="language-label">TARGET: CHINESE (SIM)</p>
           <div className="display-screen display-screen-target">
             <div className="display-scroll">
-              <p>{targetText}</p>
+              <p className="display-content">{targetText}</p>
             </div>
           </div>
         </section>

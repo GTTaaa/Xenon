@@ -166,10 +166,14 @@ body {
   overflow: hidden;
 }
 
-.display-scroll p {
+.display-content {
   margin: 0;
   padding: 30px 24px 30px 0;
   color: var(--screen-green);
+  font-size: 34px;
+  line-height: 1.9;
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
   text-shadow:
     0 0 8px rgba(0, 240, 90, 0.9),
     0 0 18px rgba(0, 240, 90, 0.45);
@@ -201,19 +205,6 @@ body {
 .display-input::placeholder {
   color: rgba(0, 240, 90, 0.45);
   text-shadow: none;
-}
-
-.display-screen-source .display-scroll p {
-  font-size: 34px;
-  line-height: 1.9;
-  font-family: 'Courier New', monospace;
-  font-weight: 700;
-}
-
-.display-screen-target .display-scroll p {
-  font-size: 46px;
-  line-height: 1.45;
-  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .device-footer {
@@ -354,20 +345,16 @@ body {
     padding-left: 12px;
   }
 
-  .display-screen-source .display-scroll p {
-    font-size: 18px;
-    line-height: 1.7;
+  .display-content {
+    padding: 12px 12px 12px 0;
+    font-size: 14px;
+    line-height: 1.5;
   }
 
   .display-input {
     padding: 12px 12px 12px 0;
     font-size: 14px;
     line-height: 1.5;
-  }
-
-  .display-screen-target .display-scroll p {
-    font-size: 24px;
-    line-height: 1.4;
   }
 
   .device-footer {
