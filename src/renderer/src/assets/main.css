@@ -288,9 +288,19 @@ body {
   }
 
   .device-header {
-    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
     gap: 10px;
     margin-bottom: 16px;
+  }
+
+  .panel-button:first-child {
+    justify-self: start;
+  }
+
+  .panel-button:last-child {
+    justify-self: end;
   }
 
   .panel-button {
