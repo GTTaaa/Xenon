@@ -1,27 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
-
-const sleep = (ms: number): Promise<void> => {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms)
-  })
-}
-
-// 模拟翻译函数，实际应用中应替换为调用翻译 API 的逻辑
-const fakeTranslate = async (text: string): Promise<string> => {
-  if (!text.trim()) return '等待翻译结果...'
-
-  await sleep(800)
-
-  const shouldFail = Math.random() < 0.3
-
-  if (shouldFail) {
-    throw new Error('翻译失败')
-  }
-
-  return `模拟翻译：${text}`
-}
+import { fakeTranslate } from './services/translator'
 
 function App(): React.JSX.Element {
   const [sourceText, setSourceText] = useState(
