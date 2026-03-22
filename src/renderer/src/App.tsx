@@ -1,13 +1,70 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
+
+const sleep = (ms: number): Promise<void> => {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
+// 模拟翻译函数，实际应用中应替换为调用翻译 API 的逻辑
+const fakeTranslate = async (text: string): Promise<string> => {
+  if (!text.trim()) return '等待翻译结果...'
+
+  await sleep(800)
+
+  const shouldFail = Math.random() < 0.3
+
+  if (shouldFail) {
+    throw new Error('翻译失败')
+  }
+
+  return `模拟翻译：${text}`
+}
 
 function App(): React.JSX.Element {
   const [sourceText, setSourceText] = useState(
     `Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.`
   )
-  const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
+  // const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
+  const [targetText, setTargetText] = useState('等待翻译结果...')
+  const [statusText, setStatusText] = useState('READY_V1.1')
 
+  useEffect(() => {
+    if (!sourceText.trim()) {
+      return
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await fakeTranslate(sourceText)
+        setTargetText(result)
+        setStatusText('READY_V1.1')
+      } catch {
+        setTargetText('翻译失败，请重试。')
+        setStatusText('ERROR')
+      }
+    }, 500)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [sourceText])
+
+  const handleSourceTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    const nextText = event.target.value
+
+    setSourceText(nextText)
+
+    if (!nextText.trim()) {
+      setTargetText('等待翻译结果...')
+      setStatusText('READY_V1.1')
+      return
+    }
+
+    setStatusText('TRANSLATING')
+  }
   return (
     <main className="translator-device">
       <section className="device-panel">
@@ -20,7 +77,7 @@ function App(): React.JSX.Element {
             <p className="status-label">SYSTEM STATUS</p>
             <div className="status-value">
               <span className="status-dot" />
-              <span>READY_V1.1</span>
+              <span>{statusText}</span>
             </div>
           </div>
 
@@ -36,7 +93,7 @@ function App(): React.JSX.Element {
               <textarea
                 className="display-input"
                 value={sourceText}
-                onChange={(event) => setSourceText(event.target.value)}
+                onChange={handleSourceTextChange}
                 placeholder="Type text here..."
                 spellCheck={false}
                 aria-label="源文本输入框"
