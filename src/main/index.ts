@@ -2,6 +2,27 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import type { TranslateRequest, TranslateResponse } from '../shared/translate'
+
+const sleep = (ms: number): Promise<void> => {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+const mockTranslate = async (request: TranslateRequest): Promise<TranslateResponse> => {
+  const { text, sourceLanguage, targetLanguage } = request
+  if (!text.trim) return { text: '等待翻译结果...' }
+  await sleep(800)
+  const shouldFail = Math.random() < 0.3
+
+  if (shouldFail) {
+    throw new Error('模拟翻译失败')
+  }
+  return {
+    text: `模拟翻译(${sourceLanguage} -> ${targetLanguage}):${text}`
+  }
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -55,6 +76,9 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
+  ipcMain.handle('translate:text', async (_, request: TranslateRequest) => {
+    return await mockTranslate(request)
+  })
   createWindow()
 
   app.on('activate', function () {
