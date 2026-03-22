@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
 
@@ -30,18 +30,24 @@ function App(): React.JSX.Element {
   // const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
   const [targetText, setTargetText] = useState('等待翻译结果...')
   const [statusText, setStatusText] = useState('READY_V1.1')
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
-    if (!sourceText.trim()) {
-      return
-    }
+    if (!sourceText.trim()) return
+
+    requestIdRef.current += 1
+    const currentRequestId = requestIdRef.current
 
     const timer = window.setTimeout(async () => {
       try {
         const result = await fakeTranslate(sourceText)
+        if (currentRequestId !== requestIdRef.current) return
+
         setTargetText(result)
         setStatusText('READY_V1.1')
       } catch {
+        if (currentRequestId !== requestIdRef.current) return
+
         setTargetText('翻译失败，请重试。')
         setStatusText('ERROR')
       }
