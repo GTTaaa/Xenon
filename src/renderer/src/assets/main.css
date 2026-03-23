@@ -112,12 +112,34 @@ body {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.status-value-idle {
+  color: #384255;
+}
+
+.status-value-translating {
+  color: #4a5568;
+}
+
+.status-value-error {
+  color: #8f3b3b;
+}
 
 .status-dot {
   width: 18px;
   height: 18px;
   border-radius: 50%;
   background: #2ac458;
+}
+.status-dot-idle {
+  background: #2ac458;
+}
+
+.status-dot-translating {
+  background: #e2b93b;
+}
+
+.status-dot-error {
+  background: #d94b4b;
 }
 
 .display-section + .display-section {
@@ -243,6 +265,19 @@ body {
 
 .display-input::-webkit-scrollbar-thumb {
   background: rgba(0, 240, 90, 0.22);
+}
+
+.translate-error {
+  margin-top: 10px;
+  color: #a84646;
+  font-size: 12px;
+  line-height: 1.4;
+  font-family: 'Space Mono', monospace;
+}
+
+.display-placeholder {
+  color: rgba(0, 240, 90, 0.45);
+  text-shadow: none;
 }
 
 /* @media (max-width: 768px) {

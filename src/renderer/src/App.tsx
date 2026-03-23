@@ -1,15 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
-import { fakeTranslate } from './services/translator'
+
+const SOURCE_LANGUAGE = 'ENGLISH'
+const TARGET_LANGUAGE = 'CHINESE (SIM)'
+type TranslateStatus = 'idle' | 'translating' | 'error'
+const STATUS_TEXT_MAP: Record<TranslateStatus, string> = {
+  idle: 'READY_V1.1',
+  translating: 'TRANSLATING',
+  error: 'ERROR'
+}
+const STATUS_DOT_CLASS_MAP: Record<TranslateStatus, string> = {
+  idle: 'status-dot status-dot-idle',
+  translating: 'status-dot status-dot-translating',
+  error: 'status-dot status-dot-error'
+}
+
+const STATUS_VALUE_CLASS_MAP: Record<TranslateStatus, string> = {
+  idle: 'status-value status-value-idle',
+  translating: 'status-value status-value-translating',
+  error: 'status-value status-value-error'
+}
 
 function App(): React.JSX.Element {
   const [sourceText, setSourceText] = useState(
     `Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.`
   )
   // const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
-  const [targetText, setTargetText] = useState('等待翻译结果...')
-  const [statusText, setStatusText] = useState('READY_V1.1')
+  // const [targetText, setTargetText] = useState('等待翻译结果...')
+  const [targetText, setTargetText] = useState('')
+  // const [statusText, setStatusText] = useState('READY_V1.1')
+  const [status, setStatus] = useState<TranslateStatus>('idle')
+  const [errorMessage, setErrorMessage] = useState('')
   const requestIdRef = useRef(0)
 
   useEffect(() => {
@@ -20,16 +42,22 @@ function App(): React.JSX.Element {
 
     const timer = window.setTimeout(async () => {
       try {
-        const result = await fakeTranslate(sourceText)
+        const response = await window.api.translateText({
+          text: sourceText,
+          sourceLanguage: SOURCE_LANGUAGE,
+          targetLanguage: TARGET_LANGUAGE
+        })
         if (currentRequestId !== requestIdRef.current) return
 
-        setTargetText(result)
-        setStatusText('READY_V1.1')
+        setTargetText(response.text)
+        setErrorMessage('')
+        setStatus('idle')
       } catch {
         if (currentRequestId !== requestIdRef.current) return
 
-        setTargetText('翻译失败，请重试。')
-        setStatusText('ERROR')
+        // setTargetText('翻译失败，请重试。')
+        setErrorMessage('翻译请求失败,请检查网络连接或稍后再试。')
+        setStatus('error')
       }
     }, 500)
 
@@ -44,12 +72,14 @@ function App(): React.JSX.Element {
     setSourceText(nextText)
 
     if (!nextText.trim()) {
-      setTargetText('等待翻译结果...')
-      setStatusText('READY_V1.1')
+      setTargetText('')
+      setErrorMessage('')
+      setStatus('idle')
       return
     }
 
-    setStatusText('TRANSLATING')
+    setErrorMessage('')
+    setStatus('translating')
   }
   return (
     <main className="translator-device">
@@ -61,9 +91,9 @@ function App(): React.JSX.Element {
 
           <div className="status-panel">
             <p className="status-label">SYSTEM STATUS</p>
-            <div className="status-value">
-              <span className="status-dot" />
-              <span>{statusText}</span>
+            <div className={STATUS_VALUE_CLASS_MAP[status]}>
+              <span className={STATUS_DOT_CLASS_MAP[status]} />
+              <span>{STATUS_TEXT_MAP[status]}</span>
             </div>
           </div>
 
@@ -73,7 +103,7 @@ function App(): React.JSX.Element {
         </header>
 
         <section className="display-section">
-          <p className="language-label">SOURCE: ENGLISH</p>
+          <p className="language-label">SOURCE: {SOURCE_LANGUAGE}</p>
           <div className="display-screen display-screen-source">
             <div className="display-scroll">
               <textarea
@@ -89,12 +119,16 @@ function App(): React.JSX.Element {
         </section>
 
         <section className="display-section">
-          <p className="language-label">TARGET: CHINESE (SIM)</p>
+          <p className="language-label">TARGET: {TARGET_LANGUAGE}</p>
           <div className="display-screen display-screen-target">
             <div className="display-scroll">
-              <p className="display-content">{targetText}</p>
+              <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
+                {targetText || '等待翻译结果...'}
+              </p>
             </div>
           </div>
+
+          {errorMessage ? <p className="translate-error">{errorMessage}</p> : null}
         </section>
 
         <footer className="device-footer">
