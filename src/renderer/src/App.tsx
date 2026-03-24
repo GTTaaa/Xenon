@@ -34,33 +34,38 @@ function App(): React.JSX.Element {
   const [errorMessage, setErrorMessage] = useState('')
   const requestIdRef = useRef(0)
 
+  const runTranslation = async (text: string, currentRequestId: number): Promise<void> => {
+    try {
+      const response = await window.api.translateText({
+        text,
+        sourceLanguage: SOURCE_LANGUAGE,
+        targetLanguage: TARGET_LANGUAGE
+      })
+
+      if (currentRequestId !== requestIdRef.current) return
+
+      setTargetText(response.text)
+      setErrorMessage('')
+      setStatus('idle')
+    } catch {
+      if (currentRequestId !== requestIdRef.current) {
+        return
+      }
+
+      setErrorMessage('翻译失败，请重试。')
+      setStatus('error')
+    }
+  }
+
   useEffect(() => {
     if (!sourceText.trim()) return
 
     requestIdRef.current += 1
     const currentRequestId = requestIdRef.current
 
+    // 防抖处理，避免频繁调用翻译接口
     const timer = window.setTimeout(async () => {
-      try {
-        // setErrorMessage('')
-        // setStatus('translating')
-        const response = await window.api.translateText({
-          text: sourceText,
-          sourceLanguage: SOURCE_LANGUAGE,
-          targetLanguage: TARGET_LANGUAGE
-        })
-        if (currentRequestId !== requestIdRef.current) return
-
-        setTargetText(response.text)
-        setErrorMessage('')
-        setStatus('idle')
-      } catch {
-        if (currentRequestId !== requestIdRef.current) return
-
-        // setTargetText('翻译失败，请重试。')
-        setErrorMessage('翻译请求失败,请检查网络连接或稍后再试。')
-        setStatus('error')
-      }
+      void runTranslation(sourceText, currentRequestId)
     }, 500)
 
     return () => {
