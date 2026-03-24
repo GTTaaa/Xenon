@@ -39,7 +39,8 @@ function App(): React.JSX.Element {
       const response = await window.api.translateText({
         text,
         sourceLanguage: SOURCE_LANGUAGE,
-        targetLanguage: TARGET_LANGUAGE
+        targetLanguage: TARGET_LANGUAGE,
+        options: { model: 'gpt-3.5-turbo' }
       })
 
       if (currentRequestId !== requestIdRef.current) return

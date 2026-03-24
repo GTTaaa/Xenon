@@ -11,7 +11,7 @@ const sleep = (ms: number): Promise<void> => {
 }
 
 const mockTranslate = async (request: TranslateRequest): Promise<TranslateResponse> => {
-  const { text, sourceLanguage, targetLanguage } = request
+  const { text, sourceLanguage, targetLanguage, options } = request
   if (!text.trim) return { text: '等待翻译结果...' }
   await sleep(800)
   const shouldFail = Math.random() < 0.3
@@ -20,7 +20,7 @@ const mockTranslate = async (request: TranslateRequest): Promise<TranslateRespon
     throw new Error('模拟翻译失败')
   }
   return {
-    text: `模拟翻译(${sourceLanguage} -> ${targetLanguage}):${text}`
+    text: `模拟翻译(${sourceLanguage} -> ${targetLanguage}/${options.model}):${text}`
   }
 }
 
