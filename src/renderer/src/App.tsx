@@ -42,6 +42,8 @@ function App(): React.JSX.Element {
 
     const timer = window.setTimeout(async () => {
       try {
+        // setErrorMessage('')
+        // setStatus('translating')
         const response = await window.api.translateText({
           text: sourceText,
           sourceLanguage: SOURCE_LANGUAGE,
@@ -117,7 +119,6 @@ function App(): React.JSX.Element {
             </div>
           </div>
         </section>
-
         <section className="display-section">
           <p className="language-label">TARGET: {TARGET_LANGUAGE}</p>
           <div className="display-screen display-screen-target">
