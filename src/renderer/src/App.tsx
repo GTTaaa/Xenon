@@ -40,7 +40,7 @@ function App(): React.JSX.Element {
         text,
         sourceLanguage: SOURCE_LANGUAGE,
         targetLanguage: TARGET_LANGUAGE,
-        options: { model: 'gpt-3.5-turbo' }
+        options: {}
       })
 
       if (currentRequestId !== requestIdRef.current) return

@@ -4,3 +4,9 @@ out
 .DS_Store
 .eslintcache
 *.log*
+
+.env
+.env.local
+.env.development.local
+.env.production.local
+!.env.example

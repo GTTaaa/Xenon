@@ -2,7 +2,7 @@ export interface TranslateRequest {
   text: string
   sourceLanguage: string
   targetLanguage: string
-  options: TranslateOptions
+  options?: TranslateOptions
 }
 
 export interface TranslateResponse {
@@ -10,5 +10,5 @@ export interface TranslateResponse {
 }
 
 export interface TranslateOptions {
-  model: string
+  model?: string
 }
