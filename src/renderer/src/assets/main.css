@@ -79,7 +79,8 @@ body {
 
 .status-panel {
   min-width: 0;
-  /* padding-top: 10px; */
+  display: grid;
+  gap: 8px;
 }
 
 .status-label,
@@ -93,17 +94,59 @@ body {
 
 .status-label {
   font-size: 20px;
-  /* margin-bottom: 6px; */
   font-family: 'Space Mono', monospace;
 }
-.model-label {
-  margin-top: 6px;
-  color: #7b8494;
-  font-size: 12px;
-  line-height: 1.2;
-  font-family: 'Space Mono', monospace;
-  letter-spacing: 0.5px;
+
+.display-section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 14px;
 }
+
+.display-section-header .language-label {
+  margin-bottom: 0;
+}
+
+.model-inline-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 10px 5px;
+  border-radius: 999px;
+  color: #435067;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(165, 156, 145, 0.1));
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.58),
+    inset -1px -1px 0 rgba(90, 99, 116, 0.08);
+}
+
+.model-inline-tag-label {
+  flex-shrink: 0;
+  color: #7c8698;
+  font-size: 9px;
+  line-height: 1;
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+}
+
+.model-inline-tag-value {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
 .status-value {
   display: flex;
   align-items: center;
@@ -356,13 +399,32 @@ body {
   }
 
   .status-panel {
-    /* padding-top: 4px; */
+    gap: 6px;
   }
 
   .status-label,
   .language-label {
     font-size: 10px;
     letter-spacing: 0.5px;
+  }
+
+  .display-section-header {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .model-inline-tag {
+    gap: 5px;
+    padding: 3px 6px 4px;
+  }
+
+  .model-inline-tag-label {
+    font-size: 7px;
+    letter-spacing: 0.9px;
+  }
+
+  .model-inline-tag-value {
+    font-size: 9px;
   }
 
   .status-value {

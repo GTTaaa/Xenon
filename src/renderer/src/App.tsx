@@ -54,39 +54,8 @@ function App(): React.JSX.Element {
   // const [statusText, setStatusText] = useState('READY_V1.1')
   const [status, setStatus] = useState<TranslateStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
-  const [debugMessage, setDebugMessage] = useState('')
   const requestIdRef = useRef(0)
   const [selectedModel] = useState(DEFAULT_MODEL)
-
-  const runTranslation = async (text: string, currentRequestId: number): Promise<void> => {
-    console.log('[renderer] runTranslation start', {
-      text,
-      requestId: currentRequestId
-    })
-    const response = await window.api.translateText({
-      text,
-      sourceLanguage: SOURCE_LANGUAGE,
-      targetLanguage: TARGET_LANGUAGE,
-      options: {
-        model: selectedModel
-      }
-    })
-
-    if (currentRequestId !== requestIdRef.current) return
-
-    if (response.ok) {
-      setTargetText(response.text)
-      setErrorMessage('')
-      setDebugMessage('')
-      setStatus('idle')
-      return
-    }
-
-    setErrorMessage(getUserFriendlyErrorMessage(response.error.code))
-    setDebugMessage(response.error.message)
-    console.error('[renderer] translate error', response.error.code, response.error.message)
-    setStatus('error')
-  }
 
   useEffect(() => {
     if (!sourceText.trim()) return
@@ -96,13 +65,38 @@ function App(): React.JSX.Element {
 
     // 防抖处理，避免频繁调用翻译接口
     const timer = window.setTimeout(async () => {
-      void runTranslation(sourceText, currentRequestId)
+      console.log('[renderer] runTranslation start', {
+        text: sourceText,
+        requestId: currentRequestId
+      })
+
+      const response = await window.api.translateText({
+        text: sourceText,
+        sourceLanguage: SOURCE_LANGUAGE,
+        targetLanguage: TARGET_LANGUAGE,
+        options: {
+          model: selectedModel
+        }
+      })
+
+      if (currentRequestId !== requestIdRef.current) return
+
+      if (response.ok) {
+        setTargetText(response.text)
+        setErrorMessage('')
+        setStatus('idle')
+        return
+      }
+
+      setErrorMessage(getUserFriendlyErrorMessage(response.error.code))
+      console.error('[renderer] translate error', response.error.code, response.error.message)
+      setStatus('error')
     }, 500)
 
     return () => {
       window.clearTimeout(timer)
     }
-  }, [sourceText])
+  }, [selectedModel, sourceText])
 
   const handleSourceTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
     const nextText = event.target.value
@@ -112,13 +106,11 @@ function App(): React.JSX.Element {
     if (!nextText.trim()) {
       setTargetText('')
       setErrorMessage('')
-      setDebugMessage('')
       setStatus('idle')
       return
     }
 
     setErrorMessage('')
-    setDebugMessage('')
     setStatus('translating')
   }
   return (
@@ -130,7 +122,6 @@ function App(): React.JSX.Element {
           </button>
 
           <div className="status-panel">
-            {/* <p className="model-label">MODEL: {selectedModel}</p> */}
             <p className="status-label">SYSTEM STATUS</p>
             <div className={STATUS_VALUE_CLASS_MAP[status]}>
               <span className={STATUS_DOT_CLASS_MAP[status]} />
@@ -144,7 +135,13 @@ function App(): React.JSX.Element {
         </header>
 
         <section className="display-section">
-          <p className="language-label">SOURCE: {SOURCE_LANGUAGE}</p>
+          <div className="display-section-header">
+            <p className="language-label">SOURCE: {SOURCE_LANGUAGE}</p>
+            <div className="model-inline-tag" aria-label={`当前模型 ${selectedModel}`}>
+              <span className="model-inline-tag-label">MODEL</span>
+              <span className="model-inline-tag-value">{selectedModel}</span>
+            </div>
+          </div>
           <div className="display-screen display-screen-source">
             <div className="display-scroll">
               <textarea
