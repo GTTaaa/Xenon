@@ -39,27 +39,24 @@ function App(): React.JSX.Element {
       text,
       requestId: currentRequestId
     })
-    try {
-      const response = await window.api.translateText({
-        text,
-        sourceLanguage: SOURCE_LANGUAGE,
-        targetLanguage: TARGET_LANGUAGE,
-        options: {}
-      })
+    const response = await window.api.translateText({
+      text,
+      sourceLanguage: SOURCE_LANGUAGE,
+      targetLanguage: TARGET_LANGUAGE,
+      options: {}
+    })
 
-      if (currentRequestId !== requestIdRef.current) return
-      console.log(response)
+    if (currentRequestId !== requestIdRef.current) return
+
+    if (response.ok) {
       setTargetText(response.text)
       setErrorMessage('')
       setStatus('idle')
-    } catch {
-      if (currentRequestId !== requestIdRef.current) {
-        return
-      }
-
-      setErrorMessage('翻译失败，请重试。')
-      setStatus('error')
+      return
     }
+
+    setErrorMessage(response.error.message)
+    setStatus('error')
   }
 
   useEffect(() => {
