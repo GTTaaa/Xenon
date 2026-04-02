@@ -5,6 +5,7 @@ import pinIcon from './assets/pin-icon.svg'
 const SOURCE_LANGUAGE = 'ENGLISH'
 const TARGET_LANGUAGE = 'CHINESE (SIM)'
 type TranslateStatus = 'idle' | 'translating' | 'error'
+const DEFAULT_MODEL = 'step-3.5-flash'
 const STATUS_TEXT_MAP: Record<TranslateStatus, string> = {
   idle: 'READY_V1.1',
   translating: 'TRANSLATING',
@@ -22,6 +23,27 @@ const STATUS_VALUE_CLASS_MAP: Record<TranslateStatus, string> = {
   error: 'status-value status-value-error'
 }
 
+const getUserFriendlyErrorMessage = (code: string): string => {
+  switch (code) {
+    case 'CONFIG_MISSING_API_KEY':
+      return '请先配置模型密钥'
+    case 'CONFIG_MISSING_BASE_URL':
+      return '请先配置模型服务地址'
+    case 'HTTP_401':
+      return '模型服务鉴权失败，请检查密钥'
+    case 'HTTP_403':
+      return '当前模型服务拒绝访问'
+    case 'HTTP_429':
+      return '请求过于频繁，请稍后再试'
+    case 'NETWORK_ERROR':
+      return '无法连接到模型服务'
+    case 'EMPTY_RESPONSE':
+      return '模型没有返回可用结果'
+    default:
+      return '翻译失败，请重试'
+  }
+}
+
 function App(): React.JSX.Element {
   const [sourceText, setSourceText] = useState(
     `Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.`
@@ -32,7 +54,9 @@ function App(): React.JSX.Element {
   // const [statusText, setStatusText] = useState('READY_V1.1')
   const [status, setStatus] = useState<TranslateStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [debugMessage, setDebugMessage] = useState('')
   const requestIdRef = useRef(0)
+  const [selectedModel] = useState(DEFAULT_MODEL)
 
   const runTranslation = async (text: string, currentRequestId: number): Promise<void> => {
     console.log('[renderer] runTranslation start', {
@@ -43,7 +67,9 @@ function App(): React.JSX.Element {
       text,
       sourceLanguage: SOURCE_LANGUAGE,
       targetLanguage: TARGET_LANGUAGE,
-      options: {}
+      options: {
+        model: selectedModel
+      }
     })
 
     if (currentRequestId !== requestIdRef.current) return
@@ -51,11 +77,14 @@ function App(): React.JSX.Element {
     if (response.ok) {
       setTargetText(response.text)
       setErrorMessage('')
+      setDebugMessage('')
       setStatus('idle')
       return
     }
 
-    setErrorMessage(response.error.message)
+    setErrorMessage(getUserFriendlyErrorMessage(response.error.code))
+    setDebugMessage(response.error.message)
+    console.error('[renderer] translate error', response.error.code, response.error.message)
     setStatus('error')
   }
 
@@ -83,11 +112,13 @@ function App(): React.JSX.Element {
     if (!nextText.trim()) {
       setTargetText('')
       setErrorMessage('')
+      setDebugMessage('')
       setStatus('idle')
       return
     }
 
     setErrorMessage('')
+    setDebugMessage('')
     setStatus('translating')
   }
   return (
@@ -99,6 +130,7 @@ function App(): React.JSX.Element {
           </button>
 
           <div className="status-panel">
+            {/* <p className="model-label">MODEL: {selectedModel}</p> */}
             <p className="status-label">SYSTEM STATUS</p>
             <div className={STATUS_VALUE_CLASS_MAP[status]}>
               <span className={STATUS_DOT_CLASS_MAP[status]} />

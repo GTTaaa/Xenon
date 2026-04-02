@@ -62,8 +62,8 @@ body {
   border: 0;
   background: #d3d7dd;
   box-shadow:
-    inset -3px -3px 0 #4f596b,
-    inset 3px 3px 0 #dfe4ea;
+    inset -2px -2px 0 #4f596b,
+    inset 2px 2px 0 #dfe4ea;
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -96,7 +96,14 @@ body {
   /* margin-bottom: 6px; */
   font-family: 'Space Mono', monospace;
 }
-
+.model-label {
+  margin-top: 6px;
+  color: #7b8494;
+  font-size: 12px;
+  line-height: 1.2;
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 0.5px;
+}
 .status-value {
   display: flex;
   align-items: center;
@@ -196,9 +203,9 @@ body {
   line-height: 1.9;
   font-family: 'Courier New', monospace;
   font-weight: 700;
-  text-shadow:
+  /* text-shadow:
     0 0 8px rgba(0, 240, 90, 0.9),
-    0 0 18px rgba(0, 240, 90, 0.45);
+    0 0 18px rgba(0, 240, 90, 0.45); */
 }
 
 .display-input {
@@ -217,9 +224,9 @@ body {
   line-height: 1.9;
   font-family: 'Courier New', monospace;
   font-weight: 700;
-  text-shadow:
+  /* text-shadow:
     0 0 8px rgba(0, 240, 90, 0.9),
-    0 0 18px rgba(0, 240, 90, 0.45);
+    0 0 18px rgba(0, 240, 90, 0.45); */
   overflow-y: auto;
   user-select: text;
 }
@@ -393,13 +400,13 @@ body {
   .display-content {
     padding: 12px 12px 12px 0;
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.6;
   }
 
   .display-input {
     padding: 12px 12px 12px 0;
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.4;
   }
 
   .device-footer {
