@@ -8,15 +8,33 @@ interface ProviderConfig {
   defaultModel: string
 }
 
+class TranslateServiceError extends Error {
+  code: string
+
+  constructor(code: string, message: string) {
+    super(message)
+    this.name = 'TranslateServiceError'
+    this.code = code
+  }
+}
+
 const getProviderConfig = (): ProviderConfig => {
   const provider = (process.env.TRANSLATE_PROVIDER ?? 'mock') as TranslateProvider
-
-  return {
+  const config = {
     provider,
     apiKey: process.env.LLM_API_KEY ?? '',
     baseUrl: process.env.LLM_BASE_URL ?? '',
     defaultModel: process.env.LLM_MODEL ?? 'gpt-4o-mini'
   }
+
+  console.log('[main] provider config', {
+    provider: config.provider,
+    hasApiKey: Boolean(config.apiKey),
+    baseUrl: config.baseUrl,
+    defaultModel: config.defaultModel
+  })
+
+  return config
 }
 
 const sleep = (ms: number): Promise<void> => {
@@ -32,10 +50,10 @@ const mockTranslate = async (request: TranslateRequest): Promise<TranslateRespon
 
   await sleep(800)
 
-  const shouldFail = Math.random() < 0.3
-  if (shouldFail) {
-    throw new Error('翻译失败')
-  }
+  // const shouldFail = Math.random() < 0.3
+  // if (shouldFail) {
+  //   throw new Error('翻译失败')
+  // }
 
   return {
     text: `模拟翻译(${sourceLanguage} -> ${targetLanguage}/${options?.model ?? 'default'}):${text}`
@@ -47,66 +65,84 @@ const translateWithOpenAICompatible = async (
   config: ProviderConfig
 ): Promise<TranslateResponse> => {
   if (!config.apiKey) {
-    throw new Error('请配置大模型对应的 key')
+    throw new TranslateServiceError('CONFIG_MISSING_API_KEY', '缺少 LLM_API_KEY')
   }
   if (!config.baseUrl) {
-    throw new Error('请配置大模型对应的 url')
+    throw new TranslateServiceError('CONFIG_MISSING_BASE_URL', '缺少 LLM_BASE_URL')
   }
   const endpoint = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`
   const model = request.options?.model || config.defaultModel
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: 'developer',
-          content:
-            'You are a translation engine. Translate the user text accurately. Output only the translated text.'
-        },
-        {
-          role: 'user',
-          content: `Source language: ${request.sourceLanguage}
+  // console.log('[main] request endpoint', endpoint)
+  // console.log('[main] request model', model)
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a translation engine. Translate the user text accurately. Output only the translated text.'
+          },
+          {
+            role: 'user',
+            content: `Source language: ${request.sourceLanguage}
                     Target language: ${request.targetLanguage}
                     Text:${request.text}`
-        }
-      ]
+          }
+        ]
+      })
     })
-  })
-  const data = (await response.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string
+    const data = (await response.json()) as {
+      choices?: Array<{
+        message?: {
+          content?: string
+        }
+      }>
+      error?: {
+        message?: string
       }
-    }>
-    error?: {
-      message?: string
     }
+
+    if (!response.ok) {
+      throw new TranslateServiceError(
+        `HTTP_${response.status}`,
+        data.error?.message ?? `模型请求失败：${response.status}`
+      )
+    }
+
+    const text = data.choices?.[0]?.message?.content?.trim()
+
+    if (!text) {
+      throw new TranslateServiceError('EMPTY_RESPONSE', '模型返回内容为空')
+    }
+
+    return { text }
+  } catch (error: unknown) {
+    if (error instanceof TranslateServiceError) {
+      throw error
+    }
+
+    throw new TranslateServiceError('NETWORK_ERROR', '无法连接到模型服务')
   }
-
-  if (!response.ok) {
-    throw new Error(data.error?.message ?? `模型请求失败：${response.status}`)
-  }
-
-  const text = data.choices?.[0]?.message?.content?.trim()
-
-  if (!text) {
-    throw new Error('模型返回内容为空')
-  }
-
-  return { text }
 }
 
 export const translateText = async (request: TranslateRequest): Promise<TranslateResponse> => {
+  // console.log('[main] translateText called')
+  console.log('[main] provider =', process.env.TRANSLATE_PROVIDER)
+
   const config = getProviderConfig()
   if (config.provider === 'mock') {
+    // console.log('[main] using mock provider')
     return await mockTranslate(request)
   }
   if (config.provider === 'openai-compatible') {
+    // console.log('[main] using openai-compatible provider')
     return await translateWithOpenAICompatible(request, config)
   }
 

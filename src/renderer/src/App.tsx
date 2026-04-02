@@ -35,6 +35,10 @@ function App(): React.JSX.Element {
   const requestIdRef = useRef(0)
 
   const runTranslation = async (text: string, currentRequestId: number): Promise<void> => {
+    console.log('[renderer] runTranslation start', {
+      text,
+      requestId: currentRequestId
+    })
     try {
       const response = await window.api.translateText({
         text,
@@ -44,7 +48,7 @@ function App(): React.JSX.Element {
       })
 
       if (currentRequestId !== requestIdRef.current) return
-
+      console.log(response)
       setTargetText(response.text)
       setErrorMessage('')
       setStatus('idle')

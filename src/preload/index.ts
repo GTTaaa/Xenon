@@ -5,6 +5,7 @@ import type { TranslateRequest, TranslateResponse } from '../shared/translate'
 // Custom APIs for renderer
 const api = {
   translateText: (request: TranslateRequest): Promise<TranslateResponse> => {
+    console.log('[preload] translateText invoke', request)
     return ipcRenderer.invoke('translate:text', request)
   }
 }

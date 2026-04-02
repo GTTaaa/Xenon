@@ -1,10 +1,14 @@
-import 'dotenv/config'
+import { config as loadEnv } from 'dotenv'
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import type { TranslateRequest } from '../shared/translate'
 import { translateText } from './services/translator'
+
+loadEnv({ path: resolve(process.cwd(), '.env.local') })
+
+console.log('[main] process booted')
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -59,6 +63,7 @@ app.whenReady().then(() => {
   ipcMain.on('ping', () => console.log('pong'))
 
   ipcMain.handle('translate:text', async (_, request: TranslateRequest) => {
+    console.log('[main] ipcMain.handle translate:text', request)
     return await translateText(request)
   })
   createWindow()
