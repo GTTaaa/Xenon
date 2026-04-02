@@ -50,7 +50,7 @@ body {
 .device-header {
   display: grid;
   grid-template-columns: 38px 1fr 38px;
-  align-items: start;
+  align-items: end;
   gap: 16px;
   margin-bottom: 42px;
   -webkit-app-region: drag;
@@ -81,6 +81,7 @@ body {
   min-width: 0;
   display: grid;
   gap: 8px;
+  align-self: end;
 }
 
 .status-label,
@@ -94,6 +95,7 @@ body {
 
 .status-label {
   font-size: 20px;
+  line-height: 1;
   font-family: 'Space Mono', monospace;
 }
 
@@ -111,12 +113,13 @@ body {
 }
 
 .model-inline-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 7px;
   min-width: 0;
   overflow: hidden;
-  padding: 4px 10px 5px;
+  padding: 5px 10px 4px;
   border-radius: 999px;
   color: #435067;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(165, 156, 145, 0.1));
@@ -131,7 +134,8 @@ body {
   font-size: 9px;
   line-height: 1;
   font-family: 'Space Mono', monospace;
-  letter-spacing: 1.3px;
+  letter-spacing: 1.1px;
+  opacity: 0.82;
   text-transform: uppercase;
 }
 
@@ -139,12 +143,12 @@ body {
   min-width: 0;
   overflow: hidden;
   font-size: 13px;
-  line-height: 1.1;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: 'Space Mono', monospace;
   font-weight: 700;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.1px;
 }
 
 .status-value {
@@ -154,6 +158,7 @@ body {
   min-width: 0;
   color: #384255;
   font-size: 30px;
+  line-height: 1;
   font-weight: 800;
   font-family: 'Space Mono', monospace;
 }
@@ -375,7 +380,7 @@ body {
   .device-header {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: start;
+    align-items: end;
     gap: 10px;
     margin-bottom: 16px;
   }
@@ -414,17 +419,18 @@ body {
   }
 
   .model-inline-tag {
-    gap: 5px;
-    padding: 3px 6px 4px;
+    column-gap: 4px;
+    padding: 3px 6px;
   }
 
   .model-inline-tag-label {
     font-size: 7px;
-    letter-spacing: 0.9px;
+    letter-spacing: 0.7px;
   }
 
   .model-inline-tag-value {
     font-size: 9px;
+    line-height: 1;
   }
 
   .status-value {
