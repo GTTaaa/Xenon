@@ -358,6 +358,82 @@ body {
   pointer-events: none;
 }
 
+.screen-control-rail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 0;
+}
+
+.screen-control-caption {
+  color: #8a93a1;
+  font-size: 9px;
+  line-height: 1;
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 1.4px;
+}
+
+.screen-control-button {
+  min-width: 118px;
+  border: 0;
+  padding: 8px 14px 9px;
+  background: linear-gradient(180deg, #d6dbe0, #c7cdd4);
+  color: #2f3848;
+  box-shadow:
+    inset -2px -2px 0 #556073,
+    inset 2px 2px 0 #eef2f6;
+  font-size: 11px;
+  line-height: 1;
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    filter 120ms ease,
+    opacity 120ms ease;
+}
+
+.screen-control-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+
+.screen-control-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow:
+    inset 2px 2px 0 #556073,
+    inset -2px -2px 0 #eef2f6;
+}
+
+.screen-control-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.screen-control-button-text {
+  display: block;
+}
+
+.screen-control-button-copy {
+  min-width: 128px;
+}
+
+.screen-control-button-done {
+  color: #1f5130;
+}
+
+.screen-control-rail-target {
+  justify-content: space-between;
+}
+
+.screen-control-rail-target .screen-control-caption {
+  order: 2;
+  padding-left: 10px;
+}
+
 .display-scroll {
   height: 100%;
   overflow-y: auto;
@@ -626,6 +702,28 @@ body {
     height: 260px;
     border-width: 2px;
     border-radius: 2px;
+  }
+
+  .screen-control-rail {
+    gap: 8px;
+    margin-top: 8px;
+    padding: 0;
+  }
+
+  .screen-control-caption {
+    font-size: 7px;
+    letter-spacing: 1px;
+  }
+
+  .screen-control-button {
+    min-width: 78px;
+    padding: 6px 8px 7px;
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .screen-control-button-copy {
+    min-width: 88px;
   }
 
   .display-scroll {

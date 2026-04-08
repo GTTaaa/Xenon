@@ -78,6 +78,7 @@ function App(): React.JSX.Element {
   // const [statusText, setStatusText] = useState('READY_V1.1')
   const [status, setStatus] = useState<TranslateStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const requestIdRef = useRef(0)
   const [selectedModel, setSelectedModel] = useState(() => {
     const savedModel = localStorage.getItem('selectedModel')
@@ -163,6 +164,18 @@ function App(): React.JSX.Element {
     localStorage.setItem('selectedModel', selectedModel)
   }, [selectedModel])
 
+  useEffect(() => {
+    if (copyState === 'idle') return
+
+    const timer = window.setTimeout(() => {
+      setCopyState('idle')
+    }, 1800)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [copyState])
+
   const handleSourceTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
     const nextText = event.target.value
 
@@ -188,6 +201,30 @@ function App(): React.JSX.Element {
       setStatus('translating')
     }
   }
+
+  const handleClearSource = (): void => {
+    requestIdRef.current += 1
+    setSourceText('')
+    setTargetText('')
+    setErrorMessage('')
+    setStatus('idle')
+    setCopyState('idle')
+  }
+
+  const handleCopyTarget = async (): Promise<void> => {
+    if (!targetText.trim()) return
+
+    try {
+      await navigator.clipboard.writeText(targetText)
+      setCopyState('done')
+    } catch (error) {
+      console.error('[renderer] copy target failed', error)
+      setCopyState('error')
+    }
+  }
+
+  const copyButtonText =
+    copyState === 'done' ? 'COPIED' : copyState === 'error' ? 'COPY FAIL' : 'COPY OUTPUT'
 
   return (
     <main className="translator-device">
@@ -273,6 +310,17 @@ function App(): React.JSX.Element {
               />
             </div>
           </div>
+          <div className="screen-control-rail screen-control-rail-source">
+            <span className="screen-control-caption">INPUT BUFFER</span>
+            <button
+              className="screen-control-button screen-control-button-clear"
+              type="button"
+              onClick={handleClearSource}
+              disabled={!sourceText.trim()}
+            >
+              <span className="screen-control-button-text">CLEAR INPUT</span>
+            </button>
+          </div>
         </section>
         <section className="display-section">
           <p className="language-label">TARGET: {TARGET_LANGUAGE}</p>
@@ -282,6 +330,17 @@ function App(): React.JSX.Element {
                 {targetText || '等待翻译结果...'}
               </p>
             </div>
+          </div>
+          <div className="screen-control-rail screen-control-rail-target">
+            <span className="screen-control-caption">OUTPUT CHANNEL</span>
+            <button
+              className={`screen-control-button screen-control-button-copy ${copyState === 'done' ? 'screen-control-button-done' : ''}`}
+              type="button"
+              onClick={() => void handleCopyTarget()}
+              disabled={!targetText.trim()}
+            >
+              <span className="screen-control-button-text">{copyButtonText}</span>
+            </button>
           </div>
 
           {errorMessage ? <p className="translate-error">{errorMessage}</p> : null}
