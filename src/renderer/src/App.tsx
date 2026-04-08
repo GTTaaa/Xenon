@@ -79,7 +79,18 @@ function App(): React.JSX.Element {
   const [status, setStatus] = useState<TranslateStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const requestIdRef = useRef(0)
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
+  const [selectedModel, setSelectedModel] = useState(() => {
+    const savedModel = localStorage.getItem('selectedModel')
+    if (!savedModel) return DEFAULT_MODEL
+
+    const isValidModel = MODEL_OPTIONS.some((option) => option.value === savedModel)
+    if (!isValidModel) {
+      localStorage.removeItem('selectedModel')
+      return DEFAULT_MODEL
+    }
+
+    return savedModel
+  })
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const modelSelectorRef = useRef<HTMLDivElement | null>(null)
 
@@ -147,6 +158,10 @@ function App(): React.JSX.Element {
       window.clearTimeout(timer)
     }
   }, [selectedModel, sourceText])
+
+  useEffect(() => {
+    localStorage.setItem('selectedModel', selectedModel)
+  }, [selectedModel])
 
   const handleSourceTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
     const nextText = event.target.value
