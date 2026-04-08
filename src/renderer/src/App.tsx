@@ -5,7 +5,31 @@ import pinIcon from './assets/pin-icon.svg'
 const SOURCE_LANGUAGE = 'ENGLISH'
 const TARGET_LANGUAGE = 'CHINESE (SIM)'
 type TranslateStatus = 'idle' | 'translating' | 'error'
+type ModelOption = {
+  value: string
+  code: string
+  profile: string
+}
+
 const DEFAULT_MODEL = 'step-3.5-flash'
+const MODEL_OPTIONS: ModelOption[] = [
+  {
+    value: 'step-3.5-flash',
+    code: 'A1',
+    profile: 'FAST RESPONSE'
+  },
+  {
+    value: 'gpt-4o-mini',
+    code: 'B2',
+    profile: 'BALANCED MODE'
+  },
+  {
+    value: 'claude-3.5-haiku',
+    code: 'C3',
+    profile: 'LOW COST'
+  }
+]
+
 const STATUS_TEXT_MAP: Record<TranslateStatus, string> = {
   idle: 'READY_V1.1',
   translating: 'TRANSLATING',
@@ -55,7 +79,33 @@ function App(): React.JSX.Element {
   const [status, setStatus] = useState<TranslateStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const requestIdRef = useRef(0)
-  const [selectedModel] = useState(DEFAULT_MODEL)
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
+  const modelSelectorRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!isModelMenuOpen) return
+
+    const handlePointerDown = (event: MouseEvent): void => {
+      if (!modelSelectorRef.current?.contains(event.target as Node)) {
+        setIsModelMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setIsModelMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isModelMenuOpen])
 
   useEffect(() => {
     if (!sourceText.trim()) return
@@ -113,6 +163,17 @@ function App(): React.JSX.Element {
     setErrorMessage('')
     setStatus('translating')
   }
+
+  const handleModelSelect = (nextModel: string): void => {
+    setSelectedModel(nextModel)
+    setIsModelMenuOpen(false)
+
+    if (sourceText.trim()) {
+      setErrorMessage('')
+      setStatus('translating')
+    }
+  }
+
   return (
     <main className="translator-device">
       <section className="device-panel">
@@ -137,9 +198,52 @@ function App(): React.JSX.Element {
         <section className="display-section">
           <div className="display-section-header">
             <p className="language-label">SOURCE: {SOURCE_LANGUAGE}</p>
-            <div className="model-inline-tag" aria-label={`当前模型 ${selectedModel}`}>
-              <span className="model-inline-tag-label">MODEL</span>
-              <span className="model-inline-tag-value">{selectedModel}</span>
+            <div className="model-selector" ref={modelSelectorRef}>
+              <button
+                className={`model-switcher-trigger ${isModelMenuOpen ? 'model-switcher-trigger-open' : ''}`}
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={isModelMenuOpen}
+                aria-label={`当前模型 ${selectedModel}，点击切换模型`}
+                onClick={() => setIsModelMenuOpen((open) => !open)}
+              >
+                <span className="model-switcher-label">MODEL BANK</span>
+                <span className="model-switcher-value" title={selectedModel}>
+                  {selectedModel}
+                </span>
+              </button>
+
+              {isModelMenuOpen ? (
+                <div className="model-switcher-panel" role="dialog" aria-label="模型切换面板">
+                  <div className="model-switcher-panel-header">
+                    <span>SELECT ENGINE</span>
+                    <span>{MODEL_OPTIONS.length.toString().padStart(2, '0')} UNITS</span>
+                  </div>
+                  <div className="model-switcher-list" role="listbox" aria-label="可用模型列表">
+                    {MODEL_OPTIONS.map((option) => {
+                      const isSelected = option.value === selectedModel
+
+                      return (
+                        <button
+                          key={option.value}
+                          className={`model-option ${isSelected ? 'model-option-selected' : ''}`}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => handleModelSelect(option.value)}
+                        >
+                          <span className="model-option-code">{option.code}</span>
+                          <span className="model-option-body">
+                            <span className="model-option-name">{option.value}</span>
+                            <span className="model-option-profile">{option.profile}</span>
+                          </span>
+                          <span className="model-option-indicator" aria-hidden="true" />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="display-screen display-screen-source">
