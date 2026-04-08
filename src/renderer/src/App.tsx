@@ -326,9 +326,19 @@ function App(): React.JSX.Element {
           <p className="language-label">TARGET: {TARGET_LANGUAGE}</p>
           <div className="display-screen display-screen-target">
             <div className="display-scroll">
-              <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
-                {targetText || '等待翻译结果...'}
-              </p>
+              {status === 'translating' ? (
+                <div className="translation-loader" aria-live="polite" aria-label="正在翻译">
+                  <div className="translation-loader-bars" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                </div>
+              ) : (
+                <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
+                  {targetText || '等待翻译结果...'}
+                </p>
+              )}
             </div>
           </div>
           <div className="screen-control-rail screen-control-rail-target">
@@ -337,7 +347,7 @@ function App(): React.JSX.Element {
               className={`screen-control-button screen-control-button-copy ${copyState === 'done' ? 'screen-control-button-done' : ''}`}
               type="button"
               onClick={() => void handleCopyTarget()}
-              disabled={!targetText.trim()}
+              disabled={!targetText.trim() || status === 'translating'}
             >
               <span className="screen-control-button-text">{copyButtonText}</span>
             </button>

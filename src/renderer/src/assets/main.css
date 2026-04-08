@@ -446,6 +446,55 @@ body {
   overflow: hidden;
 }
 
+.translation-loader {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 30px 24px 30px 0;
+}
+
+.translation-loader-bars {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.translation-loader-bars span {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(0, 240, 90, 0.9);
+  box-shadow:
+    0 0 10px rgba(0, 240, 90, 0.18),
+    0 0 18px rgba(0, 240, 90, 0.08);
+  animation: translation-loader-blip 1s steps(1, end) infinite;
+}
+
+.translation-loader-bars span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.translation-loader-bars span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.translation-loader-bars span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes translation-loader-blip {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.82);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .display-content {
   margin: 0;
   padding: 30px 24px 30px 0;
@@ -728,6 +777,19 @@ body {
 
   .display-scroll {
     padding-left: 12px;
+  }
+
+  .translation-loader {
+    padding: 24px 12px 24px 0;
+  }
+
+  .translation-loader-bars {
+    gap: 8px;
+  }
+
+  .translation-loader-bars span {
+    width: 8px;
+    height: 8px;
   }
 
   .display-content {
