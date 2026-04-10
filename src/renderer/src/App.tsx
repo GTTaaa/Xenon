@@ -225,8 +225,6 @@ function App(): React.JSX.Element {
 
   const hasSourceText = sourceText.trim().length > 0
   const hasTargetText = targetText.trim().length > 0
-  const copyButtonText =
-    copyState === 'done' ? 'COPIED' : copyState === 'error' ? 'COPY FAIL' : 'COPY OUTPUT'
   const screenActionButtonClassName = [
     'display-screen-action-button',
     'display-screen-action-button-copy',
@@ -330,8 +328,13 @@ function App(): React.JSX.Element {
                     type="button"
                     onClick={handleClearSource}
                     disabled={!hasSourceText}
+                    aria-label="清空输入"
+                    title="清空输入"
                   >
-                    <span className="display-screen-action-button-text">CLEAR</span>
+                    <span
+                      className="display-screen-action-icon display-screen-action-icon-clear"
+                      aria-hidden="true"
+                    />
                   </button>
                 </div>
               </div>
@@ -365,8 +368,13 @@ function App(): React.JSX.Element {
                     type="button"
                     onClick={() => void handleCopyTarget()}
                     disabled={!hasTargetText || status === 'translating'}
+                    aria-label={copyState === 'done' ? '复制完成' : '复制输出'}
+                    title={copyState === 'done' ? '复制完成' : '复制输出'}
                   >
-                    <span className="display-screen-action-button-text">{copyButtonText}</span>
+                    <span
+                      className="display-screen-action-icon display-screen-action-icon-copy"
+                      aria-hidden="true"
+                    />
                   </button>
                 </div>
               </div>

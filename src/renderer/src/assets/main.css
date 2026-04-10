@@ -424,13 +424,18 @@ body {
 }
 
 .display-screen-action-button {
-  min-width: auto;
+  width: 18px;
+  height: 18px;
   border: 0;
   border-bottom: 1px solid rgba(0, 240, 90, 0.18);
-  padding: 0 0 2px;
+  padding: 0;
   background: transparent;
   color: rgba(0, 240, 90, 0.68);
   cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition:
     color 120ms ease,
     border-color 120ms ease,
@@ -461,13 +466,51 @@ body {
   opacity: 0.28;
 }
 
-.display-screen-action-button-text {
+.display-screen-action-icon {
+  position: relative;
   display: block;
-  font-family: 'Space Mono', monospace;
-  font-size: 8px;
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: 0.95px;
+  width: 12px;
+  height: 12px;
+}
+
+.display-screen-action-icon-clear::before,
+.display-screen-action-icon-clear::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 0;
+  width: 12px;
+  height: 1px;
+  background: currentColor;
+}
+
+.display-screen-action-icon-clear::before {
+  transform: rotate(45deg);
+}
+
+.display-screen-action-icon-clear::after {
+  transform: rotate(-45deg);
+}
+
+.display-screen-action-icon-copy::before,
+.display-screen-action-icon-copy::after {
+  content: '';
+  position: absolute;
+  box-sizing: border-box;
+  width: 8px;
+  height: 9px;
+  border: 1px solid currentColor;
+}
+
+.display-screen-action-icon-copy::before {
+  top: 2px;
+  left: 1px;
+  opacity: 0.72;
+}
+
+.display-screen-action-icon-copy::after {
+  top: 0;
+  left: 4px;
 }
 
 .display-screen-action-button-done {
@@ -802,12 +845,35 @@ body {
   }
 
   .display-screen-action-button {
-    padding: 0 0 1px;
+    width: 14px;
+    height: 14px;
   }
 
-  .display-screen-action-button-text {
-    font-size: 6px;
-    letter-spacing: 0.7px;
+  .display-screen-action-icon {
+    width: 10px;
+    height: 10px;
+  }
+
+  .display-screen-action-icon-clear::before,
+  .display-screen-action-icon-clear::after {
+    top: 4px;
+    width: 10px;
+  }
+
+  .display-screen-action-icon-copy::before,
+  .display-screen-action-icon-copy::after {
+    width: 7px;
+    height: 8px;
+  }
+
+  .display-screen-action-icon-copy::before {
+    top: 2px;
+    left: 0;
+  }
+
+  .display-screen-action-icon-copy::after {
+    top: 0;
+    left: 3px;
   }
 
   .display-screen-toolbar {
