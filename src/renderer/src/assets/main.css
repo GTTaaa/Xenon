@@ -18,9 +18,7 @@ body {
   display: grid;
   place-items: center;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.32), transparent 36%),
-    linear-gradient(180deg, #eee9e0 0%, #ddd5c8 100%);
+  background: #ddd5c8;
   user-select: none;
 }
 
@@ -28,7 +26,7 @@ body {
   width: 100%;
   display: flex;
   justify-content: center;
-  padding: 8px;
+  padding: 6px;
 }
 
 .translator-device {
@@ -39,31 +37,8 @@ body {
 .device-panel {
   width: 100%;
   position: relative;
-  padding: 8px 8px 12px;
-  border: 1px solid rgba(123, 114, 100, 0.18);
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.08)),
-    linear-gradient(180deg, #e8e1d7 0%, #d6cebf 100%);
-  box-shadow:
-    0 18px 42px rgba(117, 109, 95, 0.12),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.68),
-    inset -1px -1px 0 rgba(96, 88, 79, 0.16);
-}
-
-.device-panel::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-}
-
-.device-panel::after {
-  inset: 1px;
-  border-radius: 17px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 28%),
-    linear-gradient(180deg, transparent 72%, rgba(73, 66, 56, 0.06));
-  opacity: 1;
+  padding: 6px 6px 10px;
+  background: transparent;
 }
 
 .device-header {
@@ -78,15 +53,10 @@ body {
 .panel-button {
   width: 34px;
   height: 34px;
-  border: 1px solid rgba(89, 98, 116, 0.1);
+  border: 1px solid rgba(89, 98, 116, 0.08);
   border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(219, 223, 229, 0.95) 0%, rgba(202, 208, 216, 0.92) 100%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent);
-  box-shadow:
-    inset -1px -1px 0 rgba(79, 89, 107, 0.28),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.58),
-    0 1px 2px rgba(95, 102, 114, 0.08);
+  background: #d2d8df;
+  box-shadow: 0 1px 2px rgba(95, 102, 114, 0.05);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -99,14 +69,12 @@ body {
 
 .panel-button:hover {
   transform: translateY(-1px);
-  filter: saturate(1.02);
+  filter: brightness(0.99);
 }
 
 .panel-button:active {
   transform: translateY(0);
-  box-shadow:
-    inset 1px 1px 0 rgba(79, 89, 107, 0.26),
-    inset -1px -1px 0 rgba(255, 255, 255, 0.54);
+  box-shadow: inset 0 1px 2px rgba(79, 89, 107, 0.12);
 }
 
 .panel-icon {
@@ -751,11 +719,11 @@ body {
 
 @media (max-width: 420px) {
   #root {
-    padding: 8px;
+    padding: 6px;
   }
 
   .device-panel {
-    padding: 8px 8px 10px;
+    padding: 6px 6px 8px;
   }
 
   .device-header {
