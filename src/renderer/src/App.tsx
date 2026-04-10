@@ -223,8 +223,18 @@ function App(): React.JSX.Element {
     }
   }
 
+  const hasSourceText = sourceText.trim().length > 0
+  const hasTargetText = targetText.trim().length > 0
   const copyButtonText =
     copyState === 'done' ? 'COPIED' : copyState === 'error' ? 'COPY FAIL' : 'COPY OUTPUT'
+  const screenActionButtonClassName = [
+    'display-screen-action-button',
+    'display-screen-action-button-copy',
+    copyState === 'done' ? 'display-screen-action-button-done' : '',
+    copyState === 'error' ? 'display-screen-action-button-error' : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <main className="translator-device">
@@ -250,107 +260,117 @@ function App(): React.JSX.Element {
         <section className="display-section">
           <div className="display-section-header">
             <p className="language-label">SOURCE: {SOURCE_LANGUAGE}</p>
-            <div className="model-selector" ref={modelSelectorRef}>
-              <button
-                className={`model-switcher-trigger ${isModelMenuOpen ? 'model-switcher-trigger-open' : ''}`}
-                type="button"
-                aria-haspopup="listbox"
-                aria-expanded={isModelMenuOpen}
-                aria-label={`当前模型 ${selectedModel}，点击切换模型`}
-                onClick={() => setIsModelMenuOpen((open) => !open)}
-              >
-                <span className="model-switcher-label">MODEL BANK</span>
-                <span className="model-switcher-value" title={selectedModel}>
-                  {selectedModel}
-                </span>
-              </button>
+            <div className="display-section-tools">
+              <div className="model-selector" ref={modelSelectorRef}>
+                <button
+                  className={`model-switcher-trigger ${isModelMenuOpen ? 'model-switcher-trigger-open' : ''}`}
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded={isModelMenuOpen}
+                  aria-label={`当前模型 ${selectedModel}，点击切换模型`}
+                  onClick={() => setIsModelMenuOpen((open) => !open)}
+                >
+                  <span className="model-switcher-label">MODEL BANK</span>
+                  <span className="model-switcher-value" title={selectedModel}>
+                    {selectedModel}
+                  </span>
+                </button>
 
-              {isModelMenuOpen ? (
-                <div className="model-switcher-panel" role="dialog" aria-label="模型切换面板">
-                  <div className="model-switcher-panel-header">
-                    <span>SELECT ENGINE</span>
-                    <span>{MODEL_OPTIONS.length.toString().padStart(2, '0')} UNITS</span>
-                  </div>
-                  <div className="model-switcher-list" role="listbox" aria-label="可用模型列表">
-                    {MODEL_OPTIONS.map((option) => {
-                      const isSelected = option.value === selectedModel
+                {isModelMenuOpen ? (
+                  <div className="model-switcher-panel" role="dialog" aria-label="模型切换面板">
+                    <div className="model-switcher-panel-header">
+                      <span>SELECT ENGINE</span>
+                      <span>{MODEL_OPTIONS.length.toString().padStart(2, '0')} UNITS</span>
+                    </div>
+                    <div className="model-switcher-list" role="listbox" aria-label="可用模型列表">
+                      {MODEL_OPTIONS.map((option) => {
+                        const isSelected = option.value === selectedModel
 
-                      return (
-                        <button
-                          key={option.value}
-                          className={`model-option ${isSelected ? 'model-option-selected' : ''}`}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          onClick={() => handleModelSelect(option.value)}
-                        >
-                          <span className="model-option-code">{option.code}</span>
-                          <span className="model-option-body">
-                            <span className="model-option-name">{option.value}</span>
-                            <span className="model-option-profile">{option.profile}</span>
-                          </span>
-                          <span className="model-option-indicator" aria-hidden="true" />
-                        </button>
-                      )
-                    })}
+                        return (
+                          <button
+                            key={option.value}
+                            className={`model-option ${isSelected ? 'model-option-selected' : ''}`}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => handleModelSelect(option.value)}
+                          >
+                            <span className="model-option-code">{option.code}</span>
+                            <span className="model-option-body">
+                              <span className="model-option-name">{option.value}</span>
+                              <span className="model-option-profile">{option.profile}</span>
+                            </span>
+                            <span className="model-option-indicator" aria-hidden="true" />
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </div>
           </div>
           <div className="display-screen display-screen-source">
-            <div className="display-scroll">
-              <textarea
-                className="display-input"
-                value={sourceText}
-                onChange={handleSourceTextChange}
-                placeholder="Type text here..."
-                spellCheck={false}
-                aria-label="源文本输入框"
-              />
+            <div className="display-screen-body">
+              <div className="display-scroll">
+                <textarea
+                  className="display-input"
+                  value={sourceText}
+                  onChange={handleSourceTextChange}
+                  placeholder="Type text here..."
+                  spellCheck={false}
+                  aria-label="源文本输入框"
+                />
+              </div>
+              <div className="display-screen-actions">
+                <span className="display-screen-actions-label">INPUT ACTIONS</span>
+                <div className="display-screen-actions-list">
+                  <button
+                    className="display-screen-action-button display-screen-action-button-clear"
+                    type="button"
+                    onClick={handleClearSource}
+                    disabled={!hasSourceText}
+                  >
+                    <span className="display-screen-action-button-text">CLEAR</span>
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="screen-control-rail screen-control-rail-source">
-            <span className="screen-control-caption">INPUT BUFFER</span>
-            <button
-              className="screen-control-button screen-control-button-clear"
-              type="button"
-              onClick={handleClearSource}
-              disabled={!sourceText.trim()}
-            >
-              <span className="screen-control-button-text">CLEAR INPUT</span>
-            </button>
           </div>
         </section>
         <section className="display-section">
           <p className="language-label">TARGET: {TARGET_LANGUAGE}</p>
           <div className="display-screen display-screen-target">
-            <div className="display-scroll">
-              {status === 'translating' ? (
-                <div className="translation-loader" aria-live="polite" aria-label="正在翻译">
-                  <div className="translation-loader-bars" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
+            <div className="display-screen-body">
+              <div className="display-scroll">
+                {status === 'translating' ? (
+                  <div className="translation-loader" aria-live="polite" aria-label="正在翻译">
+                    <div className="translation-loader-bars" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
                   </div>
+                ) : (
+                  <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
+                    {targetText || '等待翻译结果...'}
+                  </p>
+                )}
+              </div>
+              <div className="display-screen-actions">
+                <span className="display-screen-actions-label">OUTPUT ACTIONS</span>
+                <div className="display-screen-actions-list">
+                  <button
+                    className={screenActionButtonClassName}
+                    type="button"
+                    onClick={() => void handleCopyTarget()}
+                    disabled={!hasTargetText || status === 'translating'}
+                  >
+                    <span className="display-screen-action-button-text">{copyButtonText}</span>
+                  </button>
                 </div>
-              ) : (
-                <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
-                  {targetText || '等待翻译结果...'}
-                </p>
-              )}
+              </div>
             </div>
-          </div>
-          <div className="screen-control-rail screen-control-rail-target">
-            <span className="screen-control-caption">OUTPUT CHANNEL</span>
-            <button
-              className={`screen-control-button screen-control-button-copy ${copyState === 'done' ? 'screen-control-button-done' : ''}`}
-              type="button"
-              onClick={() => void handleCopyTarget()}
-              disabled={!targetText.trim() || status === 'translating'}
-            >
-              <span className="screen-control-button-text">{copyButtonText}</span>
-            </button>
           </div>
 
           {errorMessage ? <p className="translate-error">{errorMessage}</p> : null}
