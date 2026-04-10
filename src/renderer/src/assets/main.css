@@ -18,7 +18,9 @@ body {
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: var(--device-bg);
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.32), transparent 36%),
+    linear-gradient(180deg, #eee9e0 0%, #ddd5c8 100%);
   user-select: none;
 }
 
@@ -26,61 +28,99 @@ body {
   width: 100%;
   display: flex;
   justify-content: center;
-  padding: 16px;
+  padding: 8px;
 }
 
 .translator-device {
   width: 100%;
   max-width: 358px;
-  /* min-width: 358px; */
 }
 
 .device-panel {
   width: 100%;
   position: relative;
+  padding: 8px 8px 12px;
+  border: 1px solid rgba(123, 114, 100, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.08)),
+    linear-gradient(180deg, #e8e1d7 0%, #d6cebf 100%);
+  box-shadow:
+    0 18px 42px rgba(117, 109, 95, 0.12),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.68),
+    inset -1px -1px 0 rgba(96, 88, 79, 0.16);
 }
 
 .device-panel::after {
   content: '';
   position: absolute;
-  inset: 10px;
   pointer-events: none;
+}
+
+.device-panel::after {
+  inset: 1px;
+  border-radius: 17px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 28%),
+    linear-gradient(180deg, transparent 72%, rgba(73, 66, 56, 0.06));
+  opacity: 1;
 }
 
 .device-header {
   display: grid;
-  grid-template-columns: 38px 1fr 38px;
+  grid-template-columns: 34px 1fr 34px;
   align-items: end;
-  gap: 16px;
-  margin-bottom: 42px;
+  gap: 14px;
+  margin-bottom: 28px;
   -webkit-app-region: drag;
 }
 
 .panel-button {
-  width: 38px;
-  height: 38px;
-  border: 0;
-  background: #d3d7dd;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(89, 98, 116, 0.1);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(219, 223, 229, 0.95) 0%, rgba(202, 208, 216, 0.92) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent);
   box-shadow:
-    inset -2px -2px 0 #4f596b,
-    inset 2px 2px 0 #dfe4ea;
+    inset -1px -1px 0 rgba(79, 89, 107, 0.28),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.58),
+    0 1px 2px rgba(95, 102, 114, 0.08);
   display: grid;
   place-items: center;
   cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    filter 120ms ease;
   -webkit-app-region: no-drag;
 }
 
+.panel-button:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.02);
+}
+
+.panel-button:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 1px 1px 0 rgba(79, 89, 107, 0.26),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.54);
+}
+
 .panel-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: block;
   pointer-events: none;
+  opacity: 0.78;
 }
 
 .status-panel {
   min-width: 0;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-self: end;
 }
 
@@ -94,7 +134,7 @@ body {
 }
 
 .status-label {
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1;
   font-family: 'Space Mono', monospace;
 }
@@ -299,13 +339,14 @@ body {
 .status-value {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   color: #384255;
-  font-size: 30px;
+  font-size: 22px;
   line-height: 1;
-  font-weight: 800;
+  font-weight: 700;
   font-family: 'Space Mono', monospace;
+  letter-spacing: 0.2px;
 }
 
 .status-value span:last-child {
@@ -325,10 +366,11 @@ body {
 }
 
 .status-dot {
-  width: 18px;
-  height: 18px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: #2ac458;
+  box-shadow: 0 0 0 4px rgba(42, 196, 88, 0.05);
 }
 .status-dot-idle {
   background: #2ac458;
@@ -336,10 +378,26 @@ body {
 
 .status-dot-translating {
   background: #e2b93b;
+  box-shadow: 0 0 0 4px rgba(226, 185, 59, 0.08);
+  animation: status-pulse 1.5s ease-in-out infinite;
 }
 
 .status-dot-error {
   background: #d94b4b;
+  box-shadow: 0 0 0 4px rgba(217, 75, 75, 0.08);
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .display-section + .display-section {
@@ -693,23 +751,18 @@ body {
 
 @media (max-width: 420px) {
   #root {
-    padding: 16px;
+    padding: 8px;
   }
 
-  /* .device-panel {
-    padding: 20px 14px 24px;
-    box-shadow: 4px 4px 0 var(--device-shadow);
-  } */
-
-  .device-panel::after {
-    inset: 6px;
+  .device-panel {
+    padding: 8px 8px 10px;
   }
 
   .device-header {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: end;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 16px;
   }
 
@@ -722,20 +775,24 @@ body {
   }
 
   .panel-button {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
   }
 
   .panel-icon {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
 
   .status-panel {
     gap: 6px;
   }
 
-  .status-label,
+  .status-label {
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }
+
   .language-label {
     font-size: 10px;
     letter-spacing: 0.5px;
@@ -814,8 +871,8 @@ body {
   }
 
   .status-dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     flex-shrink: 0;
   }
 
