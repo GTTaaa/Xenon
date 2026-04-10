@@ -18,7 +18,7 @@ body {
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: #ddd5c8;
+  background: var(--device-bg);
   user-select: none;
 }
 
