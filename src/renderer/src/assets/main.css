@@ -369,7 +369,7 @@ body {
 }
 
 .display-section + .display-section {
-  margin-top: 42px;
+  margin-top: 38px;
 }
 
 .language-label {
@@ -384,6 +384,14 @@ body {
   overflow: hidden;
   position: relative;
   background: linear-gradient(180deg, var(--screen-bg-top), var(--screen-bg-bottom));
+}
+
+.display-screen-source {
+  height: 348px;
+}
+
+.display-screen-target {
+  height: 432px;
 }
 
 .display-screen::before {
@@ -426,18 +434,18 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 14px 8px 16px;
-  border-top: 1px solid rgba(0, 240, 90, 0.14);
+  border-top: 1px solid rgba(0, 240, 90, 0.1);
   background:
-    linear-gradient(180deg, rgba(12, 15, 24, 0.96), rgba(9, 12, 18, 0.98)),
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.015) 0 2px, transparent 2px 6px);
+    linear-gradient(180deg, rgba(11, 14, 21, 0.94), rgba(9, 11, 17, 0.98)),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.01) 0 2px, transparent 2px 6px);
 }
 
 .display-screen-actions-label {
-  color: rgba(0, 240, 90, 0.42);
+  color: rgba(0, 240, 90, 0.32);
   font-family: 'Space Mono', monospace;
   font-size: 8px;
   line-height: 1;
-  letter-spacing: 1.1px;
+  letter-spacing: 1px;
   white-space: nowrap;
 }
 
@@ -453,10 +461,10 @@ body {
   width: 18px;
   height: 18px;
   border: 0;
-  border-bottom: 1px solid rgba(0, 240, 90, 0.18);
+  border-bottom: 1px solid rgba(0, 240, 90, 0.14);
   padding: 0;
   background: transparent;
-  color: rgba(0, 240, 90, 0.68);
+  color: rgba(0, 240, 90, 0.56);
   cursor: pointer;
   position: relative;
   display: inline-flex;
@@ -483,8 +491,8 @@ body {
 }
 
 .display-screen-action-button:hover:not(:disabled) {
-  color: rgba(0, 240, 90, 0.92);
-  border-bottom-color: rgba(0, 240, 90, 0.4);
+  color: rgba(0, 240, 90, 0.82);
+  border-bottom-color: rgba(0, 240, 90, 0.28);
 }
 
 .display-screen-action-button:disabled {
@@ -548,6 +556,18 @@ body {
   overflow: hidden;
 }
 
+.display-screen-source .display-screen-actions {
+  border-top-color: rgba(0, 240, 90, 0.07);
+}
+
+.display-screen-source .display-screen-actions-label {
+  color: rgba(0, 240, 90, 0.24);
+}
+
+.display-screen-source .display-screen-action-button {
+  color: rgba(0, 240, 90, 0.44);
+}
+
 .translation-loader {
   min-height: 100%;
   display: grid;
@@ -601,13 +621,10 @@ body {
   margin: 0;
   padding: 30px 24px 30px 0;
   color: var(--screen-green);
-  font-size: 34px;
-  line-height: 1.9;
+  font-size: 32px;
+  line-height: 1.82;
   font-family: 'Courier New', monospace;
   font-weight: 700;
-  /* text-shadow:
-    0 0 8px rgba(0, 240, 90, 0.9),
-    0 0 18px rgba(0, 240, 90, 0.45); */
 }
 
 .display-input {
@@ -620,22 +637,44 @@ body {
   resize: none;
   outline: none;
   background: transparent;
-  color: var(--screen-green);
+  color: rgba(0, 240, 90, 0.78);
   caret-color: var(--screen-green);
-  font-size: 34px;
-  line-height: 1.9;
+  font-size: 27px;
+  line-height: 1.74;
   font-family: 'Courier New', monospace;
-  font-weight: 700;
-  /* text-shadow:
-    0 0 8px rgba(0, 240, 90, 0.9),
-    0 0 18px rgba(0, 240, 90, 0.45); */
+  font-weight: 600;
   overflow-y: auto;
   user-select: text;
 }
 
 .display-input::placeholder {
-  color: rgba(0, 240, 90, 0.45);
+  color: rgba(0, 240, 90, 0.28);
   text-shadow: none;
+}
+
+.display-screen-source::before {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(120, 0, 0, 0.08),
+      transparent 24%,
+      transparent 76%,
+      rgba(0, 0, 0, 0.16)
+    ),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.015) 0 2px, transparent 2px 6px);
+}
+
+.display-screen-target::before {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(120, 0, 0, 0.14),
+      transparent 28%,
+      transparent 72%,
+      rgba(0, 0, 0, 0.22)
+    ),
+    radial-gradient(circle at top, rgba(0, 240, 90, 0.04), transparent 44%),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 6px);
 }
 
 .device-footer {
@@ -645,7 +684,7 @@ body {
   flex-wrap: wrap;
   gap: 22px;
   font-size: 14px;
-  color: #9aa3b2;
+  color: rgba(101, 112, 134, 0.46);
 }
 
 .device-footer span {
@@ -845,7 +884,7 @@ body {
   }
 
   .display-section + .display-section {
-    margin-top: 28px;
+    margin-top: 24px;
   }
 
   .language-label {
@@ -853,9 +892,17 @@ body {
   }
 
   .display-screen {
-    height: 260px;
+    height: 250px;
     border-width: 2px;
     border-radius: 2px;
+  }
+
+  .display-screen-source {
+    height: 220px;
+  }
+
+  .display-screen-target {
+    height: 280px;
   }
 
   .display-screen-actions {
@@ -930,13 +977,13 @@ body {
 
   .display-content {
     padding: 12px 12px 12px 0;
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.6;
   }
 
   .display-input {
     padding: 12px 12px 12px 0;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.4;
   }
 
