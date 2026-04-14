@@ -128,8 +128,8 @@ body {
 }
 
 .display-section-tools .model-selector {
-  flex: 0 0 132px;
-  width: 132px;
+  flex: 0 0 124px;
+  width: 124px;
   max-width: none;
 }
 
@@ -149,24 +149,29 @@ body {
 .model-switcher-trigger {
   width: 100%;
   border: 0;
-  padding: 0;
+  padding: 3px 0 2px;
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: right;
   cursor: pointer;
+  transition: opacity 120ms ease;
   -webkit-app-region: no-drag;
+}
+
+.model-switcher-trigger:hover {
+  opacity: 0.84;
 }
 
 .model-switcher-label {
   display: block;
-  margin-bottom: 4px;
-  color: #8f98a7;
-  font-size: 8px;
+  margin-bottom: 5px;
+  color: #939bab;
+  font-size: 7px;
   line-height: 1;
   font-family: 'Space Mono', monospace;
-  letter-spacing: 1.6px;
-  opacity: 0.72;
+  letter-spacing: 1.35px;
+  opacity: 0.68;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -175,35 +180,32 @@ body {
   display: inline-block;
   max-width: 100%;
   overflow: hidden;
-  color: #4d586b;
-  font-size: 12px;
+  color: #5a6475;
+  font-size: 11px;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: 'Space Mono', monospace;
-  font-weight: 700;
-  letter-spacing: 0.45px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .model-switcher-trigger-open .model-switcher-value {
-  color: #273041;
+  color: #394456;
 }
 
 .model-switcher-panel {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 12;
-  width: min(272px, 100vw - 56px);
-  padding: 12px;
-  border: 1px solid rgba(79, 89, 107, 0.38);
-  background:
-    linear-gradient(180deg, rgba(231, 226, 217, 0.98), rgba(214, 206, 194, 0.98)),
-    repeating-linear-gradient(180deg, rgba(79, 89, 107, 0.025) 0 1px, transparent 1px 4px);
-  box-shadow:
-    5px 5px 0 rgba(96, 104, 118, 0.18),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.65),
-    inset -1px -1px 0 rgba(90, 99, 116, 0.14);
+  width: min(248px, 100vw - 40px);
+  padding: 10px;
+  border: 1px solid rgba(98, 108, 125, 0.14);
+  border-radius: 12px;
+  background: rgba(242, 238, 232, 0.96);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 28px rgba(92, 96, 107, 0.12);
 }
 
 .model-switcher-panel-header {
@@ -211,17 +213,17 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
-  color: #6d7788;
-  font-size: 9px;
+  margin-bottom: 8px;
+  color: #818899;
+  font-size: 8px;
   line-height: 1;
   font-family: 'Space Mono', monospace;
-  letter-spacing: 1.2px;
+  letter-spacing: 1px;
 }
 
 .model-switcher-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .model-option {
@@ -229,11 +231,12 @@ body {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr) 10px;
   align-items: center;
-  gap: 10px;
-  border: 1px solid rgba(91, 101, 119, 0.28);
-  padding: 9px 10px;
-  background: rgba(255, 255, 255, 0.22);
-  color: #364052;
+  gap: 8px;
+  border: 1px solid rgba(91, 101, 119, 0.12);
+  border-radius: 9px;
+  padding: 8px 9px;
+  background: rgba(255, 255, 255, 0.48);
+  color: #4a5567;
   text-align: left;
   cursor: pointer;
   transition:
@@ -245,21 +248,21 @@ body {
 
 .model-option:hover {
   transform: translateY(-1px);
-  border-color: rgba(79, 89, 107, 0.5);
-  background: rgba(255, 255, 255, 0.34);
+  border-color: rgba(79, 89, 107, 0.18);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .model-option-selected {
-  border-color: rgba(52, 64, 82, 0.52);
-  background: rgba(255, 255, 255, 0.42);
+  border-color: rgba(52, 64, 82, 0.22);
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .model-option-code {
-  color: #7c8698;
-  font-size: 10px;
+  color: #8f97a7;
+  font-size: 9px;
   line-height: 1;
   font-family: 'Space Mono', monospace;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
 }
 
 .model-option-body {
@@ -278,30 +281,30 @@ body {
 }
 
 .model-option-name {
-  color: #263041;
-  font-size: 12px;
+  color: #445062;
+  font-size: 11px;
   line-height: 1.05;
-  font-weight: 700;
-  letter-spacing: 0.25px;
+  font-weight: 600;
+  letter-spacing: 0.15px;
 }
 
 .model-option-profile {
-  color: #778294;
-  font-size: 9px;
+  color: #9098a7;
+  font-size: 8px;
   line-height: 1;
-  letter-spacing: 1.1px;
+  letter-spacing: 0.85px;
 }
 
 .model-option-indicator {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: rgba(91, 101, 119, 0.24);
+  background: rgba(91, 101, 119, 0.16);
 }
 
 .model-option-selected .model-option-indicator {
   background: #2ac458;
-  box-shadow: 0 0 0 3px rgba(42, 196, 88, 0.12);
+  box-shadow: 0 0 0 3px rgba(42, 196, 88, 0.08);
 }
 
 .status-value {
@@ -683,8 +686,9 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 22px;
-  font-size: 14px;
-  color: rgba(101, 112, 134, 0.46);
+  font-size: 12px;
+  color: rgba(101, 112, 134, 0.34);
+  letter-spacing: 0.8px;
 }
 
 .device-footer span {
@@ -695,8 +699,8 @@ body {
 .device-footer i {
   flex: 1;
   min-width: 72px;
-  height: 2px;
-  background: rgba(154, 163, 178, 0.35);
+  height: 1px;
+  background: rgba(154, 163, 178, 0.22);
 }
 
 .display-scroll::-webkit-scrollbar {
@@ -815,8 +819,8 @@ body {
   }
 
   .display-section-tools .model-selector {
-    flex-basis: 92px;
-    width: 92px;
+    flex-basis: 88px;
+    width: 88px;
   }
 
   .display-section-header .language-label {
@@ -826,7 +830,7 @@ body {
   .model-switcher-label {
     margin-bottom: 2px;
     font-size: 6px;
-    letter-spacing: 1px;
+    letter-spacing: 0.9px;
   }
 
   .model-switcher-value {
@@ -836,7 +840,7 @@ body {
 
   .model-switcher-panel {
     top: calc(100% + 8px);
-    width: min(220px, 100vw - 44px);
+    width: min(214px, 100vw - 36px);
     padding: 8px;
   }
 
@@ -988,8 +992,8 @@ body {
   }
 
   .device-footer {
-    margin-top: 32px;
+    margin-top: 28px;
     gap: 10px;
-    font-size: 12px;
+    font-size: 10px;
   }
 }
