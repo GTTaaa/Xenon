@@ -111,29 +111,36 @@ body {
   opacity: 0.9;
 }
 
+.language-label {
+  color: rgba(101, 112, 134, 0.82);
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0.8px;
+}
+
 .display-section-header {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   position: relative;
   z-index: 2;
 }
 
 .display-section-tools {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   flex: 0 0 auto;
   min-width: 0;
 }
 
 .display-section-tools .model-selector {
-  flex: 0 0 124px;
-  width: 124px;
+  flex: 0 0 118px;
+  width: 118px;
   max-width: none;
 }
 
@@ -153,7 +160,7 @@ body {
 .model-switcher-trigger {
   width: 100%;
   border: 0;
-  padding: 3px 0 2px;
+  padding: 1px 0;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -169,13 +176,13 @@ body {
 
 .model-switcher-label {
   display: block;
-  margin-bottom: 5px;
-  color: #939bab;
-  font-size: 7px;
+  margin-bottom: 4px;
+  color: rgba(101, 112, 134, 0.54);
+  font-size: 6px;
   line-height: 1;
   font-family: 'Space Mono', monospace;
-  letter-spacing: 1.35px;
-  opacity: 0.68;
+  letter-spacing: 1.05px;
+  opacity: 0.8;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -184,18 +191,18 @@ body {
   display: inline-block;
   max-width: 100%;
   overflow: hidden;
-  color: #5a6475;
-  font-size: 11px;
+  color: rgba(79, 89, 107, 0.88);
+  font-size: 10px;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: 'Space Mono', monospace;
   font-weight: 600;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
 }
 
 .model-switcher-trigger-open .model-switcher-value {
-  color: #394456;
+  color: rgba(57, 68, 86, 0.94);
 }
 
 .model-switcher-panel {
@@ -809,22 +816,22 @@ body {
   }
 
   .language-label {
-    font-size: 10px;
-    letter-spacing: 0.5px;
+    font-size: 8px;
+    letter-spacing: 0.45px;
   }
 
   .display-section-header {
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .display-section-tools {
-    gap: 6px;
+    gap: 4px;
   }
 
   .display-section-tools .model-selector {
-    flex-basis: 88px;
-    width: 88px;
+    flex-basis: 82px;
+    width: 82px;
   }
 
   .display-section-header .language-label {
@@ -833,12 +840,12 @@ body {
 
   .model-switcher-label {
     margin-bottom: 2px;
-    font-size: 6px;
-    letter-spacing: 0.9px;
+    font-size: 5px;
+    letter-spacing: 0.75px;
   }
 
   .model-switcher-value {
-    font-size: 8px;
+    font-size: 7px;
     line-height: 1;
   }
 
