@@ -169,7 +169,7 @@ function App(): React.JSX.Element {
 
     const timer = window.setTimeout(() => {
       setCopyState('idle')
-    }, 1800)
+    }, 1000)
 
     return () => {
       window.clearTimeout(timer)
@@ -372,7 +372,11 @@ function App(): React.JSX.Element {
                     title={copyState === 'done' ? '复制完成' : '复制输出'}
                   >
                     <span
-                      className="display-screen-action-icon display-screen-action-icon-copy"
+                      className={`display-screen-action-icon ${
+                        copyState === 'done'
+                          ? 'display-screen-action-icon-check'
+                          : 'display-screen-action-icon-copy'
+                      }`}
                       aria-hidden="true"
                     />
                   </button>
@@ -381,7 +385,12 @@ function App(): React.JSX.Element {
             </div>
           </div>
 
-          {errorMessage ? <p className="translate-error">{errorMessage}</p> : null}
+          {errorMessage ? (
+            <p className="translate-error" role="status" aria-live="polite">
+              <span className="translate-error-label">SYSTEM NOTICE</span>
+              <span className="translate-error-text">{errorMessage}</span>
+            </p>
+          ) : null}
         </section>
 
         <footer className="device-footer">
