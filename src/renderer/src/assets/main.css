@@ -44,7 +44,7 @@ body {
 .device-header {
   display: grid;
   grid-template-columns: 34px 1fr 34px;
-  align-items: end;
+  align-items: center;
   gap: 14px;
   margin-bottom: 28px;
   -webkit-app-region: drag;
@@ -88,8 +88,8 @@ body {
 .status-panel {
   min-width: 0;
   display: grid;
-  gap: 6px;
-  align-self: end;
+  gap: 4px;
+  align-self: center;
 }
 
 .status-label,
@@ -97,14 +97,18 @@ body {
 .device-footer {
   color: var(--panel-line);
   font-family: 'Courier New', monospace;
-  letter-spacing: 1px;
+  letter-spacing: 0.9px;
   font-weight: 700;
 }
 
 .status-label {
-  font-size: 16px;
+  color: rgba(101, 112, 134, 0.74);
+  font-size: 12px;
   line-height: 1;
   font-family: 'Space Mono', monospace;
+  font-weight: 600;
+  letter-spacing: 1.1px;
+  opacity: 0.9;
 }
 
 .display-section-header {
@@ -310,14 +314,14 @@ body {
 .status-value {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   color: #384255;
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1;
-  font-weight: 700;
+  font-weight: 600;
   font-family: 'Space Mono', monospace;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.12px;
 }
 
 .status-value span:last-child {
@@ -337,11 +341,11 @@ body {
 }
 
 .status-dot {
-  width: 11px;
-  height: 11px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: #2ac458;
-  box-shadow: 0 0 0 4px rgba(42, 196, 88, 0.05);
+  box-shadow: 0 0 0 3px rgba(42, 196, 88, 0.04);
 }
 .status-dot-idle {
   background: #2ac458;
@@ -349,13 +353,13 @@ body {
 
 .status-dot-translating {
   background: #e2b93b;
-  box-shadow: 0 0 0 4px rgba(226, 185, 59, 0.08);
-  animation: status-pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(226, 185, 59, 0.06);
+  animation: status-pulse 1.8s ease-in-out infinite;
 }
 
 .status-dot-error {
   background: #d94b4b;
-  box-shadow: 0 0 0 4px rgba(217, 75, 75, 0.08);
+  box-shadow: 0 0 0 3px rgba(217, 75, 75, 0.06);
 }
 
 @keyframes status-pulse {
@@ -772,7 +776,7 @@ body {
   .device-header {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: end;
+    align-items: center;
     gap: 8px;
     margin-bottom: 16px;
   }
@@ -796,12 +800,12 @@ body {
   }
 
   .status-panel {
-    gap: 6px;
+    gap: 4px;
   }
 
   .status-label {
-    font-size: 10px;
-    letter-spacing: 0.5px;
+    font-size: 8px;
+    letter-spacing: 0.8px;
   }
 
   .language-label {
@@ -875,15 +879,15 @@ body {
 
   .status-value {
     gap: 4px;
-    font-size: 12px;
+    font-size: 10px;
     span {
       font-weight: bold;
     }
   }
 
   .status-dot {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     flex-shrink: 0;
   }
 
