@@ -140,7 +140,7 @@ function App(): React.JSX.Element {
           model: selectedModel
         }
       })
-
+      console.log(response)
       if (currentRequestId !== requestIdRef.current) return
 
       if (response.ok) {

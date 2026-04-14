@@ -51,10 +51,18 @@ const mockTranslate = async (request: TranslateRequest): Promise<TranslateRespon
 
   await sleep(800)
 
-  // const shouldFail = Math.random() < 0.3
-  // if (shouldFail) {
-  //   throw new Error('翻译失败')
-  // }
+  const shouldFail = Math.random() < 1
+  if (shouldFail) {
+    console.log('[main] mock translate failed')
+    // throw new Error('翻译失败')
+    return {
+      ok: false,
+      error: {
+        code: 'MOCK_ERROR',
+        message: '模拟翻译失败'
+      }
+    }
+  }
 
   return {
     ok: true,
