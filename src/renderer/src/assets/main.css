@@ -15,18 +15,19 @@ body {
   margin: 0;
   min-width: 100vw;
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: var(--device-bg);
   user-select: none;
 }
 
 #root {
   width: 100%;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
-  padding: 6px;
+  align-items: flex-start;
+  padding: 20px 6px 12px;
 }
 
 .translator-device {
@@ -845,7 +846,7 @@ body {
 
 @media (max-width: 420px) {
   #root {
-    padding: 6px;
+    padding: 12px 6px 10px;
   }
 
   .device-panel {
