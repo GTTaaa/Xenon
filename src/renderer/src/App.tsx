@@ -97,6 +97,17 @@ function App(): React.JSX.Element {
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const modelSelectorRef = useRef<HTMLDivElement | null>(null)
 
+  const resetTranslationState = (): void => {
+    setTargetText('')
+    setErrorMessage('')
+    setStatus('idle')
+  }
+
+  const markTranslationPending = (): void => {
+    setErrorMessage('')
+    setStatus('translating')
+  }
+
   useEffect(() => {
     if (!isModelMenuOpen) return
 
@@ -122,26 +133,27 @@ function App(): React.JSX.Element {
   }, [isModelMenuOpen])
 
   useEffect(() => {
-    if (!sourceText.trim()) return
+    const trimmedSourceText = sourceText.trim()
+    if (!trimmedSourceText) return
 
     requestIdRef.current += 1
     const currentRequestId = requestIdRef.current
-
+    // console.log(trimmedSourceText)
     // 防抖处理，避免频繁调用翻译接口
     const timer = window.setTimeout(async () => {
-      console.log('[renderer] runTranslation start', {
-        text: sourceText,
-        requestId: currentRequestId
-      })
+      // console.log('[renderer] runTranslation start', {
+      //   text: trimmedSourceText,
+      //   requestId: currentRequestId
+      // })
       const response = await window.api.translateText({
-        text: sourceText,
+        text: trimmedSourceText,
         sourceLanguage: SOURCE_LANGUAGE,
         targetLanguage: TARGET_LANGUAGE,
         options: {
           model: selectedModel
         }
       })
-      console.log(response)
+      // console.log(response)
       if (currentRequestId !== requestIdRef.current) return
 
       if (response.ok) {
@@ -151,6 +163,7 @@ function App(): React.JSX.Element {
         return
       }
 
+      setTargetText('')
       setErrorMessage(getUserFriendlyErrorMessage(response.error.code))
       console.error('[renderer] translate error', response.error.code, response.error.message)
       setStatus('error')
@@ -184,14 +197,11 @@ function App(): React.JSX.Element {
     setSourceText(nextText)
 
     if (!nextText.trim()) {
-      setTargetText('')
-      setErrorMessage('')
-      setStatus('idle')
+      resetTranslationState()
       return
     }
 
-    setErrorMessage('')
-    setStatus('translating')
+    markTranslationPending()
   }
 
   const handleModelSelect = (nextModel: string): void => {
@@ -199,17 +209,14 @@ function App(): React.JSX.Element {
     setIsModelMenuOpen(false)
 
     if (sourceText.trim()) {
-      setErrorMessage('')
-      setStatus('translating')
+      markTranslationPending()
     }
   }
 
   const handleClearSource = (): void => {
     requestIdRef.current += 1
     setSourceText('')
-    setTargetText('')
-    setErrorMessage('')
-    setStatus('idle')
+    resetTranslationState()
     setCopyState('idle')
   }
 
