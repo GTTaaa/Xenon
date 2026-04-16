@@ -96,8 +96,16 @@ const translateWithOpenAICompatible = async (
         messages: [
           {
             role: 'system',
-            content:
-              'You are a translation engine. Translate the user text accurately. Output only the translated text.'
+            content: [
+              'You are a translation engine.',
+              'Translate the user text accurately.',
+              'Preserve the original structure exactly:',
+              '- keep the same line breaks and paragraph breaks',
+              '- do not merge or split lines',
+              '- keep URLs, list structure, headings, dates, and separators in their original positions',
+              '- translate only the text content; do not rewrite, summarize, or reformat',
+              'Output only the translated text.'
+            ].join('\n')
           },
           {
             role: 'user',

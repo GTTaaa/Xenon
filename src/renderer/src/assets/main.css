@@ -690,6 +690,8 @@ body {
   line-height: 1.82;
   font-family: 'Courier New', monospace;
   font-weight: 700;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .display-input {
