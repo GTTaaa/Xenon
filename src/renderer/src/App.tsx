@@ -138,22 +138,16 @@ function App(): React.JSX.Element {
 
     requestIdRef.current += 1
     const currentRequestId = requestIdRef.current
-    // console.log(trimmedSourceText)
     // 防抖处理，避免频繁调用翻译接口
     const timer = window.setTimeout(async () => {
-      // console.log('[renderer] runTranslation start', {
-      //   text: trimmedSourceText,
-      //   requestId: currentRequestId
-      // })
       const response = await window.api.translateText({
-        text: trimmedSourceText,
+        text: sourceText,
         sourceLanguage: SOURCE_LANGUAGE,
         targetLanguage: TARGET_LANGUAGE,
         options: {
           model: selectedModel
         }
       })
-      // console.log(response)
       if (currentRequestId !== requestIdRef.current) return
 
       if (response.ok) {
