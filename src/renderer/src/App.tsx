@@ -12,6 +12,8 @@ type ModelOption = {
 }
 
 const DEFAULT_MODEL = 'step-3.5-flash'
+const INITIAL_SOURCE_TEXT =
+  'Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.'
 const MODEL_OPTIONS: ModelOption[] = [
   {
     value: 'step-3.5-flash',
@@ -69,14 +71,14 @@ const getUserFriendlyErrorMessage = (code: string): string => {
 }
 
 function App(): React.JSX.Element {
-  const [sourceText, setSourceText] = useState(
-    `Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.`
-  )
+  const [sourceText, setSourceText] = useState(INITIAL_SOURCE_TEXT)
   // const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
   // const [targetText, setTargetText] = useState('等待翻译结果...')
   const [targetText, setTargetText] = useState('')
   // const [statusText, setStatusText] = useState('READY_V1.1')
-  const [status, setStatus] = useState<TranslateStatus>('idle')
+  const [status, setStatus] = useState<TranslateStatus>(
+    INITIAL_SOURCE_TEXT.trim() ? 'translating' : 'idle'
+  )
   const [errorMessage, setErrorMessage] = useState('')
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const requestIdRef = useRef(0)
@@ -131,7 +133,6 @@ function App(): React.JSX.Element {
         text: sourceText,
         requestId: currentRequestId
       })
-
       const response = await window.api.translateText({
         text: sourceText,
         sourceLanguage: SOURCE_LANGUAGE,
@@ -177,6 +178,7 @@ function App(): React.JSX.Element {
   }, [copyState])
 
   const handleSourceTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    // console.log('[renderer] source text changed', event.target.value)
     const nextText = event.target.value
 
     setSourceText(nextText)
