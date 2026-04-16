@@ -348,10 +348,13 @@ function App(): React.JSX.Element {
               <div className="display-scroll">
                 {status === 'translating' ? (
                   <div className="translation-loader" aria-live="polite" aria-label="正在翻译">
-                    <div className="translation-loader-bars" aria-hidden="true">
-                      <span />
-                      <span />
-                      <span />
+                    <div className="translation-loader-bubble" aria-hidden="true">
+                      <span className="translation-loader-bubble-tail" />
+                      <span className="translation-loader-bubble-dots">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
                     </div>
                   </div>
                 ) : (
