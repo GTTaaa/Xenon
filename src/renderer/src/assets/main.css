@@ -94,8 +94,7 @@ body {
 }
 
 .status-label,
-.language-label,
-.device-footer {
+.language-label {
   color: var(--panel-line);
   font-family: 'Courier New', monospace;
   letter-spacing: 0.9px;
@@ -413,15 +412,14 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(120, 0, 0, 0.14),
-      transparent 28%,
-      transparent 72%,
-      rgba(0, 0, 0, 0.22)
-    ),
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 6px);
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.018) 0,
+    rgba(255, 255, 255, 0.018) 1px,
+    transparent 1px,
+    transparent 6px
+  );
+  opacity: 0.72;
   pointer-events: none;
 }
 
@@ -718,54 +716,6 @@ body {
 .display-input::placeholder {
   color: rgba(0, 240, 90, 0.28);
   text-shadow: none;
-}
-
-.display-screen-source::before {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(120, 0, 0, 0.08),
-      transparent 24%,
-      transparent 76%,
-      rgba(0, 0, 0, 0.16)
-    ),
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.015) 0 2px, transparent 2px 6px);
-}
-
-.display-screen-target::before {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(120, 0, 0, 0.14),
-      transparent 28%,
-      transparent 72%,
-      rgba(0, 0, 0, 0.22)
-    ),
-    radial-gradient(circle at top, rgba(0, 240, 90, 0.04), transparent 44%),
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 6px);
-}
-
-.device-footer {
-  margin-top: 56px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 22px;
-  font-size: 12px;
-  color: rgba(101, 112, 134, 0.34);
-  letter-spacing: 0.8px;
-}
-
-.device-footer span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.device-footer i {
-  flex: 1;
-  min-width: 72px;
-  height: 1px;
-  background: rgba(154, 163, 178, 0.22);
 }
 
 .display-scroll::-webkit-scrollbar {
@@ -1086,12 +1036,6 @@ body {
     padding: 12px 12px 12px 0;
     font-size: 13px;
     line-height: 1.4;
-  }
-
-  .device-footer {
-    margin-top: 28px;
-    gap: 10px;
-    font-size: 10px;
   }
 
   .translate-error {

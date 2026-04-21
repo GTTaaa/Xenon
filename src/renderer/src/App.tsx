@@ -398,11 +398,6 @@ function App(): React.JSX.Element {
             </p>
           ) : null}
         </section>
-
-        <footer className="device-footer">
-          <span>LABORATORY UNIT #402-B // ANALOG CONVERTER</span>
-          <i />
-        </footer>
       </section>
     </main>
   )
