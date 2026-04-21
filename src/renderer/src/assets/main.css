@@ -170,6 +170,11 @@ body {
   -webkit-app-region: no-drag;
 }
 
+button:focus,
+button:focus-visible {
+  outline: none;
+}
+
 .model-switcher-trigger:hover {
   opacity: 0.84;
 }
