@@ -1,17 +1,21 @@
 import { config as loadEnv } from 'dotenv'
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Tray, nativeImage } from 'electron'
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import trayIcon2x from '../../resources/trayTemplate@2x.png?asset'
 import type { TranslateRequest } from '../shared/translate'
 import { translateText } from './services/translator'
 
 loadEnv({ path: resolve(process.cwd(), '.env.local') })
 
+let tray: Tray | null = null
+let mainWindow: BrowserWindow | null = null
+
 console.log('[main] process booted')
 
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     useContentSize: true,
     width: 358,
     height: 670,
@@ -28,7 +32,11 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow?.show()
+  })
+
+  mainWindow.on('closed', () => {
+    mainWindow = null
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -43,6 +51,31 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+function createTray(): void {
+  if (process.platform !== 'darwin') return
+
+  const image = nativeImage.createFromPath(trayIcon2x)
+  image.setTemplateImage(true)
+
+  tray = new Tray(image)
+  tray.setToolTip('Xenon')
+
+  tray.on('click', () => {
+    if (!mainWindow) {
+      createWindow()
+      return
+    }
+
+    if (mainWindow.isVisible()) {
+      mainWindow.hide()
+      return
+    }
+
+    mainWindow.show()
+    mainWindow.focus()
+  })
 }
 
 // This method will be called when Electron has finished
@@ -67,6 +100,7 @@ app.whenReady().then(() => {
     return await translateText(request)
   })
   createWindow()
+  createTray()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
