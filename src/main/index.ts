@@ -90,7 +90,6 @@ function createTray(): void {
     }
   ])
 
-  // tray.setContextMenu(contextMenu)
   tray.on('right-click', () => {
     tray?.popUpContextMenu(contextMenu)
   })
