@@ -1,5 +1,5 @@
 import { config as loadEnv } from 'dotenv'
-import { app, shell, BrowserWindow, ipcMain, Tray, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -61,6 +61,36 @@ function createTray(): void {
 
   tray = new Tray(image)
   tray.setToolTip('Xenon')
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示窗口',
+      click: () => {
+        if (!mainWindow) {
+          createWindow()
+          return
+        }
+
+        mainWindow.show()
+        mainWindow.focus()
+      }
+    },
+    {
+      label: '隐藏窗口',
+      click: () => {
+        mainWindow?.hide()
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        app.quit()
+      }
+    }
+  ])
+
+  tray.setContextMenu(contextMenu)
 
   tray.on('click', () => {
     if (!mainWindow) {
