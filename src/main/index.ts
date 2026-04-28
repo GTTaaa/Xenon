@@ -1,5 +1,14 @@
 import { config as loadEnv } from 'dotenv'
-import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  Tray,
+  Menu,
+  nativeImage,
+  globalShortcut
+} from 'electron'
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -53,6 +62,21 @@ function createWindow(): void {
   }
 }
 
+function showMainWindow(): void {
+  if (!mainWindow) {
+    createWindow()
+    return
+  }
+
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function showInputTranslateWindow(): void {
+  showMainWindow()
+  mainWindow?.webContents.send('translate:focus-input')
+}
+
 function createTray(): void {
   if (process.platform !== 'darwin') return
 
@@ -63,6 +87,14 @@ function createTray(): void {
   tray.setToolTip('Xenon')
 
   const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '输入翻译',
+      accelerator: 'Alt+A',
+      click: () => {
+        showInputTranslateWindow()
+      }
+    },
+    { type: 'separator' },
     {
       label: '显示窗口',
       click: () => {
@@ -95,18 +127,19 @@ function createTray(): void {
   })
 
   tray.on('click', () => {
-    if (!mainWindow) {
-      createWindow()
-      return
-    }
+    // if (!mainWindow) {
+    //   createWindow()
+    //   return
+    // }
 
-    if (mainWindow.isVisible()) {
-      mainWindow.hide()
-      return
-    }
+    // if (mainWindow.isVisible()) {
+    //   mainWindow.hide()
+    //   return
+    // }
 
-    mainWindow.show()
-    mainWindow.focus()
+    // mainWindow.show()
+    // mainWindow.focus()
+    tray?.popUpContextMenu(contextMenu)
   })
 }
 
@@ -134,10 +167,18 @@ app.whenReady().then(() => {
   createWindow()
   createTray()
 
+  globalShortcut.register('Alt+A', () => {
+    showInputTranslateWindow()
+  })
+
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll()
   })
 })
 

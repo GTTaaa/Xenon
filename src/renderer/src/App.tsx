@@ -82,6 +82,7 @@ function App(): React.JSX.Element {
   const [errorMessage, setErrorMessage] = useState('')
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const requestIdRef = useRef(0)
+  const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [selectedModel, setSelectedModel] = useState(() => {
     const savedModel = localStorage.getItem('selectedModel')
     if (!savedModel) return DEFAULT_MODEL
@@ -167,6 +168,13 @@ function App(): React.JSX.Element {
       window.clearTimeout(timer)
     }
   }, [selectedModel, sourceText])
+
+  useEffect(() => {
+    return window.api.onFocusInput(() => {
+      sourceInputRef.current?.focus()
+      sourceInputRef.current?.select()
+    })
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('selectedModel', selectedModel)
@@ -315,6 +323,7 @@ function App(): React.JSX.Element {
             <div className="display-screen-body">
               <div className="display-scroll">
                 <textarea
+                  ref={sourceInputRef}
                   className="display-input"
                   value={sourceText}
                   onChange={handleSourceTextChange}

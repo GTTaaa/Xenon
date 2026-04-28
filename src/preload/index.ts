@@ -7,6 +7,17 @@ const api = {
   translateText: (request: TranslateRequest): Promise<TranslateResponse> => {
     console.log('[preload] translateText invoke', request)
     return ipcRenderer.invoke('translate:text', request)
+  },
+  onFocusInput: (callback: () => void): (() => void) => {
+    const listener = (): void => {
+      callback()
+    }
+
+    ipcRenderer.on('translate:focus-input', listener)
+
+    return () => {
+      ipcRenderer.removeListener('translate:focus-input', listener)
+    }
   }
 }
 
