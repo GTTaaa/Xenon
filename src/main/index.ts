@@ -167,9 +167,15 @@ app.whenReady().then(() => {
   createWindow()
   createTray()
 
-  globalShortcut.register('Alt+A', () => {
+  const isInputTranslateShortcutRegistered = globalShortcut.register('Alt+A', () => {
     showInputTranslateWindow()
   })
+
+  if (!isInputTranslateShortcutRegistered) {
+    console.warn('[main] failed to register input translate shortcut: Alt+A')
+  } else {
+    console.log('[main] registered input translate shortcut: Alt+A')
+  }
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
