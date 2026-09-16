@@ -15,8 +15,7 @@ body {
   margin: 0;
   min-width: 100vw;
   min-height: 100vh;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--device-bg);
   user-select: none;
 }
@@ -946,6 +945,11 @@ button:focus-visible {
 
   .display-screen-target {
     height: 280px;
+  }
+
+  /* 出现错误提示时回收高度，避免页面超出窗口高度产生滚动条 */
+  .device-panel-error .display-screen-target {
+    height: 254px;
   }
 
   .display-screen-actions {

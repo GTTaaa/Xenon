@@ -247,7 +247,7 @@ function App(): React.JSX.Element {
 
   return (
     <main className="translator-device">
-      <section className="device-panel">
+      <section className={`device-panel ${errorMessage ? 'device-panel-error' : ''}`}>
         <header className="device-header">
           <button className="panel-button" type="button" aria-label="打开菜单">
             <img className="panel-icon" src={menuIcon} alt="" />
