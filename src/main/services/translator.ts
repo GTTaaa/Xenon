@@ -1,12 +1,6 @@
 import type { TranslateRequest, TranslateResponse } from '../../shared/translate'
-type TranslateProvider = 'mock' | 'openai-compatible'
-
-interface ProviderConfig {
-  provider: TranslateProvider
-  apiKey: string
-  baseUrl: string
-  defaultModel: string
-}
+import { getLLMConfig } from './configManager'
+import type { LLMConfig } from '../../shared/config'
 
 class TranslateServiceError extends Error {
   code: string
@@ -18,25 +12,6 @@ class TranslateServiceError extends Error {
   }
 }
 
-const getProviderConfig = (): ProviderConfig => {
-  const provider = (process.env.TRANSLATE_PROVIDER ?? 'mock') as TranslateProvider
-  const config = {
-    provider,
-    apiKey: process.env.LLM_API_KEY ?? '',
-    baseUrl: process.env.LLM_BASE_URL ?? '',
-    defaultModel: process.env.LLM_MODEL ?? 'gpt-4o-mini'
-  }
-
-  console.log('[main] provider config', {
-    provider: config.provider,
-    hasApiKey: Boolean(config.apiKey),
-    baseUrl: config.baseUrl,
-    defaultModel: config.defaultModel
-  })
-
-  return config
-}
-
 const sleep = (ms: number): Promise<void> => {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -46,44 +21,31 @@ const sleep = (ms: number): Promise<void> => {
 const mockTranslate = async (request: TranslateRequest): Promise<TranslateResponse> => {
   const { text, targetLanguage, sourceLanguage, options } = request
 
-  // if (!text.trim()) return { text: '' }
-  if (!text.trim()) return { ok: false, error: { code: 'EMPTY_TEXT', message: '输入文本不能为空' } }
-
-  await sleep(800)
-
-  const shouldFail = Math.random() < 1
-  if (shouldFail) {
-    console.log('[main] mock translate failed')
-    // throw new Error('翻译失败')
-    return {
-      ok: false,
-      error: {
-        code: 'MOCK_ERROR',
-        message: '模拟翻译失败'
-      }
-    }
+  if (!text.trim()) {
+    return { ok: false, error: { code: 'EMPTY_TEXT', message: '输入文本不能为空' } }
   }
+
+  await sleep(400)
 
   return {
     ok: true,
-    text: `模拟翻译(${sourceLanguage} -> ${targetLanguage}/${options?.model ?? 'default'}):${text}`
+    text: `[模拟翻译] (${sourceLanguage} -> ${targetLanguage} | 模型: ${options?.model ?? 'default'}):\n${text}`
   }
 }
 
 const translateWithOpenAICompatible = async (
   request: TranslateRequest,
-  config: ProviderConfig
+  config: LLMConfig
 ): Promise<TranslateResponse> => {
   if (!config.apiKey) {
-    throw new TranslateServiceError('CONFIG_MISSING_API_KEY', '缺少 LLM_API_KEY')
+    throw new TranslateServiceError('CONFIG_MISSING_API_KEY', '缺少 API Key，请在设置中配置')
   }
   if (!config.baseUrl) {
-    throw new TranslateServiceError('CONFIG_MISSING_BASE_URL', '缺少 LLM_BASE_URL')
+    throw new TranslateServiceError('CONFIG_MISSING_BASE_URL', '缺少 Base URL，请在设置中配置')
   }
   const endpoint = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`
-  const model = request.options?.model || config.defaultModel
-  // console.log('[main] request endpoint', endpoint)
-  // console.log('[main] request model', model)
+  const model = request.options?.model || config.model || 'gpt-4o-mini'
+
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -109,9 +71,7 @@ const translateWithOpenAICompatible = async (
           },
           {
             role: 'user',
-            content: `Source language: ${request.sourceLanguage}
-                    Target language: ${request.targetLanguage}
-                    Text:${request.text}`
+            content: `Source language: ${request.sourceLanguage}\nTarget language: ${request.targetLanguage}\nText:${request.text}`
           }
         ]
       })
@@ -155,18 +115,20 @@ const translateWithOpenAICompatible = async (
 
 export const translateText = async (request: TranslateRequest): Promise<TranslateResponse> => {
   try {
-    // console.log('[main] translateText called')
-    console.log('[main] provider =', process.env.TRANSLATE_PROVIDER)
+    const config = getLLMConfig()
 
-    const config = getProviderConfig()
+    console.log(
+      '[main] translateText 执行，当前模式 =',
+      config.provider,
+      '模型 =',
+      request.options?.model || config.model
+    )
 
     if (config.provider === 'mock') {
-      // console.log('[main] using mock provider')
       return await mockTranslate(request)
     }
 
     if (config.provider === 'openai-compatible') {
-      // console.log('[main] using openai-compatible provider')
       return await translateWithOpenAICompatible(request, config)
     }
 
@@ -174,7 +136,7 @@ export const translateText = async (request: TranslateRequest): Promise<Translat
       ok: false,
       error: {
         code: 'UNSUPPORTED_PROVIDER',
-        message: '不支持的翻译 provider'
+        message: '不支持的翻译服务类型'
       }
     }
   } catch (error) {

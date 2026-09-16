@@ -14,7 +14,9 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import trayIcon2x from '../../resources/trayTemplate@2x.png?asset'
 import type { TranslateRequest } from '../shared/translate'
+import type { LLMConfig } from '../shared/config'
 import { translateText } from './services/translator'
+import { getLLMConfig, saveLLMConfig, testLLMConnection } from './services/configManager'
 
 loadEnv({ path: resolve(process.cwd(), '.env.local') })
 
@@ -94,6 +96,13 @@ function createTray(): void {
         showInputTranslateWindow()
       }
     },
+    {
+      label: '模型配置',
+      click: () => {
+        showMainWindow()
+        mainWindow?.webContents.send('app:open-config')
+      }
+    },
     { type: 'separator' },
     {
       label: '显示窗口',
@@ -127,18 +136,6 @@ function createTray(): void {
   })
 
   tray.on('click', () => {
-    // if (!mainWindow) {
-    //   createWindow()
-    //   return
-    // }
-
-    // if (mainWindow.isVisible()) {
-    //   mainWindow.hide()
-    //   return
-    // }
-
-    // mainWindow.show()
-    // mainWindow.focus()
     tray?.popUpContextMenu(contextMenu)
   })
 }
@@ -163,6 +160,18 @@ app.whenReady().then(() => {
   ipcMain.handle('translate:text', async (_, request: TranslateRequest) => {
     console.log('[main] ipcMain.handle translate:text', request)
     return await translateText(request)
+  })
+
+  ipcMain.handle('config:get', async () => {
+    return getLLMConfig()
+  })
+
+  ipcMain.handle('config:save', async (_, config: LLMConfig) => {
+    return await saveLLMConfig(config)
+  })
+
+  ipcMain.handle('config:test', async (_, config: LLMConfig) => {
+    return await testLLMConnection(config)
   })
   createWindow()
   createTray()

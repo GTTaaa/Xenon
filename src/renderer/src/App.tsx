@@ -1,20 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
+import { ConfigModal } from './components/ConfigModal'
+import type { LLMConfig, ModelOptionItem } from '../../shared/config'
 
 const SOURCE_LANGUAGE = 'ENGLISH'
 const TARGET_LANGUAGE = 'CHINESE (SIM)'
 type TranslateStatus = 'idle' | 'translating' | 'error'
-type ModelOption = {
-  value: string
-  code: string
-  profile: string
-}
 
 const DEFAULT_MODEL = 'step-3.5-flash'
 const INITIAL_SOURCE_TEXT =
   'Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.'
-const MODEL_OPTIONS: ModelOption[] = [
+const INITIAL_MODEL_OPTIONS: ModelOptionItem[] = [
   {
     value: 'step-3.5-flash',
     code: 'A1',
@@ -83,11 +80,13 @@ function App(): React.JSX.Element {
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const requestIdRef = useRef(0)
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>(INITIAL_MODEL_OPTIONS)
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
   const [selectedModel, setSelectedModel] = useState(() => {
     const savedModel = localStorage.getItem('selectedModel')
     if (!savedModel) return DEFAULT_MODEL
 
-    const isValidModel = MODEL_OPTIONS.some((option) => option.value === savedModel)
+    const isValidModel = INITIAL_MODEL_OPTIONS.some((option) => option.value === savedModel)
     if (!isValidModel) {
       localStorage.removeItem('selectedModel')
       return DEFAULT_MODEL
@@ -98,6 +97,33 @@ function App(): React.JSX.Element {
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const modelSelectorRef = useRef<HTMLDivElement | null>(null)
 
+  // 初始加载后端持久化的大模型配置与模型列表
+  useEffect(() => {
+    window.api
+      .getConfig()
+      .then((cfg) => {
+        if (Array.isArray(cfg.modelOptions) && cfg.modelOptions.length > 0) {
+          setModelOptions(cfg.modelOptions)
+        }
+        const savedModel = localStorage.getItem('selectedModel')
+        if (savedModel && cfg.modelOptions?.some((opt) => opt.value === savedModel)) {
+          setSelectedModel(savedModel)
+        } else if (cfg.model) {
+          setSelectedModel(cfg.model)
+        }
+      })
+      .catch((err) => {
+        console.error('[renderer] 初始化加载配置失败', err)
+      })
+  }, [])
+
+  // 监听托盘快捷打开配置面板事件
+  useEffect(() => {
+    return window.api.onOpenConfig(() => {
+      setIsConfigModalOpen(true)
+    })
+  }, [])
+
   const resetTranslationState = (): void => {
     setTargetText('')
     setErrorMessage('')
@@ -107,6 +133,19 @@ function App(): React.JSX.Element {
   const markTranslationPending = (): void => {
     setErrorMessage('')
     setStatus('translating')
+  }
+
+  // 配置保存成功后的联动处理
+  const handleConfigSaved = (newConfig: LLMConfig): void => {
+    if (Array.isArray(newConfig.modelOptions) && newConfig.modelOptions.length > 0) {
+      setModelOptions(newConfig.modelOptions)
+    }
+    if (newConfig.model) {
+      setSelectedModel(newConfig.model)
+    }
+    if (sourceText.trim()) {
+      markTranslationPending()
+    }
   }
 
   useEffect(() => {
@@ -249,7 +288,13 @@ function App(): React.JSX.Element {
     <main className="translator-device">
       <section className={`device-panel ${errorMessage ? 'device-panel-error' : ''}`}>
         <header className="device-header">
-          <button className="panel-button" type="button" aria-label="打开菜单">
+          <button
+            className="panel-button"
+            type="button"
+            aria-label="打开大模型配置"
+            title="打开大模型配置"
+            onClick={() => setIsConfigModalOpen(true)}
+          >
             <img className="panel-icon" src={menuIcon} alt="" />
           </button>
 
@@ -289,10 +334,10 @@ function App(): React.JSX.Element {
                   <div className="model-switcher-panel" role="dialog" aria-label="模型切换面板">
                     <div className="model-switcher-panel-header">
                       <span>SELECT ENGINE</span>
-                      <span>{MODEL_OPTIONS.length.toString().padStart(2, '0')} UNITS</span>
+                      <span>{modelOptions.length.toString().padStart(2, '0')} UNITS</span>
                     </div>
                     <div className="model-switcher-list" role="listbox" aria-label="可用模型列表">
-                      {MODEL_OPTIONS.map((option) => {
+                      {modelOptions.map((option) => {
                         const isSelected = option.value === selectedModel
 
                         return (
@@ -313,6 +358,18 @@ function App(): React.JSX.Element {
                           </button>
                         )
                       })}
+                    </div>
+                    <div className="model-switcher-panel-footer">
+                      <button
+                        type="button"
+                        className="model-switcher-config-btn"
+                        onClick={() => {
+                          setIsModelMenuOpen(false)
+                          setIsConfigModalOpen(true)
+                        }}
+                      >
+                        ⚙ CONFIGURE ENGINES
+                      </button>
                     </div>
                   </div>
                 ) : null}
@@ -408,6 +465,13 @@ function App(): React.JSX.Element {
           ) : null}
         </section>
       </section>
+
+      {/* 大模型配置弹窗 */}
+      <ConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        onConfigSaved={handleConfigSaved}
+      />
     </main>
   )
 }

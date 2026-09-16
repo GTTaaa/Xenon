@@ -1,8 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { TranslateRequest, TranslateResponse } from '../shared/translate'
+import type { LLMConfig, TestConnectionResult } from '../shared/config'
 
-// Custom APIs for renderer
+// 暴露给渲染进程的应用 API
 const api = {
   translateText: (request: TranslateRequest): Promise<TranslateResponse> => {
     console.log('[preload] translateText invoke', request)
@@ -17,6 +18,26 @@ const api = {
 
     return () => {
       ipcRenderer.removeListener('translate:focus-input', listener)
+    }
+  },
+  getConfig: (): Promise<LLMConfig> => {
+    return ipcRenderer.invoke('config:get')
+  },
+  saveConfig: (config: LLMConfig): Promise<{ ok: boolean; error?: string }> => {
+    return ipcRenderer.invoke('config:save', config)
+  },
+  testConfig: (config: LLMConfig): Promise<TestConnectionResult> => {
+    return ipcRenderer.invoke('config:test', config)
+  },
+  onOpenConfig: (callback: () => void): (() => void) => {
+    const listener = (): void => {
+      callback()
+    }
+
+    ipcRenderer.on('app:open-config', listener)
+
+    return () => {
+      ipcRenderer.removeListener('app:open-config', listener)
     }
   }
 }
