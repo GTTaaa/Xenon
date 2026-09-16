@@ -36,7 +36,7 @@ function createWindow(): void {
     frame: false,
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -152,8 +152,13 @@ function createTray(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  // Set app user model id for windows
+  // 设置应用模型 ID（用于 Windows 任务栏识别）
   electronApp.setAppUserModelId('com.electron')
+
+  // 在 macOS 环境下设置 Dock 栏应用图标（开发环境与运行时即时生效）
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(icon)
+  }
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
