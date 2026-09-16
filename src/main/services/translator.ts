@@ -45,6 +45,30 @@ const translateWithOpenAICompatible = async (
   }
   const endpoint = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`
   const model = request.options?.model || config.model || 'gpt-4o-mini'
+  const enableThinking = request.options?.enableThinking ?? config.enableThinking ?? false
+
+  const systemContent = enableThinking
+    ? [
+        'You are a translation engine with deep reasoning enabled.',
+        'Translate the user text accurately.',
+        'Preserve the original structure exactly:',
+        '- keep the same line breaks and paragraph breaks',
+        '- do not merge or split lines',
+        '- keep URLs, list structure, headings, dates, and separators in their original positions',
+        '- translate only the text content; do not rewrite, summarize, or reformat',
+        'Output only the translated text.'
+      ].join('\n')
+    : [
+        'You are a translation engine.',
+        'Translate the user text accurately.',
+        'Preserve the original structure exactly:',
+        '- keep the same line breaks and paragraph breaks',
+        '- do not merge or split lines',
+        '- keep URLs, list structure, headings, dates, and separators in their original positions',
+        '- translate only the text content; do not rewrite, summarize, or reformat',
+        'Direct translation only. Do not output any thinking process, reasoning, or <think> tags.',
+        'Output only the translated text.'
+      ].join('\n')
 
   try {
     const response = await fetch(endpoint, {
@@ -58,22 +82,17 @@ const translateWithOpenAICompatible = async (
         messages: [
           {
             role: 'system',
-            content: [
-              'You are a translation engine.',
-              'Translate the user text accurately.',
-              'Preserve the original structure exactly:',
-              '- keep the same line breaks and paragraph breaks',
-              '- do not merge or split lines',
-              '- keep URLs, list structure, headings, dates, and separators in their original positions',
-              '- translate only the text content; do not rewrite, summarize, or reformat',
-              'Output only the translated text.'
-            ].join('\n')
+            content: systemContent
           },
           {
             role: 'user',
             content: `Source language: ${request.sourceLanguage}\nTarget language: ${request.targetLanguage}\nText:${request.text}`
           }
-        ]
+        ],
+        // DeepSeek 官方标准思考开关参数：{"thinking": {"type": "enabled/disabled"}}
+        thinking: {
+          type: enableThinking ? 'enabled' : 'disabled'
+        }
       })
     })
     const data = (await response.json()) as {
@@ -94,10 +113,15 @@ const translateWithOpenAICompatible = async (
       )
     }
 
-    const text = data.choices?.[0]?.message?.content?.trim()
+    let text = data.choices?.[0]?.message?.content?.trim()
 
     if (!text) {
       throw new TranslateServiceError('EMPTY_RESPONSE', '模型返回内容为空')
+    }
+
+    // 关闭思考模式时，若模型仍然返回了 <think> 标签内容，自动将其剥离保持译文纯净
+    if (!enableThinking) {
+      text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
     }
 
     return {
@@ -121,7 +145,9 @@ export const translateText = async (request: TranslateRequest): Promise<Translat
       '[main] translateText 执行，当前模式 =',
       config.provider,
       '模型 =',
-      request.options?.model || config.model
+      request.options?.model || config.model,
+      '思考开关 =',
+      (request.options?.enableThinking ?? config.enableThinking ?? false) ? '开启' : '关闭'
     )
 
     if (config.provider === 'mock') {

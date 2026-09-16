@@ -9,6 +9,8 @@ interface AppAPI {
   saveConfig: (config: LLMConfig) => Promise<{ ok: boolean; error?: string }>
   testConfig: (config: LLMConfig) => Promise<TestConnectionResult>
   onOpenConfig: (callback: () => void) => () => void
+  captureScreen: () => Promise<{ ok: boolean; message?: string }>
+  onApplySourceText: (callback: (text: string) => void) => () => void
 }
 
 declare global {

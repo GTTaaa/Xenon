@@ -69,6 +69,8 @@ export const ConfigModal = ({
   const [model, setModel] = useState('')
   const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>([])
   const [showApiKey, setShowApiKey] = useState(false)
+  // 深度思考模式默认开关状态
+  const [enableThinking, setEnableThinking] = useState(false)
 
   // 连通性测试状态
   const [isTesting, setIsTesting] = useState(false)
@@ -95,6 +97,7 @@ export const ConfigModal = ({
         setApiKey(config.apiKey || '')
         setModel(config.model || '')
         setModelOptions(config.modelOptions || [])
+        setEnableThinking(Boolean(config.enableThinking))
         setTestResult(null)
         setFeedbackMessage('')
       })
@@ -164,7 +167,8 @@ export const ConfigModal = ({
       baseUrl: baseUrl.trim(),
       apiKey: apiKey.trim(),
       model: model.trim() || 'gpt-4o-mini',
-      modelOptions
+      modelOptions,
+      enableThinking
     }
 
     try {
@@ -203,7 +207,8 @@ export const ConfigModal = ({
       baseUrl: baseUrl.trim(),
       apiKey: apiKey.trim(),
       model: trimmedModel || 'step-3.5-flash',
-      modelOptions: currentOptions
+      modelOptions: currentOptions,
+      enableThinking
     }
 
     try {
@@ -393,6 +398,26 @@ export const ConfigModal = ({
                     spellCheck={false}
                   />
                 </div>
+              </div>
+
+              {/* 思考模式默认开关 */}
+              <div className="config-field-group">
+                <div className="config-label-row">
+                  <label className="config-field-label">REASONING / THINKING // 默认思考模式</label>
+                  <button
+                    type="button"
+                    className={`config-toggle-switch ${enableThinking ? 'config-toggle-switch-active' : ''}`}
+                    onClick={() => setEnableThinking((prev) => !prev)}
+                    title={enableThinking ? '点击禁用思考模式' : '点击启用思考模式'}
+                    aria-label={enableThinking ? '禁用思考模式' : '启用思考模式'}
+                  >
+                    <span className="config-toggle-switch-handle" />
+                    <span className="config-toggle-switch-text">{enableThinking ? 'ENABLED' : 'DISABLED'}</span>
+                  </button>
+                </div>
+                <span className="config-field-hint">
+                  启用后将向接口传递 {"{ \"thinking\": { \"type\": \"enabled\" } }"} 参数（适配 DeepSeek-R1 / deepseek-flash 等推理模型）。
+                </span>
               </div>
 
               {/* 连通性测试区 */}

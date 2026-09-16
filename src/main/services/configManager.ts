@@ -52,6 +52,7 @@ const getDefaultConfigFromEnv = (): LLMConfig => {
     apiKey,
     baseUrl,
     model,
+    enableThinking: false,
     modelOptions: DEFAULT_MODEL_OPTIONS
   }
 }
@@ -77,6 +78,7 @@ export const getLLMConfig = (): LLMConfig => {
         baseUrl: typeof parsed.baseUrl === 'string' ? parsed.baseUrl : '',
         apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
         model: typeof parsed.model === 'string' && parsed.model ? parsed.model : 'step-3.5-flash',
+        enableThinking: Boolean(parsed.enableThinking),
         modelOptions:
           Array.isArray(parsed.modelOptions) && parsed.modelOptions.length > 0
             ? parsed.modelOptions
@@ -105,6 +107,7 @@ export const saveLLMConfig = async (
       baseUrl: (newConfig.baseUrl ?? '').trim(),
       apiKey: (newConfig.apiKey ?? '').trim(),
       model: (newConfig.model ?? '').trim() || 'step-3.5-flash',
+      enableThinking: Boolean(newConfig.enableThinking),
       modelOptions:
         Array.isArray(newConfig.modelOptions) && newConfig.modelOptions.length > 0
           ? newConfig.modelOptions
@@ -118,7 +121,8 @@ export const saveLLMConfig = async (
       provider: sanitizedConfig.provider,
       baseUrl: sanitizedConfig.baseUrl,
       hasApiKey: Boolean(sanitizedConfig.apiKey),
-      model: sanitizedConfig.model
+      model: sanitizedConfig.model,
+      enableThinking: sanitizedConfig.enableThinking
     })
 
     return { ok: true }

@@ -82,6 +82,10 @@ function App(): React.JSX.Element {
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>(INITIAL_MODEL_OPTIONS)
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
+  const [enableThinking, setEnableThinking] = useState<boolean>(() => {
+    const saved = localStorage.getItem('enableThinking')
+    return saved === 'true'
+  })
   const [selectedModel, setSelectedModel] = useState(() => {
     const savedModel = localStorage.getItem('selectedModel')
     if (!savedModel) return DEFAULT_MODEL
@@ -111,6 +115,9 @@ function App(): React.JSX.Element {
         } else if (cfg.model) {
           setSelectedModel(cfg.model)
         }
+        if (localStorage.getItem('enableThinking') === null && typeof cfg.enableThinking === 'boolean') {
+          setEnableThinking(cfg.enableThinking)
+        }
       })
       .catch((err) => {
         console.error('[renderer] 初始化加载配置失败', err)
@@ -121,6 +128,22 @@ function App(): React.JSX.Element {
   useEffect(() => {
     return window.api.onOpenConfig(() => {
       setIsConfigModalOpen(true)
+    })
+  }, [])
+
+  // 监听截图 OCR 提取出的文本并自动填充触发翻译
+  useEffect(() => {
+    return window.api.onApplySourceText((recognizedText) => {
+      const trimmed = recognizedText.trim()
+      if (!trimmed) {
+        setErrorMessage('截图未识别到文字内容')
+        setStatus('idle')
+        return
+      }
+
+      setSourceText(recognizedText)
+      setErrorMessage('')
+      markTranslationPending()
     })
   }, [])
 
@@ -135,6 +158,26 @@ function App(): React.JSX.Element {
     setStatus('translating')
   }
 
+  const handleTriggerCapture = async (): Promise<void> => {
+    try {
+      await window.api.captureScreen()
+    } catch (error) {
+      console.error('[renderer] 触发截图翻译失败', error)
+    }
+  }
+
+  // 切换大模型思考模式
+  const handleToggleThinking = (): void => {
+    setEnableThinking((prev) => {
+      const next = !prev
+      localStorage.setItem('enableThinking', String(next))
+      return next
+    })
+    if (sourceText.trim()) {
+      markTranslationPending()
+    }
+  }
+
   // 配置保存成功后的联动处理
   const handleConfigSaved = (newConfig: LLMConfig): void => {
     if (Array.isArray(newConfig.modelOptions) && newConfig.modelOptions.length > 0) {
@@ -142,6 +185,10 @@ function App(): React.JSX.Element {
     }
     if (newConfig.model) {
       setSelectedModel(newConfig.model)
+    }
+    if (typeof newConfig.enableThinking === 'boolean') {
+      setEnableThinking(newConfig.enableThinking)
+      localStorage.setItem('enableThinking', String(newConfig.enableThinking))
     }
     if (sourceText.trim()) {
       markTranslationPending()
@@ -185,7 +232,8 @@ function App(): React.JSX.Element {
         sourceLanguage: SOURCE_LANGUAGE,
         targetLanguage: TARGET_LANGUAGE,
         options: {
-          model: selectedModel
+          model: selectedModel,
+          enableThinking
         }
       })
       if (currentRequestId !== requestIdRef.current) return
@@ -206,7 +254,7 @@ function App(): React.JSX.Element {
     return () => {
       window.clearTimeout(timer)
     }
-  }, [selectedModel, sourceText])
+  }, [selectedModel, sourceText, enableThinking])
 
   useEffect(() => {
     return window.api.onFocusInput(() => {
@@ -392,6 +440,51 @@ function App(): React.JSX.Element {
               <div className="display-screen-actions">
                 <span className="display-screen-actions-label">INPUT ACTIONS</span>
                 <div className="display-screen-actions-list">
+                  <button
+                    className={`display-screen-action-button display-screen-action-button-think ${
+                      enableThinking ? 'display-screen-action-button-think-active' : ''
+                    }`}
+                    type="button"
+                    onClick={handleToggleThinking}
+                    aria-label={enableThinking ? '深度思考模式: 已开启 (点击关闭)' : '深度思考模式: 已关闭 (点击开启)'}
+                    title={enableThinking ? '深度思考模式: 已开启 (点击关闭)' : '深度思考模式: 已关闭 (点击开启)'}
+                  >
+                    {enableThinking ? (
+                      <svg
+                        className="display-screen-action-icon display-screen-action-icon-toggle"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                      >
+                        {/* 谷歌 Material Symbols: toggle_on */}
+                        <path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6zm0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4zm0-7c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
+                      </svg>
+                    ) : (
+                      <svg
+                        className="display-screen-action-icon display-screen-action-icon-toggle"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                      >
+                        {/* 谷歌 Material Symbols: toggle_off */}
+                        <path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6zm0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4zM7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
+                      </svg>
+                    )}
+                  </button>
+                  <button
+                    className="display-screen-action-button display-screen-action-button-capture"
+                    type="button"
+                    onClick={() => void handleTriggerCapture()}
+                    aria-label="截图翻译 (Alt+S)"
+                    title="截图翻译 (Alt+S)"
+                  >
+                    <span
+                      className="display-screen-action-icon display-screen-action-icon-crop"
+                      aria-hidden="true"
+                    />
+                  </button>
                   <button
                     className="display-screen-action-button display-screen-action-button-clear"
                     type="button"

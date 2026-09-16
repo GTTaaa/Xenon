@@ -17,6 +17,7 @@ import type { TranslateRequest } from '../shared/translate'
 import type { LLMConfig } from '../shared/config'
 import { translateText } from './services/translator'
 import { getLLMConfig, saveLLMConfig, testLLMConnection } from './services/configManager'
+import { triggerScreenshotTranslation } from './services/screenCapture'
 
 loadEnv({ path: resolve(process.cwd(), '.env.local') })
 
@@ -97,6 +98,13 @@ function createTray(): void {
       }
     },
     {
+      label: '截图翻译',
+      accelerator: 'Alt+S',
+      click: () => {
+        void triggerScreenshotTranslation(() => mainWindow)
+      }
+    },
+    {
       label: '模型配置',
       click: () => {
         showMainWindow()
@@ -173,6 +181,10 @@ app.whenReady().then(() => {
   ipcMain.handle('config:test', async (_, config: LLMConfig) => {
     return await testLLMConnection(config)
   })
+
+  ipcMain.handle('capture:screen', async () => {
+    return await triggerScreenshotTranslation(() => mainWindow)
+  })
   createWindow()
   createTray()
 
@@ -184,6 +196,16 @@ app.whenReady().then(() => {
     console.warn('[main] failed to register input translate shortcut: Alt+A')
   } else {
     console.log('[main] registered input translate shortcut: Alt+A')
+  }
+
+  const isScreenshotShortcutRegistered = globalShortcut.register('Alt+S', () => {
+    void triggerScreenshotTranslation(() => mainWindow)
+  })
+
+  if (!isScreenshotShortcutRegistered) {
+    console.warn('[main] failed to register screenshot shortcut: Alt+S')
+  } else {
+    console.log('[main] registered screenshot shortcut: Alt+S')
   }
 
   app.on('activate', function () {

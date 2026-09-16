@@ -29,6 +29,8 @@ export interface LLMConfig {
   apiKey: string
   /** 默认使用的模型名称 */
   model: string
+  /** 默认是否启用大模型深度思考/推理模式 */
+  enableThinking?: boolean
   /** 用户配置的快捷模型备选池 */
   modelOptions: ModelOptionItem[]
 }

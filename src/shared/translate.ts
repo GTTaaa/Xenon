@@ -20,4 +20,6 @@ export type TranslateResponse = TranslateSuccessResponse | TranslateErrorRespons
 
 export interface TranslateOptions {
   model?: string
+  /** 是否开启大模型深度思考/推理模式 */
+  enableThinking?: boolean
 }
