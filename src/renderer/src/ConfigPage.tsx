@@ -56,7 +56,6 @@ export const ConfigPage = (): React.JSX.Element => {
   const [model, setModel] = useState('')
   const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>([])
   const [showApiKey, setShowApiKey] = useState(false)
-  // 深度思考模式开关
   const [enableThinking, setEnableThinking] = useState(false)
 
   // 连通性测试状态
@@ -133,7 +132,7 @@ export const ConfigPage = (): React.JSX.Element => {
     }
 
     setTestResult(null)
-    setFeedbackMessage(`已填充 ${preset.name} 预设`)
+    setFeedbackMessage(`已填入 ${preset.name} 预设参数`)
   }
 
   /**
@@ -196,10 +195,10 @@ export const ConfigPage = (): React.JSX.Element => {
     try {
       const result = await window.api.saveConfig(payload)
       if (result.ok) {
-        setFeedbackMessage('✓ 配置已保存并实时同步至主窗口')
+        setFeedbackMessage('配置已保存生效')
         setTimeout(() => {
           void window.api.closeConfigWindow()
-        }, 500)
+        }, 400)
       } else {
         setFeedbackMessage(`保存失败: ${result.error || '未知错误'}`)
       }
@@ -242,127 +241,117 @@ export const ConfigPage = (): React.JSX.Element => {
   }
 
   return (
-    <div className="config-page-root">
-      {/* 顶部可拖拽工业控制条 */}
-      <header className="config-page-header">
-        <div className="config-header-brand">
-          <span className="config-brand-code">SYS-CFG // PREFERENCES</span>
-          <h1 className="config-page-title">LLM ENGINE CONFIGURATION</h1>
+    <div className="pref-root">
+      {/* 顶部标题栏 */}
+      <header className="pref-header">
+        <div className="pref-header-title">
+          <span className="pref-title-main">偏好设置</span>
+          <span className="pref-title-sub">PREFERENCES // LLM CONFIG</span>
         </div>
-        <div className="config-header-actions">
-          <button
-            type="button"
-            className="config-window-close-btn"
-            aria-label="关闭设置窗口"
-            title="关闭设置 (ESC)"
-            onClick={() => void window.api.closeConfigWindow()}
-          >
-            ✕ ESC
-          </button>
-        </div>
+        <button
+          type="button"
+          className="pref-close-btn"
+          aria-label="关闭设置窗口"
+          title="关闭设置 (ESC)"
+          onClick={() => void window.api.closeConfigWindow()}
+        >
+          ×
+        </button>
       </header>
 
-      {/* 主体滚动表单 */}
-      <main className="config-page-scroll">
-        {/* 服务提供商选择 */}
-        <section className="config-section-card">
-          <div className="config-section-header">
-            <span className="config-section-tag">01 / MODE</span>
-            <label className="config-field-label">SERVICE PROVIDER // 模式选择</label>
+      {/* 主体设置表单区 */}
+      <main className="pref-body">
+        {/* 模块一：服务模式与厂商预设 */}
+        <section className="pref-card">
+          <div className="pref-card-header">
+            <h2 className="pref-card-title">模型服务与厂商</h2>
+            {/* 分段模式选择器 */}
+            <div className="pref-seg-control">
+              <button
+                type="button"
+                className={`pref-seg-btn ${
+                  provider === 'openai-compatible' ? 'pref-seg-btn-active' : ''
+                }`}
+                onClick={() => setProvider('openai-compatible')}
+              >
+                OpenAI 兼容接口
+              </button>
+              <button
+                type="button"
+                className={`pref-seg-btn ${provider === 'mock' ? 'pref-seg-btn-active' : ''}`}
+                onClick={() => setProvider('mock')}
+              >
+                Mock 离线演练
+              </button>
+            </div>
           </div>
-          <div className="config-provider-toggle">
-            <button
-              type="button"
-              className={`config-provider-chip ${
-                provider === 'openai-compatible' ? 'config-provider-chip-active' : ''
-              }`}
-              onClick={() => setProvider('openai-compatible')}
-            >
-              OPENAI COMPATIBLE (通用接口)
-            </button>
-            <button
-              type="button"
-              className={`config-provider-chip ${provider === 'mock' ? 'config-provider-chip-active' : ''}`}
-              onClick={() => setProvider('mock')}
-            >
-              MOCK 离线模拟演练
-            </button>
-          </div>
-          <p className="config-field-hint">
-            {provider === 'openai-compatible'
-              ? '支持兼容 OpenAI 标准的各种商业与本地大模型接口（DeepSeek, 通义千问, Kimi, Ollama, 阶跃星辰等）'
-              : '离线模拟模式，无需配置网络与 API Key，返回预设模拟翻译结果'}
-          </p>
-        </section>
 
-        {provider === 'openai-compatible' ? (
-          <>
-            {/* 厂商快捷预设 */}
-            <section className="config-section-card">
-              <div className="config-section-header">
-                <span className="config-section-tag">02 / PRESETS</span>
-                <label className="config-field-label">QUICK PRESETS // 常用厂商一键填充</label>
-              </div>
-              <div className="config-preset-grid">
+          {provider === 'openai-compatible' ? (
+            <div className="pref-preset-row">
+              <span className="pref-preset-tip">快速填入：</span>
+              <div className="pref-preset-chips">
                 {PRESETS.map((preset) => (
                   <button
                     key={preset.name}
                     type="button"
-                    className="config-preset-card-btn"
+                    className="pref-preset-chip"
                     onClick={() => handleApplyPreset(preset)}
+                    title={`填充 Base URL 与 ${preset.defaultModel}`}
                   >
-                    <span className="config-preset-name">{preset.name}</span>
-                    <span className="config-preset-meta">{preset.defaultModel}</span>
+                    {preset.name}
                   </button>
                 ))}
               </div>
-            </section>
+            </div>
+          ) : (
+            <p className="pref-mock-hint">当前为离线演练模式，将返回预设翻译结果，无需网络请求。</p>
+          )}
+        </section>
 
-            {/* 核心接口参数 */}
-            <section className="config-section-card">
-              <div className="config-section-header">
-                <span className="config-section-tag">03 / ENDPOINT</span>
-                <label className="config-field-label">API PARAMETERS // 接口基础配置</label>
+        {provider === 'openai-compatible' ? (
+          <>
+            {/* 模块二：接口连接与模型配置 */}
+            <section className="pref-card">
+              <div className="pref-card-header">
+                <h2 className="pref-card-title">接口连接与主模型</h2>
               </div>
 
-              {/* Base URL */}
-              <div className="config-field-group">
-                <label className="config-field-label" htmlFor="llm-base-url">
-                  BASE URL // 接口服务地址
-                </label>
-                <div className="config-input-wrapper">
+              <div className="pref-fields-grid">
+                {/* 服务地址 */}
+                <div className="pref-field">
+                  <label className="pref-label" htmlFor="llm-base-url">
+                    服务地址 (Base URL)
+                  </label>
                   <input
                     id="llm-base-url"
                     type="text"
-                    className="config-text-input"
+                    className="pref-input"
                     value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="例如: https://api.deepseek.com/v1"
+                    placeholder="https://api.deepseek.com/v1"
                     spellCheck={false}
                     autoComplete="off"
                   />
                 </div>
-              </div>
 
-              {/* API Key */}
-              <div className="config-field-group">
-                <div className="config-label-row">
-                  <label className="config-field-label" htmlFor="llm-api-key">
-                    API KEY // 访问密钥
-                  </label>
-                  <button
-                    type="button"
-                    className="config-toggle-visibility-btn"
-                    onClick={() => setShowApiKey((prev) => !prev)}
-                  >
-                    {showApiKey ? '[HIDE / 隐藏]' : '[SHOW / 显示]'}
-                  </button>
-                </div>
-                <div className="config-input-wrapper">
+                {/* 访问密钥 */}
+                <div className="pref-field">
+                  <div className="pref-label-row">
+                    <label className="pref-label" htmlFor="llm-api-key">
+                      访问密钥 (API Key)
+                    </label>
+                    <button
+                      type="button"
+                      className="pref-text-btn"
+                      onClick={() => setShowApiKey((prev) => !prev)}
+                    >
+                      {showApiKey ? '隐藏' : '显示'}
+                    </button>
+                  </div>
                   <input
                     id="llm-api-key"
                     type={showApiKey ? 'text' : 'password'}
-                    className="config-text-input"
+                    className="pref-input"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder="sk-..."
@@ -370,163 +359,149 @@ export const ConfigPage = (): React.JSX.Element => {
                     autoComplete="off"
                   />
                 </div>
-              </div>
-            </section>
 
-            {/* 主模型与特性 */}
-            <section className="config-section-card">
-              <div className="config-section-header">
-                <span className="config-section-tag">04 / ENGINE</span>
-                <label className="config-field-label">
-                  DEFAULT ENGINE & REASONING // 主模型与深度思考
-                </label>
-              </div>
-
-              <div className="config-field-group">
-                <label className="config-field-label" htmlFor="llm-model-name">
-                  DEFAULT MODEL ID // 默认模型代号
-                </label>
-                <div className="config-input-wrapper">
+                {/* 默认模型 */}
+                <div className="pref-field">
+                  <label className="pref-label" htmlFor="llm-model-name">
+                    默认模型 (Model ID)
+                  </label>
                   <input
                     id="llm-model-name"
                     type="text"
-                    className="config-text-input"
+                    className="pref-input"
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
                     placeholder="例如: deepseek-chat 或 gpt-4o-mini"
                     spellCheck={false}
                   />
                 </div>
-              </div>
 
-              {/* 深度思考开关 */}
-              <div className="config-field-group">
-                <div
-                  className="config-checkbox-label"
-                  onClick={() => setEnableThinking((prev) => !prev)}
-                >
-                  <input
-                    id="llm-enable-thinking"
-                    type="checkbox"
-                    checked={enableThinking}
-                    onChange={(e) => setEnableThinking(e.target.checked)}
-                    className="config-checkbox-input"
-                  />
-                  <div className="config-checkbox-info">
-                    <span className="config-checkbox-title">
-                      ENABLE DEEP THINKING // 开启深度思考模式
+                {/* 深度思考模式 Switch 开关 */}
+                <div className="pref-switch-row" onClick={() => setEnableThinking((prev) => !prev)}>
+                  <div className="pref-switch-desc">
+                    <span className="pref-switch-name">深度思考推理模式</span>
+                    <span className="pref-switch-sub">
+                      让模型输出思维推导链（支持 DeepSeek-R1 / o1 / o3 等）
                     </span>
-                    <span className="config-checkbox-desc">
-                      适配 DeepSeek-R1 / OpenAI o1 等推理模型，让模型输出思考推导链
-                    </span>
+                  </div>
+                  <div className={`pref-switch ${enableThinking ? 'pref-switch-on' : ''}`}>
+                    <div className="pref-switch-thumb" />
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* 备选模型切换池 */}
-            <section className="config-section-card">
-              <div className="config-section-header">
-                <span className="config-section-tag">05 / REPOSITORY</span>
-                <label className="config-field-label">MODEL POOL // 主窗口快速切换模型库</label>
+            {/* 模块三：主窗口快捷模型库 */}
+            <section className="pref-card">
+              <div className="pref-card-header">
+                <div className="pref-card-title-group">
+                  <h2 className="pref-card-title">快捷切换模型池</h2>
+                  <span className="pref-card-subtitle">
+                    主翻译界面右上角可直接快速下拉切换以下模型
+                  </span>
+                </div>
               </div>
 
-              <div className="config-model-list">
-                {modelOptions.map((opt) => (
-                  <div key={opt.value} className="config-model-item">
-                    <div className="config-model-item-code">{opt.code}</div>
-                    <div className="config-model-item-info">
-                      <span className="config-model-item-value">{opt.value}</span>
-                      <span className="config-model-item-profile">{opt.profile}</span>
-                    </div>
-                    {modelOptions.length > 1 ? (
-                      <button
-                        type="button"
-                        className="config-model-remove-btn"
-                        onClick={() => handleRemoveModelOption(opt.value)}
-                        title={`移除 ${opt.value}`}
-                      >
-                        ✕
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+              <div className="pref-pool-container">
+                {/* 标签胶囊池 */}
+                <div className="pref-pills-wrap">
+                  {modelOptions.map((opt) => (
+                    <span key={opt.value} className="pref-pill">
+                      <span className="pref-pill-name">{opt.value}</span>
+                      {modelOptions.length > 1 ? (
+                        <button
+                          type="button"
+                          className="pref-pill-remove"
+                          onClick={() => handleRemoveModelOption(opt.value)}
+                          title={`移除 ${opt.value}`}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </span>
+                  ))}
+                </div>
 
-              {/* 添加新备选模型 */}
-              <div className="config-add-model-row">
-                <input
-                  type="text"
-                  className="config-text-input config-add-input"
-                  value={newModelName}
-                  onChange={(e) => setNewModelName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      handleAddModelOption()
-                    }
-                  }}
-                  placeholder="输入新模型标识符，如 claude-3-5-sonnet..."
-                  spellCheck={false}
-                />
-                <button
-                  type="button"
-                  className="config-action-btn config-add-btn"
-                  onClick={handleAddModelOption}
-                  disabled={!newModelName.trim()}
-                >
-                  + ADD POOL
-                </button>
+                {/* 紧凑添加行 */}
+                <div className="pref-add-row">
+                  <input
+                    type="text"
+                    className="pref-input pref-add-input"
+                    value={newModelName}
+                    onChange={(e) => setNewModelName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleAddModelOption()
+                      }
+                    }}
+                    placeholder="添加新模型，如 qwen-max..."
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className="pref-btn pref-btn-secondary"
+                    onClick={handleAddModelOption}
+                    disabled={!newModelName.trim()}
+                  >
+                    + 加入模型池
+                  </button>
+                </div>
               </div>
             </section>
           </>
         ) : null}
       </main>
 
-      {/* 底部固定操作栏 */}
-      <footer className="config-page-footer">
-        <div className="config-footer-left">
+      {/* 底部操作工具栏 */}
+      <footer className="pref-footer">
+        <div className="pref-footer-left">
           {provider === 'openai-compatible' ? (
             <button
               type="button"
-              className="config-action-btn config-test-btn"
+              className="pref-btn pref-btn-test"
               onClick={() => void handleTestConnection()}
               disabled={isTesting || isSaving}
             >
-              {isTesting ? 'TESTING...' : '⚡ TEST CONNECTION'}
+              {isTesting ? '正在测试...' : '测试连接'}
             </button>
           ) : null}
 
           {testResult ? (
-            <span
-              className={`config-test-badge ${
-                testResult.ok ? 'config-test-badge-ok' : 'config-test-badge-fail'
+            <div
+              className={`pref-test-status ${
+                testResult.ok ? 'pref-test-status-ok' : 'pref-test-status-fail'
               }`}
             >
-              {testResult.ok ? `✓ OK (${testResult.latencyMs ?? 0}ms)` : `✕ ${testResult.message}`}
-            </span>
+              <span className="pref-status-dot" />
+              <span className="pref-status-text">
+                {testResult.ok
+                  ? `连接成功 (${testResult.latencyMs ?? 0}ms)`
+                  : `连接失败: ${testResult.message}`}
+              </span>
+            </div>
           ) : null}
         </div>
 
-        <div className="config-footer-right">
-          {feedbackMessage ? <span className="config-feedback-msg">{feedbackMessage}</span> : null}
+        <div className="pref-footer-right">
+          {feedbackMessage ? <span className="pref-feedback-text">{feedbackMessage}</span> : null}
 
           <button
             type="button"
-            className="config-action-btn config-cancel-btn"
+            className="pref-btn pref-btn-cancel"
             onClick={() => void window.api.closeConfigWindow()}
             disabled={isSaving}
           >
-            CANCEL
+            取消
           </button>
 
           <button
             type="button"
-            className="config-action-btn config-save-btn"
+            className="pref-btn pref-btn-save"
             onClick={() => void handleSave()}
             disabled={isSaving || isTesting}
           >
-            {isSaving ? 'SAVING...' : 'SAVE & APPLY'}
+            {isSaving ? '保存中...' : '保存设置'}
           </button>
         </div>
       </footer>

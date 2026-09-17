@@ -639,7 +639,7 @@ function App(): React.JSX.Element {
                           void window.api.openConfigWindow()
                         }}
                       >
-                        ⚙ CONFIGURE ENGINES
+                        CONFIGURE ENGINES
                       </button>
                     </div>
                   </div>
