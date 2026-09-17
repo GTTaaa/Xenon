@@ -2024,3 +2024,465 @@ button:focus-visible {
     inset 1px 1px 0 #8b96a7;
   transform: translateY(1px);
 }
+
+/* ==========================================================================
+   独立系统偏好设置窗口 (Preferences Window / ConfigPage) 样式体系
+   ========================================================================== */
+
+.config-page-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #e4dfd7;
+  color: #3b4251;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 顶部可拖拽工业控制条 */
+.config-page-header {
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: #dad4cb;
+  border-bottom: 2px solid #5a6475;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  -webkit-app-region: drag;
+}
+
+.config-header-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-brand-code {
+  font-family: 'Space Mono', 'Courier New', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: #657086;
+  letter-spacing: 1.2px;
+}
+
+.config-page-title {
+  margin: 0;
+  font-family: 'Space Mono', 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 800;
+  color: #272d37;
+  letter-spacing: 0.8px;
+}
+
+.config-header-actions {
+  -webkit-app-region: no-drag;
+}
+
+.config-window-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #555f71;
+  background: #d0d6de;
+  border: 1px solid #9aa5b5;
+  border-radius: 4px;
+  box-shadow:
+    inset 1px 1px 0 #edf1f5,
+    inset -1px -1px 0 #8b96a7;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.config-window-close-btn:hover {
+  background: #e28787;
+  color: #ffffff;
+  border-color: #ba4343;
+}
+
+.config-window-close-btn:active {
+  box-shadow:
+    inset -1px -1px 0 #ffffff,
+    inset 1px 1px 0 #8b96a7;
+  transform: translateY(1px);
+}
+
+/* 主体滚动表单区 */
+.config-page-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #e4dfd7;
+}
+
+.config-page-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+
+.config-page-scroll::-webkit-scrollbar-thumb {
+  background: #b5ada2;
+  border-radius: 4px;
+}
+
+.config-page-scroll::-webkit-scrollbar-thumb:hover {
+  background: #8e8578;
+}
+
+/* 工业卡片容器 */
+.config-section-card {
+  background: #eae5de;
+  border: 1px solid #c8c0b4;
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.config-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.config-section-tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  color: #5a6578;
+  background: #dad3c8;
+  border: 1px solid #b8b0a3;
+  border-radius: 3px;
+  padding: 2px 6px;
+  letter-spacing: 0.5px;
+}
+
+/* 厂商预设网格 */
+.config-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.config-preset-card-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 8px 10px;
+  background: #d6dbe0;
+  border: 1px solid #9aa5b5;
+  border-radius: 4px;
+  box-shadow:
+    inset 1px 1px 0 #edf1f5,
+    inset -1px -1px 0 #8b96a7;
+  cursor: pointer;
+  text-align: left;
+  transition: all 120ms ease;
+}
+
+.config-preset-card-btn:hover {
+  background: #e0e5eb;
+  transform: translateY(-1px);
+}
+
+.config-preset-card-btn:active {
+  box-shadow:
+    inset -1px -1px 0 #edf1f5,
+    inset 1px 1px 0 #8b96a7;
+  transform: translateY(1px);
+}
+
+.config-preset-name {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #2b3341;
+}
+
+.config-preset-meta {
+  font-size: 10px;
+  color: #657086;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* 深度思考复选框整行卡片 */
+.config-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #ded8ce;
+  border: 1px solid #bbb3a6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.config-checkbox-label:hover {
+  background: #d7d1c6;
+}
+
+.config-checkbox-input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: #27ae60;
+  cursor: pointer;
+}
+
+.config-checkbox-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-checkbox-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #272d37;
+}
+
+.config-checkbox-desc {
+  font-size: 11px;
+  color: #636e82;
+  line-height: 1.4;
+}
+
+/* 备选模型列表项 */
+.config-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.config-model-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: #ded8ce;
+  border: 1px solid #bfb7aa;
+  border-radius: 4px;
+}
+
+.config-model-item-code {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #4f596b;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.config-model-item-info {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.config-model-item-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #272d37;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.config-model-item-profile {
+  font-size: 10px;
+  color: #7b8699;
+  white-space: nowrap;
+}
+
+.config-model-remove-btn {
+  background: transparent;
+  border: none;
+  color: #8c97a8;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 2px;
+  transition: all 120ms ease;
+}
+
+.config-model-remove-btn:hover {
+  background: #d46b6b;
+  color: #ffffff;
+}
+
+/* 添加模型行 */
+.config-add-model-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.config-add-input {
+  flex: 1;
+}
+
+.config-add-btn {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 14px;
+  background: #d0d6de;
+  border: 1px solid #9aa5b5;
+  border-radius: 4px;
+  color: #3b4453;
+  cursor: pointer;
+  box-shadow:
+    inset 1px 1px 0 #edf1f5,
+    inset -1px -1px 0 #8b96a7;
+  transition: all 120ms ease;
+}
+
+.config-add-btn:hover:not(:disabled) {
+  background: #dae0e8;
+}
+
+.config-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 底部操作工具栏 */
+.config-page-footer {
+  height: 54px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: #dad4cb;
+  border-top: 2px solid #5a6475;
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.config-footer-left,
+.config-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.config-test-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 3px;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.config-test-badge-ok {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.config-test-badge-fail {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.config-feedback-msg {
+  font-size: 11px;
+  font-weight: 600;
+  color: #27ae60;
+  margin-right: 4px;
+}
+
+.config-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 14px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.config-test-btn {
+  background: #d6dbe0;
+  border: 1px solid #9aa5b5;
+  color: #3f495a;
+  box-shadow:
+    inset 1px 1px 0 #edf1f5,
+    inset -1px -1px 0 #8b96a7;
+}
+
+.config-test-btn:hover:not(:disabled) {
+  background: #e0e5eb;
+}
+
+.config-cancel-btn {
+  background: transparent;
+  border: 1px solid #a89f92;
+  color: #657086;
+}
+
+.config-cancel-btn:hover {
+  background: #cec7bc;
+  color: #272d37;
+}
+
+.config-save-btn {
+  background: #27ae60;
+  border: 1px solid #1e8449;
+  color: #ffffff;
+  box-shadow:
+    inset 1px 1px 0 #58d68d,
+    inset -1px -1px 0 #196f3d,
+    0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.config-save-btn:hover:not(:disabled) {
+  background: #2ecc71;
+}
+
+.config-save-btn:active:not(:disabled) {
+  box-shadow:
+    inset -1px -1px 0 #58d68d,
+    inset 1px 1px 0 #196f3d;
+  transform: translateY(1px);
+}
+
+.config-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

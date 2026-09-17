@@ -56,6 +56,23 @@ const api = {
   },
   setWindowHeight: (height: number): Promise<void> => {
     return ipcRenderer.invoke('window:set-height', height)
+  },
+  openConfigWindow: (): Promise<void> => {
+    return ipcRenderer.invoke('app:open-config')
+  },
+  closeConfigWindow: (): Promise<void> => {
+    return ipcRenderer.invoke('window:close-config')
+  },
+  onConfigUpdated: (callback: (config: LLMConfig) => void): (() => void) => {
+    const listener = (_: unknown, config: LLMConfig): void => {
+      callback(config)
+    }
+
+    ipcRenderer.on('config:updated', listener)
+
+    return () => {
+      ipcRenderer.removeListener('config:updated', listener)
+    }
   }
 }
 

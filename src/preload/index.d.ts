@@ -12,6 +12,9 @@ interface AppAPI {
   captureScreen: () => Promise<{ ok: boolean; message?: string }>
   onApplySourceText: (callback: (text: string) => void) => () => void
   setWindowHeight: (height: number) => Promise<void>
+  openConfigWindow: () => Promise<void>
+  closeConfigWindow: () => Promise<void>
+  onConfigUpdated: (callback: (config: LLMConfig) => void) => () => void
 }
 
 declare global {

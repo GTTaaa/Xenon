@@ -23,8 +23,71 @@ loadEnv({ path: resolve(process.cwd(), '.env.local') })
 
 let tray: Tray | null = null
 let mainWindow: BrowserWindow | null = null
+let configWindow: BrowserWindow | null = null
 
 console.log('[main] process booted')
+
+/**
+ * 创建或激活独立的系统偏好设置窗口
+ */
+function openConfigWindow(): void {
+  if (configWindow && !configWindow.isDestroyed()) {
+    if (configWindow.isMinimized()) {
+      configWindow.restore()
+    }
+    configWindow.show()
+    configWindow.focus()
+    return
+  }
+
+  configWindow = new BrowserWindow({
+    width: 560,
+    height: 660,
+    minWidth: 480,
+    minHeight: 520,
+    resizable: true,
+    frame: false,
+    show: false,
+    autoHideMenuBar: true,
+    icon,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+
+  configWindow.on('ready-to-show', () => {
+    configWindow?.show()
+    configWindow?.focus()
+  })
+
+  configWindow.on('closed', () => {
+    configWindow = null
+  })
+
+  configWindow.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url)
+    return { action: 'deny' }
+  })
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    configWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?window=config`)
+  } else {
+    configWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: { window: 'config' }
+    })
+  }
+}
+
+/**
+ * 关闭独立的系统偏好设置窗口
+ */
+function closeConfigWindow(): void {
+  if (configWindow && !configWindow.isDestroyed()) {
+    configWindow.close()
+    configWindow = null
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -109,9 +172,9 @@ function createTray(): void {
     },
     {
       label: '模型配置',
+      accelerator: 'CommandOrControl+,',
       click: () => {
-        showMainWindow()
-        mainWindow?.webContents.send('app:open-config')
+        openConfigWindow()
       }
     },
     { type: 'separator' },
@@ -183,7 +246,20 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('config:save', async (_, config: LLMConfig) => {
-    return await saveLLMConfig(config)
+    const result = await saveLLMConfig(config)
+    if (result.ok) {
+      const latestConfig = getLLMConfig()
+      mainWindow?.webContents.send('config:updated', latestConfig)
+    }
+    return result
+  })
+
+  ipcMain.handle('app:open-config', () => {
+    openConfigWindow()
+  })
+
+  ipcMain.handle('window:close-config', () => {
+    closeConfigWindow()
   })
 
   ipcMain.handle('config:test', async (_, config: LLMConfig) => {
@@ -223,6 +299,16 @@ app.whenReady().then(() => {
     console.warn('[main] failed to register screenshot shortcut: Alt+S')
   } else {
     console.log('[main] registered screenshot shortcut: Alt+S')
+  }
+
+  const isPreferencesShortcutRegistered = globalShortcut.register('CommandOrControl+,', () => {
+    openConfigWindow()
+  })
+
+  if (!isPreferencesShortcutRegistered) {
+    console.warn('[main] failed to register preferences shortcut: CommandOrControl+,')
+  } else {
+    console.log('[main] registered preferences shortcut: CommandOrControl+,')
   }
 
   app.on('activate', function () {

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
-import { ConfigModal } from './components/ConfigModal'
 import type { LLMConfig, ModelOptionItem } from '../../shared/config'
 import {
   detectLanguage,
@@ -87,7 +86,6 @@ function App(): React.JSX.Element {
   const requestIdRef = useRef(0)
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>(INITIAL_MODEL_OPTIONS)
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
   const [enableThinking, setEnableThinking] = useState<boolean>(() => {
     const saved = localStorage.getItem('enableThinking')
     return saved === 'true'
@@ -225,10 +223,10 @@ function App(): React.JSX.Element {
     setStatus('translating')
   }
 
-  // 监听托盘快捷打开配置面板事件
+  // 监听快捷打开配置面板事件
   useEffect(() => {
     return window.api.onOpenConfig(() => {
-      setIsConfigModalOpen(true)
+      void window.api.openConfigWindow()
     })
   }, [])
 
@@ -268,22 +266,33 @@ function App(): React.JSX.Element {
     }
   }
 
-  // 配置保存成功后的联动处理
-  const handleConfigSaved = (newConfig: LLMConfig): void => {
-    if (Array.isArray(newConfig.modelOptions) && newConfig.modelOptions.length > 0) {
-      setModelOptions(newConfig.modelOptions)
-    }
-    if (newConfig.model) {
-      setSelectedModel(newConfig.model)
-    }
-    if (typeof newConfig.enableThinking === 'boolean') {
-      setEnableThinking(newConfig.enableThinking)
-      localStorage.setItem('enableThinking', String(newConfig.enableThinking))
-    }
-    if (sourceText.trim()) {
-      markTranslationPending()
-    }
-  }
+  // 监听独立配置窗口保存后的配置热同步事件
+  useEffect(() => {
+    return window.api.onConfigUpdated((newConfig: LLMConfig) => {
+      console.log('[renderer] 主窗口收到配置热更新广播', newConfig)
+      if (Array.isArray(newConfig.modelOptions) && newConfig.modelOptions.length > 0) {
+        setModelOptions(newConfig.modelOptions)
+        // 校验当前选中的模型是否依然有效
+        const isValidModel = newConfig.modelOptions.some((item) => item.value === selectedModel)
+        if (!isValidModel) {
+          const fallback = newConfig.model || newConfig.modelOptions[0].value
+          setSelectedModel(fallback)
+          localStorage.setItem('selectedModel', fallback)
+        }
+      }
+      if (newConfig.model) {
+        setSelectedModel(newConfig.model)
+        localStorage.setItem('selectedModel', newConfig.model)
+      }
+      if (typeof newConfig.enableThinking === 'boolean') {
+        setEnableThinking(newConfig.enableThinking)
+        localStorage.setItem('enableThinking', String(newConfig.enableThinking))
+      }
+      if (sourceText.trim()) {
+        markTranslationPending()
+      }
+    })
+  }, [selectedModel, sourceText])
 
   // 监听多浮层外部点击与 Esc 按键关闭
   useEffect(() => {
@@ -485,9 +494,9 @@ function App(): React.JSX.Element {
           <button
             className="panel-button"
             type="button"
-            aria-label="打开大模型配置"
-            title="打开大模型配置"
-            onClick={() => setIsConfigModalOpen(true)}
+            aria-label="打开系统偏好设置"
+            title="偏好设置 (Cmd+,)"
+            onClick={() => void window.api.openConfigWindow()}
           >
             <img className="panel-icon" src={menuIcon} alt="" />
           </button>
@@ -627,7 +636,7 @@ function App(): React.JSX.Element {
                         className="model-switcher-config-btn"
                         onClick={() => {
                           setIsModelMenuOpen(false)
-                          setIsConfigModalOpen(true)
+                          void window.api.openConfigWindow()
                         }}
                       >
                         ⚙ CONFIGURE ENGINES
@@ -908,13 +917,6 @@ function App(): React.JSX.Element {
           ) : null}
         </section>
       </section>
-
-      {/* 大模型配置弹窗 */}
-      <ConfigModal
-        isOpen={isConfigModalOpen}
-        onClose={() => setIsConfigModalOpen(false)}
-        onConfigSaved={handleConfigSaved}
-      />
     </main>
   )
 }
