@@ -1,11 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
 import { ConfigModal } from './components/ConfigModal'
 import type { LLMConfig, ModelOptionItem } from '../../shared/config'
+import {
+  detectLanguage,
+  getLanguageInfo,
+  resolveAutoTargetLanguage,
+  resolvePromptLanguage,
+  SUPPORTED_LANGUAGES,
+  type SupportedLanguage
+} from '../../shared/languageDetector'
 
-const SOURCE_LANGUAGE = 'ENGLISH'
-const TARGET_LANGUAGE = 'CHINESE (SIM)'
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
 const DEFAULT_MODEL = 'step-3.5-flash'
@@ -101,6 +107,48 @@ function App(): React.JSX.Element {
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const modelSelectorRef = useRef<HTMLDivElement | null>(null)
 
+  // 用户选中的源语言模式（'auto' 或指定语言）
+  const [sourceLanguage, setSourceLanguage] = useState<SupportedLanguage>(() => {
+    const saved = localStorage.getItem('sourceLanguage') as SupportedLanguage | null
+    return saved && SUPPORTED_LANGUAGES.some((l) => l.code === saved) ? saved : 'auto'
+  })
+
+  // 用户手动指定的目标语言（为 null 时跟随自动匹配）
+  const [manualTargetLang, setManualTargetLang] = useState<SupportedLanguage | null>(() => {
+    const saved = localStorage.getItem('targetLanguage') as SupportedLanguage | null
+    return saved && SUPPORTED_LANGUAGES.some((l) => l.code === saved && l.code !== 'auto')
+      ? saved
+      : null
+  })
+
+  const [isSourceLangMenuOpen, setIsSourceLangMenuOpen] = useState(false)
+  const [isTargetLangMenuOpen, setIsTargetLangMenuOpen] = useState(false)
+  const sourceLangSelectorRef = useRef<HTMLDivElement | null>(null)
+  const targetLangSelectorRef = useRef<HTMLDivElement | null>(null)
+
+  // 毫秒级根据输入文本自动检测语言
+  const detectedInfo = useMemo(() => {
+    return detectLanguage(sourceText)
+  }, [sourceText])
+
+  // 计算当前实际生效的目标语言
+  const effectiveTargetLang: SupportedLanguage = useMemo(() => {
+    if (manualTargetLang) return manualTargetLang
+    const autoTarget = resolveAutoTargetLanguage(detectedInfo.detected)
+    if (sourceLanguage !== 'auto' && sourceLanguage === autoTarget) {
+      return autoTarget === 'zh' ? 'en' : 'zh'
+    }
+    return autoTarget
+  }, [manualTargetLang, detectedInfo.detected, sourceLanguage])
+
+  // 源语言标签的单行规范化显示文本
+  const sourceDisplayPrompt = useMemo(() => {
+    if (sourceLanguage === 'auto') {
+      return sourceText.trim() ? detectedInfo.languageInfo.promptName : 'AUTO'
+    }
+    return getLanguageInfo(sourceLanguage).promptName
+  }, [sourceLanguage, sourceText, detectedInfo.languageInfo.promptName])
+
   // 初始加载后端持久化的大模型配置与模型列表
   useEffect(() => {
     window.api
@@ -115,7 +163,10 @@ function App(): React.JSX.Element {
         } else if (cfg.model) {
           setSelectedModel(cfg.model)
         }
-        if (localStorage.getItem('enableThinking') === null && typeof cfg.enableThinking === 'boolean') {
+        if (
+          localStorage.getItem('enableThinking') === null &&
+          typeof cfg.enableThinking === 'boolean'
+        ) {
           setEnableThinking(cfg.enableThinking)
         }
       })
@@ -123,6 +174,17 @@ function App(): React.JSX.Element {
         console.error('[renderer] 初始化加载配置失败', err)
       })
   }, [])
+
+  const resetTranslationState = (): void => {
+    setTargetText('')
+    setErrorMessage('')
+    setStatus('idle')
+  }
+
+  const markTranslationPending = (): void => {
+    setErrorMessage('')
+    setStatus('translating')
+  }
 
   // 监听托盘快捷打开配置面板事件
   useEffect(() => {
@@ -146,17 +208,6 @@ function App(): React.JSX.Element {
       markTranslationPending()
     })
   }, [])
-
-  const resetTranslationState = (): void => {
-    setTargetText('')
-    setErrorMessage('')
-    setStatus('idle')
-  }
-
-  const markTranslationPending = (): void => {
-    setErrorMessage('')
-    setStatus('translating')
-  }
 
   const handleTriggerCapture = async (): Promise<void> => {
     try {
@@ -195,18 +246,28 @@ function App(): React.JSX.Element {
     }
   }
 
+  // 监听多浮层外部点击与 Esc 按键关闭
   useEffect(() => {
-    if (!isModelMenuOpen) return
+    if (!isModelMenuOpen && !isSourceLangMenuOpen && !isTargetLangMenuOpen) return
 
     const handlePointerDown = (event: MouseEvent): void => {
-      if (!modelSelectorRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node
+      if (isModelMenuOpen && !modelSelectorRef.current?.contains(target)) {
         setIsModelMenuOpen(false)
+      }
+      if (isSourceLangMenuOpen && !sourceLangSelectorRef.current?.contains(target)) {
+        setIsSourceLangMenuOpen(false)
+      }
+      if (isTargetLangMenuOpen && !targetLangSelectorRef.current?.contains(target)) {
+        setIsTargetLangMenuOpen(false)
       }
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         setIsModelMenuOpen(false)
+        setIsSourceLangMenuOpen(false)
+        setIsTargetLangMenuOpen(false)
       }
     }
 
@@ -217,20 +278,38 @@ function App(): React.JSX.Element {
       window.removeEventListener('mousedown', handlePointerDown)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isModelMenuOpen])
+  }, [isModelMenuOpen, isSourceLangMenuOpen, isTargetLangMenuOpen])
 
+  // 源语言选择持久化
+  useEffect(() => {
+    localStorage.setItem('sourceLanguage', sourceLanguage)
+  }, [sourceLanguage])
+
+  // 手动目标语言选择持久化
+  useEffect(() => {
+    if (manualTargetLang) {
+      localStorage.setItem('targetLanguage', manualTargetLang)
+    } else {
+      localStorage.removeItem('targetLanguage')
+    }
+  }, [manualTargetLang])
+
+  // 核心翻译流程：基于动态检测的源语言与自适应目标语言触发模型翻译
   useEffect(() => {
     const trimmedSourceText = sourceText.trim()
     if (!trimmedSourceText) return
 
     requestIdRef.current += 1
     const currentRequestId = requestIdRef.current
+    const effectiveSourcePrompt = resolvePromptLanguage(sourceLanguage, detectedInfo.detected)
+    const effectiveTargetPrompt = getLanguageInfo(effectiveTargetLang).promptName
+
     // 防抖处理，避免频繁调用翻译接口
     const timer = window.setTimeout(async () => {
       const response = await window.api.translateText({
         text: sourceText,
-        sourceLanguage: SOURCE_LANGUAGE,
-        targetLanguage: TARGET_LANGUAGE,
+        sourceLanguage: effectiveSourcePrompt,
+        targetLanguage: effectiveTargetPrompt,
         options: {
           model: selectedModel,
           enableThinking
@@ -254,7 +333,35 @@ function App(): React.JSX.Element {
     return () => {
       window.clearTimeout(timer)
     }
-  }, [selectedModel, sourceText, enableThinking])
+  }, [
+    selectedModel,
+    sourceText,
+    enableThinking,
+    sourceLanguage,
+    effectiveTargetLang,
+    detectedInfo.detected
+  ])
+
+  // 互换源语言与目标语言（包括对应文本内容）
+  const handleSwapLanguages = (): void => {
+    if (sourceLanguage !== 'auto') {
+      const prevSource = sourceLanguage
+      const prevTarget = effectiveTargetLang
+      setSourceLanguage(prevTarget)
+      setManualTargetLang(prevSource)
+    } else {
+      const detected = detectedInfo.detected
+      setManualTargetLang(detected)
+    }
+
+    // 互换文本内容
+    if (targetText.trim()) {
+      const prevTarget = targetText
+      setSourceText(prevTarget)
+      setTargetText('')
+      markTranslationPending()
+    }
+  }
 
   useEffect(() => {
     return window.api.onFocusInput(() => {
@@ -361,7 +468,75 @@ function App(): React.JSX.Element {
 
         <section className="display-section">
           <div className="display-section-header">
-            <p className="language-label">SOURCE: {SOURCE_LANGUAGE}</p>
+            <div className="lang-header-item" ref={sourceLangSelectorRef}>
+              <button
+                className={`lang-badge-button ${isSourceLangMenuOpen ? 'lang-badge-button-open' : ''}`}
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={isSourceLangMenuOpen}
+                aria-label={`当前源语言: ${sourceLanguage === 'auto' ? `自动检测 (当前识别: ${detectedInfo.languageInfo.label})` : getLanguageInfo(sourceLanguage).label}，点击切换`}
+                onClick={() => {
+                  setIsSourceLangMenuOpen((open) => !open)
+                  setIsTargetLangMenuOpen(false)
+                  setIsModelMenuOpen(false)
+                }}
+              >
+                <span className="language-label">
+                  SOURCE: <span className="language-label-value">{sourceDisplayPrompt}</span>
+                </span>
+                {sourceLanguage === 'auto' && sourceText.trim() ? (
+                  <span
+                    className="lang-pill"
+                    title={`已自动识别: ${detectedInfo.languageInfo.label} (置信度: ${Math.round(detectedInfo.confidence * 100)}%)`}
+                  >
+                    AUTO
+                  </span>
+                ) : null}
+              </button>
+
+              {isSourceLangMenuOpen ? (
+                <div className="lang-switcher-panel" role="dialog" aria-label="源语言选择面板">
+                  <div className="lang-switcher-panel-header">
+                    <span>SELECT SOURCE</span>
+                    <span>{SUPPORTED_LANGUAGES.length.toString().padStart(2, '0')} UNITS</span>
+                  </div>
+                  <div className="lang-switcher-list" role="listbox" aria-label="源语言列表">
+                    {SUPPORTED_LANGUAGES.map((lang) => {
+                      const isSelected = lang.code === sourceLanguage
+
+                      return (
+                        <button
+                          key={lang.code}
+                          className={`lang-option ${isSelected ? 'lang-option-selected' : ''}`}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => {
+                            setSourceLanguage(lang.code)
+                            setIsSourceLangMenuOpen(false)
+                            if (sourceText.trim()) {
+                              markTranslationPending()
+                            }
+                          }}
+                        >
+                          <span className="lang-option-code">{lang.shortLabel}</span>
+                          <span className="lang-option-body">
+                            <span className="lang-option-name">{lang.label}</span>
+                            {lang.code === 'auto' && sourceText.trim() ? (
+                              <span className="lang-option-sub">
+                                识别: {detectedInfo.languageInfo.label}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="lang-option-indicator" aria-hidden="true" />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <div className="display-section-tools">
               <div className="model-selector" ref={modelSelectorRef}>
                 <button
@@ -446,8 +621,16 @@ function App(): React.JSX.Element {
                     }`}
                     type="button"
                     onClick={handleToggleThinking}
-                    aria-label={enableThinking ? '深度思考模式: 已开启 (点击关闭)' : '深度思考模式: 已关闭 (点击开启)'}
-                    title={enableThinking ? '深度思考模式: 已开启 (点击关闭)' : '深度思考模式: 已关闭 (点击开启)'}
+                    aria-label={
+                      enableThinking
+                        ? '深度思考模式: 已开启 (点击关闭)'
+                        : '深度思考模式: 已关闭 (点击开启)'
+                    }
+                    title={
+                      enableThinking
+                        ? '深度思考模式: 已开启 (点击关闭)'
+                        : '深度思考模式: 已关闭 (点击开启)'
+                    }
                   >
                     {enableThinking ? (
                       <svg
@@ -525,7 +708,114 @@ function App(): React.JSX.Element {
           </div>
         </section>
         <section className="display-section">
-          <p className="language-label">TARGET: {TARGET_LANGUAGE}</p>
+          <div className="display-section-header">
+            <div className="lang-header-item" ref={targetLangSelectorRef}>
+              <button
+                className={`lang-badge-button ${isTargetLangMenuOpen ? 'lang-badge-button-open' : ''}`}
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={isTargetLangMenuOpen}
+                aria-label={`当前目标语言: ${getLanguageInfo(effectiveTargetLang).label}，点击切换`}
+                onClick={() => {
+                  setIsTargetLangMenuOpen((open) => !open)
+                  setIsSourceLangMenuOpen(false)
+                  setIsModelMenuOpen(false)
+                }}
+              >
+                <span className="language-label">
+                  TARGET:{' '}
+                  <span className="language-label-value">
+                    {getLanguageInfo(effectiveTargetLang).promptName}
+                  </span>
+                </span>
+              </button>
+
+              {isTargetLangMenuOpen ? (
+                <div className="lang-switcher-panel" role="dialog" aria-label="目标语言选择面板">
+                  <div className="lang-switcher-panel-header">
+                    <span>SELECT TARGET</span>
+                    <span>MODE</span>
+                  </div>
+                  <div className="lang-switcher-list" role="listbox" aria-label="目标语言列表">
+                    <button
+                      className={`lang-option ${manualTargetLang === null ? 'lang-option-selected' : ''}`}
+                      type="button"
+                      role="option"
+                      aria-selected={manualTargetLang === null}
+                      onClick={() => {
+                        setManualTargetLang(null)
+                        setIsTargetLangMenuOpen(false)
+                        if (sourceText.trim()) {
+                          markTranslationPending()
+                        }
+                      }}
+                    >
+                      <span className="lang-option-code">AUTO</span>
+                      <span className="lang-option-body">
+                        <span className="lang-option-name">智能自动匹配</span>
+                        <span className="lang-option-sub">根据输入语言自动对偶切换</span>
+                      </span>
+                      <span className="lang-option-indicator" aria-hidden="true" />
+                    </button>
+
+                    {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => {
+                      const isSelected = manualTargetLang === lang.code
+
+                      return (
+                        <button
+                          key={lang.code}
+                          className={`lang-option ${isSelected ? 'lang-option-selected' : ''}`}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => {
+                            setManualTargetLang(lang.code)
+                            setIsTargetLangMenuOpen(false)
+                            if (sourceText.trim()) {
+                              markTranslationPending()
+                            }
+                          }}
+                        >
+                          <span className="lang-option-code">{lang.shortLabel}</span>
+                          <span className="lang-option-body">
+                            <span className="lang-option-name">{lang.label}</span>
+                          </span>
+                          <span className="lang-option-indicator" aria-hidden="true" />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="display-section-tools">
+              <button
+                className="lang-swap-icon-button"
+                type="button"
+                onClick={handleSwapLanguages}
+                title="互换翻译方向与内容"
+                aria-label="互换源语言与目标语言"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M7 10l-4 4 4 4" />
+                  <path d="M3 14h14" />
+                  <path d="M17 14l4-4-4-4" />
+                  <path d="M21 10H7" />
+                </svg>
+              </button>
+            </div>
+          </div>
           <div className="display-screen display-screen-target">
             <div className="display-screen-body">
               <div className="display-scroll">

@@ -412,11 +412,14 @@ export const ConfigModal = ({
                     aria-label={enableThinking ? '禁用思考模式' : '启用思考模式'}
                   >
                     <span className="config-toggle-switch-handle" />
-                    <span className="config-toggle-switch-text">{enableThinking ? 'ENABLED' : 'DISABLED'}</span>
+                    <span className="config-toggle-switch-text">
+                      {enableThinking ? 'ENABLED' : 'DISABLED'}
+                    </span>
                   </button>
                 </div>
                 <span className="config-field-hint">
-                  启用后将向接口传递 {"{ \"thinking\": { \"type\": \"enabled\" } }"} 参数（适配 DeepSeek-R1 / deepseek-flash 等推理模型）。
+                  启用后将向接口传递 {'{ "thinking": { "type": "enabled" } }'} 参数（适配
+                  DeepSeek-R1 / deepseek-flash 等推理模型）。
                 </span>
               </div>
 

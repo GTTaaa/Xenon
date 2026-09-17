@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, dialog, shell } from 'electron'
 import { execFile } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { unlink } from 'fs/promises'

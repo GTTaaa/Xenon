@@ -112,9 +112,10 @@ body {
 
 .language-label {
   color: rgba(101, 112, 134, 0.82);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
   letter-spacing: 0.8px;
+  white-space: nowrap;
 }
 
 .display-section-header {
@@ -542,7 +543,9 @@ button:focus-visible {
   background: transparent;
   color: rgba(0, 240, 90, 0.45);
   opacity: 0.7;
-  transition: opacity 120ms ease, color 120ms ease;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
 }
 
 .display-screen-action-button-think:hover:not(:disabled) {
@@ -970,7 +973,9 @@ button:focus-visible {
   }
 
   .display-section-header .language-label {
-    flex: 0 1 46%;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 11px;
   }
 
   .model-switcher-label {
@@ -1292,7 +1297,9 @@ button:focus-visible {
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: transform 80ms ease, filter 80ms ease;
+  transition:
+    transform 80ms ease,
+    filter 80ms ease;
 }
 
 .config-close-button:hover {
@@ -1434,7 +1441,9 @@ button:focus-visible {
   box-sizing: border-box;
   caret-color: #00f05a;
   user-select: text;
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .config-text-input::placeholder {
@@ -1784,3 +1793,223 @@ button:focus-visible {
   cursor: not-allowed;
 }
 
+/* ==========================================================================
+   语言检测与选择器控件 (Language Detection & Selector)
+   ========================================================================== */
+
+.lang-header-item {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  z-index: 5;
+}
+
+.lang-badge-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 1px 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.lang-badge-button:hover {
+  opacity: 0.85;
+}
+
+.language-label-value {
+  color: #384255;
+  font-weight: 800;
+}
+
+/* 极简自动检测胶囊 (AUTO Pill) */
+.lang-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  border: 1px solid rgba(101, 112, 134, 0.28);
+  border-radius: 2px;
+  background: rgba(101, 112, 134, 0.1);
+  color: #4f596b;
+  font-family: 'Space Mono', monospace;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.6px;
+  vertical-align: middle;
+}
+
+.lang-pill::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #00f05a;
+  box-shadow: 0 0 4px rgba(0, 240, 90, 0.6);
+}
+
+/* 语言下拉悬浮面板 */
+.lang-switcher-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 15;
+  width: min(220px, 100vw - 40px);
+  max-height: 250px;
+  padding: 8px;
+  border: 1px solid rgba(98, 108, 125, 0.16);
+  border-radius: 10px;
+  background: rgba(242, 238, 232, 0.97);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 28px rgba(92, 96, 107, 0.14);
+  display: flex;
+  flex-direction: column;
+}
+
+.lang-switcher-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  color: #818899;
+  font-size: 8px;
+  line-height: 1;
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 1px;
+}
+
+.lang-switcher-list {
+  display: grid;
+  gap: 4px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.lang-switcher-list::-webkit-scrollbar {
+  width: 3px;
+}
+
+.lang-switcher-list::-webkit-scrollbar-thumb {
+  background: rgba(101, 112, 134, 0.3);
+  border-radius: 2px;
+}
+
+.lang-option {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 10px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(91, 101, 119, 0.12);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.48);
+  color: #4a5567;
+  text-align: left;
+  cursor: pointer;
+  transition: all 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.lang-option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(79, 89, 107, 0.22);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.lang-option-selected {
+  border-color: rgba(52, 64, 82, 0.25);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.lang-option-code {
+  color: #8f97a7;
+  font-size: 9px;
+  line-height: 1;
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+}
+
+.lang-option-selected .lang-option-code {
+  color: #2f3848;
+}
+
+.lang-option-body {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.lang-option-name {
+  color: #384255;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lang-option-sub {
+  color: #008f35;
+  font-size: 8px;
+  line-height: 1;
+  font-family: 'Space Mono', monospace;
+}
+
+.lang-option-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid rgba(101, 112, 134, 0.3);
+}
+
+.lang-option-selected .lang-option-indicator {
+  background: #2ac458;
+  border-color: #2ac458;
+  box-shadow: 0 0 5px rgba(42, 196, 88, 0.5);
+}
+
+/* 微型复古机械语言互换按钮 (SWAP) */
+.lang-swap-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #9aa5b5;
+  border-radius: 2px;
+  background: #d6dbe0;
+  box-shadow:
+    inset 1px 1px 0 #edf1f5,
+    inset -1px -1px 0 #8b96a7;
+  color: #4f596b;
+  cursor: pointer;
+  transition: all 100ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.lang-swap-icon-button:hover {
+  filter: brightness(0.96);
+  color: #2f3848;
+}
+
+.lang-swap-icon-button:active {
+  box-shadow:
+    inset -1px -1px 0 #edf1f5,
+    inset 1px 1px 0 #8b96a7;
+  transform: translateY(1px);
+}
