@@ -30,9 +30,10 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     useContentSize: true,
     width: 358,
-    height: 670,
+    height: 520,
     minWidth: 358,
-    minHeight: 670,
+    minHeight: 320,
+    maxHeight: 880,
     frame: false,
     show: false,
     autoHideMenuBar: true,
@@ -189,6 +190,15 @@ app.whenReady().then(() => {
 
   ipcMain.handle('capture:screen', async () => {
     return await triggerScreenshotTranslation(() => mainWindow)
+  })
+
+  ipcMain.handle('window:set-height', (_, targetHeight: number) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    const [width, currentHeight] = mainWindow.getContentSize()
+    const clampedHeight = Math.max(320, Math.min(Math.round(targetHeight), 880))
+    if (Math.abs(currentHeight - clampedHeight) >= 2) {
+      mainWindow.setContentSize(width, clampedHeight, true)
+    }
   })
   createWindow()
   createTray()

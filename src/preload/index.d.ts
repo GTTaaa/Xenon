@@ -11,6 +11,7 @@ interface AppAPI {
   onOpenConfig: (callback: () => void) => () => void
   captureScreen: () => Promise<{ ok: boolean; message?: string }>
   onApplySourceText: (callback: (text: string) => void) => () => void
+  setWindowHeight: (height: number) => Promise<void>
 }
 
 declare global {

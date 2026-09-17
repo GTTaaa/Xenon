@@ -149,6 +149,45 @@ function App(): React.JSX.Element {
     return getLanguageInfo(sourceLanguage).promptName
   }, [sourceLanguage, sourceText, detectedInfo.languageInfo.promptName])
 
+  const deviceRef = useRef<HTMLElement | null>(null)
+
+  // 动态根据输入内容自适应调整 textarea 高度
+  const adjustTextareaHeight = (): void => {
+    const textarea = sourceInputRef.current
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    const nextHeight = Math.min(textarea.scrollHeight, 180)
+    textarea.style.height = `${Math.max(nextHeight, 36)}px`
+  }
+
+  useEffect(() => {
+    adjustTextareaHeight()
+  }, [sourceText])
+
+  // 监听组件真实渲染尺寸并动态同步给 Electron 窗口高度
+  useEffect(() => {
+    if (!deviceRef.current) return
+
+    const updateWindowHeight = (): void => {
+      if (!deviceRef.current) return
+      const rect = deviceRef.current.getBoundingClientRect()
+      // 加上 #root 上下内边距与外壳安全裕量
+      const targetHeight = Math.ceil(rect.height + 24)
+      void window.api.setWindowHeight(targetHeight)
+    }
+
+    const observer = new ResizeObserver(() => {
+      window.requestAnimationFrame(updateWindowHeight)
+    })
+
+    observer.observe(deviceRef.current)
+    updateWindowHeight()
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
   // 初始加载后端持久化的大模型配置与模型列表
   useEffect(() => {
     window.api
@@ -440,7 +479,7 @@ function App(): React.JSX.Element {
     .join(' ')
 
   return (
-    <main className="translator-device">
+    <main className="translator-device" ref={deviceRef}>
       <section className={`device-panel ${errorMessage ? 'device-panel-error' : ''}`}>
         <header className="device-header">
           <button

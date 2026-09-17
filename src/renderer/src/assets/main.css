@@ -14,7 +14,7 @@
 body {
   margin: 0;
   min-width: 100vw;
-  min-height: 100vh;
+  height: auto;
   overflow: hidden;
   background: var(--device-bg);
   user-select: none;
@@ -22,11 +22,11 @@ body {
 
 #root {
   width: 100%;
-  min-height: 100vh;
+  height: auto;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 20px 6px 12px;
+  padding: 12px 6px 12px;
 }
 
 .translator-device {
@@ -429,20 +429,27 @@ button:focus-visible {
 }
 
 .display-screen {
-  height: 392px;
+  height: auto;
+  min-height: 80px;
   border: 8px solid var(--screen-border);
   border-radius: 10px;
   overflow: hidden;
   position: relative;
   background: linear-gradient(180deg, var(--screen-bg-top), var(--screen-bg-bottom));
+  display: flex;
+  flex-direction: column;
 }
 
 .display-screen-source {
-  height: 348px;
+  min-height: 84px;
+  max-height: 240px;
+  height: auto;
 }
 
 .display-screen-target {
-  height: 432px;
+  min-height: 84px;
+  max-height: 280px;
+  height: auto;
 }
 
 .display-screen::before {
@@ -461,16 +468,19 @@ button:focus-visible {
 }
 
 .display-screen-body {
-  height: 100%;
+  height: auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
   z-index: 1;
+  flex: 1;
 }
 
 .display-scroll {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 36px;
+  max-height: inherit;
   overflow-y: auto;
   padding-left: 24px;
   position: relative;
@@ -812,9 +822,10 @@ button:focus-visible {
   display: block;
   box-sizing: border-box;
   width: 100%;
-  height: 100%;
+  height: auto;
+  min-height: 48px;
   border: 0;
-  padding: 30px 24px 30px 0;
+  padding: 20px 24px 20px 0;
   resize: none;
   outline: none;
   background: transparent;
@@ -1047,22 +1058,22 @@ button:focus-visible {
   }
 
   .display-screen {
-    height: 250px;
+    height: auto;
+    min-height: 74px;
     border-width: 2px;
     border-radius: 2px;
   }
 
   .display-screen-source {
-    height: 220px;
+    min-height: 78px;
+    max-height: 220px;
+    height: auto;
   }
 
   .display-screen-target {
-    height: 280px;
-  }
-
-  /* 出现错误提示时回收高度，避免页面超出窗口高度产生滚动条 */
-  .device-panel-error .display-screen-target {
-    height: 254px;
+    min-height: 78px;
+    max-height: 260px;
+    height: auto;
   }
 
   .display-screen-actions {

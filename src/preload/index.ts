@@ -53,6 +53,9 @@ const api = {
     return () => {
       ipcRenderer.removeListener('translate:apply-source-text', listener)
     }
+  },
+  setWindowHeight: (height: number): Promise<void> => {
+    return ipcRenderer.invoke('window:set-height', height)
   }
 }
 
