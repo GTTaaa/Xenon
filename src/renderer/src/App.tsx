@@ -14,8 +14,7 @@ import {
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
 const DEFAULT_MODEL = 'step-3.5-flash'
-const INITIAL_SOURCE_TEXT =
-  'Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.Hello, how are you today? I am testing the professional industrial handheld translator layout to ensure it handles long text content properly with a fixed-height display area and internal scrolling.'
+const INITIAL_SOURCE_TEXT = 'hello'
 const INITIAL_MODEL_OPTIONS: ModelOptionItem[] = [
   {
     value: 'step-3.5-flash',
