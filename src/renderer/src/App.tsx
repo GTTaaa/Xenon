@@ -72,6 +72,15 @@ const getUserFriendlyErrorMessage = (code: string): string => {
   }
 }
 
+/**
+ * 格式化界面显示的语言名称，去除多余繁杂括号
+ */
+function formatLanguageDisplay(code: SupportedLanguage): string {
+  if (code === 'auto') return 'AUTO'
+  if (code === 'zh') return 'CHINESE'
+  return getLanguageInfo(code).promptName
+}
+
 function App(): React.JSX.Element {
   const [sourceText, setSourceText] = useState(INITIAL_SOURCE_TEXT)
   // const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
@@ -83,6 +92,7 @@ function App(): React.JSX.Element {
   )
   const [errorMessage, setErrorMessage] = useState('')
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
+  const [isSwapping, setIsSwapping] = useState(false)
   const requestIdRef = useRef(0)
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>(INITIAL_MODEL_OPTIONS)
@@ -105,7 +115,7 @@ function App(): React.JSX.Element {
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const modelSelectorRef = useRef<HTMLDivElement | null>(null)
 
-  // 用户选中的源语言模式（'auto' 或指定语言）
+  // 用户指定的源语言（'auto' 表示自动识别）
   const [sourceLanguage, setSourceLanguage] = useState<SupportedLanguage>(() => {
     const saved = localStorage.getItem('sourceLanguage') as SupportedLanguage | null
     return saved && SUPPORTED_LANGUAGES.some((l) => l.code === saved) ? saved : 'auto'
@@ -142,10 +152,10 @@ function App(): React.JSX.Element {
   // 源语言标签的单行规范化显示文本
   const sourceDisplayPrompt = useMemo(() => {
     if (sourceLanguage === 'auto') {
-      return sourceText.trim() ? detectedInfo.languageInfo.promptName : 'AUTO'
+      return sourceText.trim() ? formatLanguageDisplay(detectedInfo.detected) : 'AUTO'
     }
-    return getLanguageInfo(sourceLanguage).promptName
-  }, [sourceLanguage, sourceText, detectedInfo.languageInfo.promptName])
+    return formatLanguageDisplay(sourceLanguage)
+  }, [sourceLanguage, sourceText, detectedInfo.detected])
 
   const deviceRef = useRef<HTMLElement | null>(null)
 
@@ -390,23 +400,36 @@ function App(): React.JSX.Element {
     detectedInfo.detected
   ])
 
-  // 互换源语言与目标语言（包括对应文本内容）
+  // 切换源语言与目标语言方向
   const handleSwapLanguages = (): void => {
+    setIsSwapping(true)
+    window.setTimeout(() => {
+      setIsSwapping(false)
+    }, 350)
+
+    let nextSource: SupportedLanguage
+    let nextTarget: SupportedLanguage
+
     if (sourceLanguage !== 'auto') {
-      const prevSource = sourceLanguage
-      const prevTarget = effectiveTargetLang
-      setSourceLanguage(prevTarget)
-      setManualTargetLang(prevSource)
+      nextSource = effectiveTargetLang
+      nextTarget = sourceLanguage
     } else {
-      const detected = detectedInfo.detected
-      setManualTargetLang(detected)
+      nextSource = effectiveTargetLang
+      nextTarget = detectedInfo.detected
     }
 
-    // 互换文本内容
-    if (targetText.trim()) {
-      const prevTarget = targetText
-      setSourceText(prevTarget)
-      setTargetText('')
+    // 防止源语言与目标语言完全一致
+    if (nextSource === nextTarget) {
+      nextTarget = nextSource === 'zh' ? 'en' : 'zh'
+    }
+
+    setSourceLanguage(nextSource)
+    setManualTargetLang(nextTarget)
+    localStorage.setItem('sourceLanguage', nextSource)
+    localStorage.setItem('targetLanguage', nextTarget)
+
+    // 语言方向切换后，若有输入内容，以新方向重新发起翻译
+    if (sourceText.trim()) {
       markTranslationPending()
     }
   }
@@ -516,6 +539,7 @@ function App(): React.JSX.Element {
 
         <section className="display-section">
           <div className="display-section-header">
+            {/* 源语言选择器 */}
             <div className="lang-header-item" ref={sourceLangSelectorRef}>
               <button
                 className={`lang-badge-button ${isSourceLangMenuOpen ? 'lang-badge-button-open' : ''}`}
@@ -529,9 +553,8 @@ function App(): React.JSX.Element {
                   setIsModelMenuOpen(false)
                 }}
               >
-                <span className="language-label">
-                  SOURCE: <span className="language-label-value">{sourceDisplayPrompt}</span>
-                </span>
+                <span className="section-header-label">SOURCE:</span>
+                <span className="section-header-value">{sourceDisplayPrompt}</span>
                 {sourceLanguage === 'auto' && sourceText.trim() ? (
                   <span
                     className="lang-pill"
@@ -543,7 +566,11 @@ function App(): React.JSX.Element {
               </button>
 
               {isSourceLangMenuOpen ? (
-                <div className="lang-switcher-panel" role="dialog" aria-label="源语言选择面板">
+                <div
+                  className="lang-switcher-panel lang-switcher-panel-left"
+                  role="dialog"
+                  aria-label="源语言选择面板"
+                >
                   <div className="lang-switcher-panel-header">
                     <span>SELECT SOURCE</span>
                     <span>{SUPPORTED_LANGUAGES.length.toString().padStart(2, '0')} UNITS</span>
@@ -583,68 +610,6 @@ function App(): React.JSX.Element {
                   </div>
                 </div>
               ) : null}
-            </div>
-
-            <div className="display-section-tools">
-              <div className="model-selector" ref={modelSelectorRef}>
-                <button
-                  className={`model-switcher-trigger ${isModelMenuOpen ? 'model-switcher-trigger-open' : ''}`}
-                  type="button"
-                  aria-haspopup="listbox"
-                  aria-expanded={isModelMenuOpen}
-                  aria-label={`当前模型 ${selectedModel}，点击切换模型`}
-                  onClick={() => setIsModelMenuOpen((open) => !open)}
-                >
-                  <span className="model-switcher-label">MODEL BANK</span>
-                  <span className="model-switcher-value" title={selectedModel}>
-                    {selectedModel}
-                  </span>
-                </button>
-
-                {isModelMenuOpen ? (
-                  <div className="model-switcher-panel" role="dialog" aria-label="模型切换面板">
-                    <div className="model-switcher-panel-header">
-                      <span>SELECT ENGINE</span>
-                      <span>{modelOptions.length.toString().padStart(2, '0')} UNITS</span>
-                    </div>
-                    <div className="model-switcher-list" role="listbox" aria-label="可用模型列表">
-                      {modelOptions.map((option) => {
-                        const isSelected = option.value === selectedModel
-
-                        return (
-                          <button
-                            key={option.value}
-                            className={`model-option ${isSelected ? 'model-option-selected' : ''}`}
-                            type="button"
-                            role="option"
-                            aria-selected={isSelected}
-                            onClick={() => handleModelSelect(option.value)}
-                          >
-                            <span className="model-option-code">{option.code}</span>
-                            <span className="model-option-body">
-                              <span className="model-option-name">{option.value}</span>
-                              <span className="model-option-profile">{option.profile}</span>
-                            </span>
-                            <span className="model-option-indicator" aria-hidden="true" />
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="model-switcher-panel-footer">
-                      <button
-                        type="button"
-                        className="model-switcher-config-btn"
-                        onClick={() => {
-                          setIsModelMenuOpen(false)
-                          void window.api.openConfigWindow()
-                        }}
-                      >
-                        CONFIGURE ENGINES
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
             </div>
           </div>
           <div className="display-screen display-screen-source">
@@ -755,8 +720,10 @@ function App(): React.JSX.Element {
             </div>
           </div>
         </section>
-        <section className="display-section">
-          <div className="display-section-header">
+
+        <section className="display-section display-section-target-wrap">
+          <div className="display-section-header display-section-header-target">
+            {/* 目标语言选择器 */}
             <div className="lang-header-item" ref={targetLangSelectorRef}>
               <button
                 className={`lang-badge-button ${isTargetLangMenuOpen ? 'lang-badge-button-open' : ''}`}
@@ -770,16 +737,18 @@ function App(): React.JSX.Element {
                   setIsModelMenuOpen(false)
                 }}
               >
-                <span className="language-label">
-                  TARGET:{' '}
-                  <span className="language-label-value">
-                    {getLanguageInfo(effectiveTargetLang).promptName}
-                  </span>
+                <span className="section-header-label">TARGET:</span>
+                <span className="section-header-value">
+                  {formatLanguageDisplay(effectiveTargetLang)}
                 </span>
               </button>
 
               {isTargetLangMenuOpen ? (
-                <div className="lang-switcher-panel" role="dialog" aria-label="目标语言选择面板">
+                <div
+                  className="lang-switcher-panel lang-switcher-panel-left"
+                  role="dialog"
+                  aria-label="目标语言选择面板"
+                >
                   <div className="lang-switcher-panel-header">
                     <span>SELECT TARGET</span>
                     <span>MODE</span>
@@ -837,31 +806,107 @@ function App(): React.JSX.Element {
               ) : null}
             </div>
 
-            <div className="display-section-tools">
-              <button
-                className="lang-swap-icon-button"
-                type="button"
-                onClick={handleSwapLanguages}
-                title="互换翻译方向与内容"
-                aria-label="互换源语言与目标语言"
+            {/* 中央微型语言互换按键（对称嵌入两屏腰线中心） */}
+            <button
+              className="lang-flow-switch-btn"
+              type="button"
+              onClick={handleSwapLanguages}
+              title="切换源语言与目标语言方向"
+              aria-label="切换源语言与目标语言方向"
+            >
+              <svg
+                className={`lang-flow-icon ${isSwapping ? 'lang-flow-icon-spin' : ''}`}
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
               >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M7 10l-4 4 4 4" />
-                  <path d="M3 14h14" />
-                  <path d="M17 14l4-4-4-4" />
-                  <path d="M21 10H7" />
-                </svg>
+                <path d="M8 4v15m0 0l-3.5-3.5M8 19l3.5-3.5" />
+                <path d="M16 20V5m0 0l-3.5 3.5M16 5l3.5 3.5" />
+              </svg>
+            </button>
+
+            {/* 模型选择器（单行平齐排版） */}
+            <div className="model-selector" ref={modelSelectorRef}>
+              <button
+                className={`model-switcher-trigger ${isModelMenuOpen ? 'model-switcher-trigger-open' : ''}`}
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={isModelMenuOpen}
+                aria-label={`当前模型: ${selectedModel}，点击展开模型切换菜单`}
+                onClick={() => {
+                  setIsModelMenuOpen((open) => !open)
+                  setIsSourceLangMenuOpen(false)
+                  setIsTargetLangMenuOpen(false)
+                }}
+              >
+                <span className="section-header-label">MODEL:</span>
+                <span className="section-header-value">{selectedModel}</span>
               </button>
+
+              {isModelMenuOpen ? (
+                <div className="model-switcher-panel" role="dialog" aria-label="模型切换面板">
+                  <div className="model-switcher-panel-header">
+                    <span>SELECT ENGINE</span>
+                    <span>{modelOptions.length.toString().padStart(2, '0')} UNITS</span>
+                  </div>
+                  <div className="model-switcher-list" role="listbox" aria-label="可用模型列表">
+                    {modelOptions.map((option) => {
+                      const isSelected = option.value === selectedModel
+
+                      return (
+                        <button
+                          key={option.value}
+                          className={`model-option ${isSelected ? 'model-option-selected' : ''}`}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => handleModelSelect(option.value)}
+                        >
+                          <span className="model-option-code">{option.code}</span>
+                          <span className="model-option-body">
+                            <span className="model-option-name">{option.value}</span>
+                            <span className="model-option-profile">{option.profile}</span>
+                          </span>
+                          <span className="model-option-indicator" aria-hidden="true" />
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="model-switcher-panel-footer">
+                    <button
+                      type="button"
+                      className="model-switcher-config-btn"
+                      onClick={() => {
+                        setIsModelMenuOpen(false)
+                        void window.api.openConfigWindow()
+                      }}
+                    >
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ marginRight: '5px', verticalAlign: 'middle' }}
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                      </svg>
+                      <span>CONFIGURE ENGINES</span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="display-screen display-screen-target">

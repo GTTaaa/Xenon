@@ -120,54 +120,84 @@ body {
 
 .display-section-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
-  margin-bottom: 12px;
+  height: 20px;
+  margin-bottom: 8px;
+  padding: 0 4px;
   position: relative;
   z-index: 2;
+  box-sizing: border-box;
 }
 
-.display-section-tools {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 6px;
-  flex: 0 0 auto;
-  min-width: 0;
+/* 屏幕头部通用标签与取值规范 (左右两端严格镜像对称) */
+.section-header-label {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(101, 112, 134, 0.78);
+  font-family: 'Space Mono', monospace;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
 }
 
-.display-section-tools .model-selector {
-  flex: 0 0 118px;
-  width: 118px;
-  max-width: none;
-}
-
-.display-section-header .language-label {
-  margin-bottom: 0;
-  flex: 0 1 auto;
+.section-header-value {
+  display: inline-flex;
+  align-items: center;
+  color: #384255;
+  font-family: 'Space Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .model-selector {
   position: relative;
-  flex: 0 1 48%;
-  max-width: 48%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 20px;
+  flex: 0 1 auto;
+  max-width: calc(50% - 20px);
   min-width: 0;
   z-index: 6;
 }
 
 .model-switcher-trigger {
-  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 20px;
+  gap: 4px;
   border: 0;
-  padding: 1px 0;
+  padding: 0;
+  margin: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: right;
   cursor: pointer;
+  white-space: nowrap;
+  line-height: 1;
   transition: opacity 120ms ease;
   -webkit-app-region: no-drag;
+}
+
+.model-switcher-trigger .section-header-value {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
 }
 
 button:focus,
@@ -176,38 +206,11 @@ button:focus-visible {
 }
 
 .model-switcher-trigger:hover {
-  opacity: 0.84;
+  opacity: 0.82;
 }
 
-.model-switcher-label {
-  display: block;
-  margin-bottom: 4px;
-  color: rgba(101, 112, 134, 0.54);
-  font-size: 6px;
-  line-height: 1;
-  font-family: 'Space Mono', monospace;
-  letter-spacing: 1.05px;
-  opacity: 0.8;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.model-switcher-value {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  color: rgba(79, 89, 107, 0.88);
-  font-size: 10px;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: 'Space Mono', monospace;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-}
-
-.model-switcher-trigger-open .model-switcher-value {
-  color: rgba(57, 68, 86, 0.94);
+.model-switcher-trigger-open .section-header-value {
+  color: #1e2532;
 }
 
 .model-switcher-panel {
@@ -417,15 +420,6 @@ button:focus-visible {
     transform: scale(1);
     opacity: 1;
   }
-}
-
-.display-section + .display-section {
-  margin-top: 38px;
-}
-
-.language-label {
-  font-size: 18px;
-  margin-bottom: 14px;
 }
 
 .display-screen {
@@ -969,35 +963,22 @@ button:focus-visible {
     letter-spacing: 0.45px;
   }
 
-  .display-section-header {
-    gap: 8px;
+  .display-section-header,
+  .display-section-header-target {
+    height: 20px;
+    gap: 6px;
     margin-bottom: 8px;
+    padding: 0 3px;
   }
 
-  .display-section-tools {
-    gap: 4px;
+  .section-header-label {
+    font-size: 8px;
+    letter-spacing: 0.6px;
   }
 
-  .display-section-tools .model-selector {
-    flex-basis: 82px;
-    width: 82px;
-  }
-
-  .display-section-header .language-label {
-    flex: 0 0 auto;
-    white-space: nowrap;
-    font-size: 11px;
-  }
-
-  .model-switcher-label {
-    margin-bottom: 2px;
-    font-size: 5px;
-    letter-spacing: 0.75px;
-  }
-
-  .model-switcher-value {
-    font-size: 7px;
-    line-height: 1;
+  .section-header-value {
+    font-size: 9px;
+    letter-spacing: 0.2px;
   }
 
   .model-switcher-panel {
@@ -1049,8 +1030,9 @@ button:focus-visible {
     flex-shrink: 0;
   }
 
-  .display-section + .display-section {
-    margin-top: 24px;
+  .display-section + .display-section,
+  .display-section-target-wrap {
+    margin-top: 8px;
   }
 
   .language-label {
@@ -1810,36 +1792,40 @@ button:focus-visible {
 
 .lang-header-item {
   position: relative;
-  min-width: 0;
   display: flex;
   align-items: center;
-  flex: 0 0 auto;
+  height: 20px;
+  flex: 0 1 auto;
+  max-width: calc(50% - 20px);
+  min-width: 0;
   z-index: 5;
 }
 
 .lang-badge-button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  height: 20px;
+  gap: 4px;
   border: 0;
-  padding: 1px 0;
+  padding: 0;
+  margin: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
+  line-height: 1;
   transition: opacity 120ms ease;
   -webkit-app-region: no-drag;
 }
 
 .lang-badge-button:hover {
-  opacity: 0.85;
+  opacity: 0.82;
 }
 
-.language-label-value {
-  color: #384255;
-  font-weight: 800;
+.lang-badge-button-open .section-header-value {
+  color: #1e2532;
 }
 
 /* 极简自动检测胶囊 (AUTO Pill) */
@@ -1994,35 +1980,103 @@ button:focus-visible {
   box-shadow: 0 0 5px rgba(42, 196, 88, 0.5);
 }
 
-/* 微型复古机械语言互换按钮 (SWAP) */
-.lang-swap-icon-button {
+/* ==========================================================================
+   两屏腰部集成式流向互换 (Integrated Flow Swap Header)
+   ========================================================================== */
+
+.display-section-target-wrap {
+  margin-top: 8px;
+}
+
+.display-section-header-target {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 20px;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.lang-flow-switch-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #9aa7b8;
+  border-radius: 4px;
+  background: #d5dbe3;
+  color: #434e5f;
+  cursor: pointer;
+  box-shadow:
+    0 1px 2px rgba(95, 102, 114, 0.1),
+    inset 1px 1px 0 #edf1f6,
+    inset -1px -1px 0 #8b97a8;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid #9aa5b5;
-  border-radius: 2px;
-  background: #d6dbe0;
-  box-shadow:
-    inset 1px 1px 0 #edf1f5,
-    inset -1px -1px 0 #8b96a7;
-  color: #4f596b;
-  cursor: pointer;
-  transition: all 100ms ease;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    color 120ms ease;
   -webkit-app-region: no-drag;
+  z-index: 7;
 }
 
-.lang-swap-icon-button:hover {
-  filter: brightness(0.96);
-  color: #2f3848;
-}
-
-.lang-swap-icon-button:active {
+.lang-flow-switch-btn:hover {
+  background: #e0e5ed;
+  border-color: #7b8a9e;
+  color: #1e2532;
+  transform: translate(-50%, -50%) scale(1.08);
   box-shadow:
-    inset -1px -1px 0 #edf1f5,
-    inset 1px 1px 0 #8b96a7;
-  transform: translateY(1px);
+    0 2px 4px rgba(95, 102, 114, 0.14),
+    inset 1px 1px 0 #ffffff,
+    inset -1px -1px 0 #8b97a8;
+}
+
+.lang-flow-switch-btn:active {
+  transform: translate(-50%, -50%) scale(0.96);
+  background: #cbcfd8;
+  box-shadow:
+    inset 1px 1px 2px rgba(60, 68, 80, 0.2),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.lang-flow-icon {
+  width: 11px;
+  height: 11px;
+  display: block;
+  flex-shrink: 0;
+  transition: transform 250ms ease;
+}
+
+.lang-flow-icon-spin {
+  animation: lang-flow-spin 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes lang-flow-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(180deg);
+  }
+}
+
+.lang-switcher-panel-left {
+  left: 0;
+  right: auto;
+}
+
+.lang-switcher-panel-right {
+  right: 0;
+  left: auto;
 }
 
 /* ==========================================================================
