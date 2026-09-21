@@ -172,15 +172,29 @@ function App(): React.JSX.Element {
     adjustTextareaHeight()
   }, [sourceText])
 
-  // 监听组件真实渲染尺寸并动态同步给 Electron 窗口高度
+  // 监听组件真实渲染尺寸与弹出菜单展开状态，动态同步给 Electron 窗口高度
   useEffect(() => {
     if (!deviceRef.current) return
 
     const updateWindowHeight = (): void => {
       if (!deviceRef.current) return
       const rect = deviceRef.current.getBoundingClientRect()
-      // 加上 #root 上下内边距与外壳安全裕量
-      const targetHeight = Math.ceil(rect.height + 24)
+      // 基础内容高度加上 #root 上下内边距与外壳安全裕量
+      let targetHeight = Math.ceil(rect.height + 24)
+
+      // 如果有任何弹出菜单处于展开状态，需确保窗口高度能完整容纳该浮层
+      const activePopups = deviceRef.current.querySelectorAll<HTMLElement>(
+        '.lang-switcher-panel, .model-switcher-panel'
+      )
+      activePopups.forEach((popup) => {
+        const popupRect = popup.getBoundingClientRect()
+        // 计算从 deviceRef 顶部到浮层底部的实际距离，并预留底部呼吸间隙与内边距
+        const popupNeededHeight = Math.ceil(popupRect.bottom - rect.top + 24)
+        if (popupNeededHeight > targetHeight) {
+          targetHeight = popupNeededHeight
+        }
+      })
+
       void window.api.setWindowHeight(targetHeight)
     }
 
@@ -189,12 +203,15 @@ function App(): React.JSX.Element {
     })
 
     observer.observe(deviceRef.current)
-    updateWindowHeight()
+
+    // 在每一轮渲染或菜单开关切换后触发一次高度测量与同步
+    const frameId = window.requestAnimationFrame(updateWindowHeight)
 
     return () => {
+      window.cancelAnimationFrame(frameId)
       observer.disconnect()
     }
-  }, [])
+  }, [isSourceLangMenuOpen, isTargetLangMenuOpen, isModelMenuOpen])
 
   // 初始加载后端持久化的大模型配置与模型列表
   useEffect(() => {
