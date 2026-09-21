@@ -133,6 +133,7 @@ function App(): React.JSX.Element {
   const [isTargetLangMenuOpen, setIsTargetLangMenuOpen] = useState(false)
   const sourceLangSelectorRef = useRef<HTMLDivElement | null>(null)
   const targetLangSelectorRef = useRef<HTMLDivElement | null>(null)
+  const targetScreenRef = useRef<HTMLDivElement | null>(null)
 
   // 毫秒级根据输入文本自动检测语言
   const detectedInfo = useMemo(() => {
@@ -333,7 +334,11 @@ function App(): React.JSX.Element {
       if (isSourceLangMenuOpen && !sourceLangSelectorRef.current?.contains(target)) {
         setIsSourceLangMenuOpen(false)
       }
-      if (isTargetLangMenuOpen && !targetLangSelectorRef.current?.contains(target)) {
+      if (
+        isTargetLangMenuOpen &&
+        !targetLangSelectorRef.current?.contains(target) &&
+        !targetScreenRef.current?.contains(target)
+      ) {
         setIsTargetLangMenuOpen(false)
       }
     }
@@ -747,7 +752,7 @@ function App(): React.JSX.Element {
                 type="button"
                 aria-haspopup="listbox"
                 aria-expanded={isTargetLangMenuOpen}
-                aria-label={`当前目标语言: ${getLanguageInfo(effectiveTargetLang).label}，点击切换`}
+                aria-label={`当前目标语言: ${getLanguageInfo(effectiveTargetLang).label}，点击在下方屏幕配置`}
                 onClick={() => {
                   setIsTargetLangMenuOpen((open) => !open)
                   setIsSourceLangMenuOpen(false)
@@ -759,68 +764,6 @@ function App(): React.JSX.Element {
                   {formatLanguageDisplay(effectiveTargetLang)}
                 </span>
               </button>
-
-              {isTargetLangMenuOpen ? (
-                <div
-                  className="lang-switcher-panel lang-switcher-panel-left"
-                  role="dialog"
-                  aria-label="目标语言选择面板"
-                >
-                  <div className="lang-switcher-panel-header">
-                    <span>SELECT TARGET</span>
-                    <span>MODE</span>
-                  </div>
-                  <div className="lang-switcher-list" role="listbox" aria-label="目标语言列表">
-                    <button
-                      className={`lang-option ${manualTargetLang === null ? 'lang-option-selected' : ''}`}
-                      type="button"
-                      role="option"
-                      aria-selected={manualTargetLang === null}
-                      onClick={() => {
-                        setManualTargetLang(null)
-                        setIsTargetLangMenuOpen(false)
-                        if (sourceText.trim()) {
-                          markTranslationPending()
-                        }
-                      }}
-                    >
-                      <span className="lang-option-code">AUTO</span>
-                      <span className="lang-option-body">
-                        <span className="lang-option-name">智能自动匹配</span>
-                        <span className="lang-option-sub">根据输入语言自动对偶切换</span>
-                      </span>
-                      <span className="lang-option-indicator" aria-hidden="true" />
-                    </button>
-
-                    {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => {
-                      const isSelected = manualTargetLang === lang.code
-
-                      return (
-                        <button
-                          key={lang.code}
-                          className={`lang-option ${isSelected ? 'lang-option-selected' : ''}`}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          onClick={() => {
-                            setManualTargetLang(lang.code)
-                            setIsTargetLangMenuOpen(false)
-                            if (sourceText.trim()) {
-                              markTranslationPending()
-                            }
-                          }}
-                        >
-                          <span className="lang-option-code">{lang.shortLabel}</span>
-                          <span className="lang-option-body">
-                            <span className="lang-option-name">{lang.label}</span>
-                          </span>
-                          <span className="lang-option-indicator" aria-hidden="true" />
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : null}
             </div>
 
             {/* 中央微型语言互换按键（对称嵌入两屏腰线中心） */}
@@ -926,26 +869,88 @@ function App(): React.JSX.Element {
               ) : null}
             </div>
           </div>
-          <div className="display-screen display-screen-target">
+          <div className="display-screen display-screen-target" ref={targetScreenRef}>
             <div className="display-screen-body">
-              <div className="display-scroll">
-                {status === 'translating' ? (
-                  <div className="translation-loader" aria-live="polite" aria-label="正在翻译">
-                    <div className="translation-loader-bubble" aria-hidden="true">
-                      <span className="translation-loader-bubble-tail" />
-                      <span className="translation-loader-bubble-dots">
-                        <span />
-                        <span />
-                        <span />
-                      </span>
-                    </div>
+              {isTargetLangMenuOpen ? (
+                <div className="screen-lang-matrix" role="listbox" aria-label="目标语言配置终端">
+                  <div className="screen-lang-matrix-header">
+                    <span className="screen-lang-matrix-title">SELECT TARGET TERMINAL</span>
+                    <button
+                      className="screen-lang-matrix-close-btn"
+                      type="button"
+                      onClick={() => setIsTargetLangMenuOpen(false)}
+                      aria-label="关闭选择模式"
+                      title="关闭模式"
+                    >
+                      ✕
+                    </button>
                   </div>
-                ) : (
-                  <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
-                    {targetText || '等待翻译结果...'}
-                  </p>
-                )}
-              </div>
+                  <div className="screen-lang-matrix-list">
+                    <button
+                      className={`matrix-option-auto ${manualTargetLang === null ? 'matrix-option-selected' : ''}`}
+                      type="button"
+                      role="option"
+                      aria-selected={manualTargetLang === null}
+                      onClick={() => {
+                        setManualTargetLang(null)
+                        setIsTargetLangMenuOpen(false)
+                        if (sourceText.trim()) {
+                          markTranslationPending()
+                        }
+                      }}
+                    >
+                      <span className="matrix-code">AUTO</span>
+                      <span className="matrix-name">智能自动匹配 (对偶切换)</span>
+                      <span className="matrix-led" aria-hidden="true" />
+                    </button>
+
+                    {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => {
+                      const isSelected = manualTargetLang === lang.code
+
+                      return (
+                        <button
+                          key={lang.code}
+                          className={`matrix-option-item ${isSelected ? 'matrix-option-selected' : ''}`}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => {
+                            setManualTargetLang(lang.code)
+                            setIsTargetLangMenuOpen(false)
+                            if (sourceText.trim()) {
+                              markTranslationPending()
+                            }
+                          }}
+                        >
+                          <span className="matrix-code">{lang.shortLabel}</span>
+                          <span className="matrix-name">{lang.label}</span>
+                          <span className="matrix-led" aria-hidden="true" />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="display-scroll">
+                  {status === 'translating' ? (
+                    <div className="translation-loader" aria-live="polite" aria-label="正在翻译">
+                      <div className="translation-loader-bubble" aria-hidden="true">
+                        <span className="translation-loader-bubble-tail" />
+                        <span className="translation-loader-bubble-dots">
+                          <span />
+                          <span />
+                          <span />
+                          <span />
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
+                      {targetText || '等待翻译结果...'}
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="display-screen-actions">
                 <span className="display-screen-actions-label">OUTPUT ACTIONS</span>
                 <div className="display-screen-actions-list">
