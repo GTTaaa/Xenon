@@ -1981,144 +1981,140 @@ button:focus-visible {
 }
 
 /* ==========================================================================
-   CRT 屏幕原位切换选择器 (In-Screen CRT Target Selector)
+   方案 1：腰线极简磁带滑轨 (Tape Ribbon Selector)
    ========================================================================== */
 
-.screen-lang-matrix {
-  height: 100%;
-  min-height: 72px;
+.target-tape-ribbon {
   display: flex;
-  flex-direction: column;
-  padding: 4px 8px 6px 12px;
+  align-items: center;
+  width: 100%;
+  height: 20px;
+  gap: 6px;
   box-sizing: border-box;
 }
 
-.screen-lang-matrix-header {
+.tape-ribbon-label {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 5px;
-  border-bottom: 1px dashed rgba(0, 240, 90, 0.2);
-  padding-bottom: 3px;
+  flex-shrink: 0;
 }
 
-.screen-lang-matrix-title {
-  color: rgba(0, 240, 90, 0.7);
-  font-size: 8px;
-  line-height: 1;
-  font-family: 'Space Mono', monospace;
-  letter-spacing: 0.8px;
-  font-weight: 700;
+.tape-ribbon-track {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  flex: 1;
+  padding: 1px 2px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, black 6px, black calc(100% - 6px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 6px, black calc(100% - 6px), transparent);
 }
 
-.screen-lang-matrix-close-btn {
+.tape-ribbon-track::-webkit-scrollbar {
+  display: none;
+}
+
+.tape-chip {
+  position: relative;
   background: transparent;
-  border: 0;
-  color: rgba(0, 240, 90, 0.45);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'Space Mono', monospace;
+  font-size: 8.5px;
+  line-height: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #737c8e;
   cursor: pointer;
-  padding: 0 4px;
-  font-size: 11px;
+  transition: all 120ms ease;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.tape-chip:hover {
+  color: #1f2328;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* 方案 B：纯净极简游标刻度线 (Precision Vernier Line) */
+.tape-chip-selected-vernier {
+  background: transparent !important;
+  color: #12161f !important;
+  font-weight: 800 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.tape-chip-selected-vernier::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  background: #00f05a;
+  border-radius: 1px;
+  box-shadow: 0 0 5px rgba(0, 240, 90, 0.7);
+}
+
+/* 方案 A：机械按键物理下沉 (Tactile Inset Key) */
+.tape-chip-selected-inset {
+  background: #c8d0dc !important;
+  color: #12161f !important;
+  font-weight: 800 !important;
+  border: 1px solid #9aa7b8 !important;
+  border-radius: 4px !important;
+  box-shadow:
+    inset 1px 1px 2px rgba(35, 45, 60, 0.22),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.7) !important;
+  text-shadow: none !important;
+}
+
+.tape-ribbon-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.tape-style-chip-btn {
+  background: rgba(120, 130, 145, 0.12);
+  border: 1px solid rgba(120, 130, 145, 0.25);
+  border-radius: 3px;
+  font-family: 'Space Mono', monospace;
+  font-size: 7.5px;
+  line-height: 12px;
+  padding: 1px 4px;
+  color: #5a6474;
+  cursor: pointer;
+  transition: all 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.tape-style-chip-btn:hover {
+  background: rgba(120, 130, 145, 0.25);
+  color: #1f2328;
+  border-color: #8c97a8;
+}
+
+.tape-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 9px;
   line-height: 1;
+  color: #8a94a6;
+  cursor: pointer;
+  padding: 2px 3px;
   transition: color 120ms ease;
   -webkit-app-region: no-drag;
 }
 
-.screen-lang-matrix-close-btn:hover {
-  color: #00f05a;
-}
-
-.screen-lang-matrix-list {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 3px;
-  overflow-y: auto;
-  max-height: 110px;
-  padding-right: 2px;
-}
-
-.screen-lang-matrix-list::-webkit-scrollbar {
-  width: 3px;
-}
-
-.screen-lang-matrix-list::-webkit-scrollbar-thumb {
-  background: rgba(0, 240, 90, 0.25);
-  border-radius: 2px;
-}
-
-.matrix-option-auto {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px 6px;
-  border: 1px solid rgba(0, 240, 90, 0.18);
-  border-radius: 4px;
-  background: rgba(0, 240, 90, 0.05);
-  color: rgba(0, 240, 90, 0.8);
-  font-family: 'Space Mono', monospace;
-  font-size: 8.5px;
-  cursor: pointer;
-  transition: all 120ms ease;
-  -webkit-app-region: no-drag;
-}
-
-.matrix-option-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px 6px;
-  border: 1px solid rgba(0, 240, 90, 0.14);
-  border-radius: 4px;
-  background: rgba(0, 240, 90, 0.03);
-  color: rgba(0, 240, 90, 0.7);
-  font-family: 'Space Mono', monospace;
-  font-size: 8.5px;
-  cursor: pointer;
-  transition: all 120ms ease;
-  -webkit-app-region: no-drag;
-}
-
-.matrix-option-item:hover,
-.matrix-option-auto:hover {
-  border-color: rgba(0, 240, 90, 0.45);
-  background: rgba(0, 240, 90, 0.12);
-  color: #00f05a;
-}
-
-.matrix-option-selected {
-  border-color: #00f05a !important;
-  background: rgba(0, 240, 90, 0.18) !important;
-  color: #00f05a !important;
-  box-shadow: 0 0 6px rgba(0, 240, 90, 0.3);
-}
-
-.matrix-code {
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  margin-right: 4px;
-  font-size: 8px;
-}
-
-.matrix-name {
-  font-size: 8.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.matrix-led {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  border: 1px solid rgba(0, 240, 90, 0.35);
-  flex-shrink: 0;
-  margin-left: 4px;
-}
-
-.matrix-option-selected .matrix-led {
-  background: #00f05a;
-  border-color: #00f05a;
-  box-shadow: 0 0 4px #00f05a;
+.tape-close-btn:hover {
+  color: #24292f;
 }
 
 /* ==========================================================================
@@ -2137,77 +2133,6 @@ button:focus-visible {
   height: 20px;
   margin-bottom: 8px;
   box-sizing: border-box;
-}
-
-.lang-flow-switch-btn {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 26px;
-  height: 18px;
-  padding: 0;
-  margin: 0;
-  border: 1px solid #9aa7b8;
-  border-radius: 4px;
-  background: #d5dbe3;
-  color: #434e5f;
-  cursor: pointer;
-  box-shadow:
-    0 1px 2px rgba(95, 102, 114, 0.1),
-    inset 1px 1px 0 #edf1f6,
-    inset -1px -1px 0 #8b97a8;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    transform 120ms ease,
-    background-color 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    color 120ms ease;
-  -webkit-app-region: no-drag;
-  z-index: 7;
-}
-
-.lang-flow-switch-btn:hover {
-  background: #e0e5ed;
-  border-color: #7b8a9e;
-  color: #1e2532;
-  transform: translate(-50%, -50%) scale(1.08);
-  box-shadow:
-    0 2px 4px rgba(95, 102, 114, 0.14),
-    inset 1px 1px 0 #ffffff,
-    inset -1px -1px 0 #8b97a8;
-}
-
-.lang-flow-switch-btn:active {
-  transform: translate(-50%, -50%) scale(0.96);
-  background: #cbcfd8;
-  box-shadow:
-    inset 1px 1px 2px rgba(60, 68, 80, 0.2),
-    inset -1px -1px 0 rgba(255, 255, 255, 0.4);
-}
-
-.lang-flow-icon {
-  width: 11px;
-  height: 11px;
-  display: block;
-  flex-shrink: 0;
-  transition: transform 250ms ease;
-}
-
-.lang-flow-icon-spin {
-  animation: lang-flow-spin 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes lang-flow-spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(180deg);
-  }
 }
 
 .lang-switcher-panel-left {

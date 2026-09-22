@@ -91,7 +91,6 @@ function App(): React.JSX.Element {
   )
   const [errorMessage, setErrorMessage] = useState('')
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
-  const [isSwapping, setIsSwapping] = useState(false)
   const requestIdRef = useRef(0)
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>(INITIAL_MODEL_OPTIONS)
@@ -132,7 +131,37 @@ function App(): React.JSX.Element {
   const [isTargetLangMenuOpen, setIsTargetLangMenuOpen] = useState(false)
   const sourceLangSelectorRef = useRef<HTMLDivElement | null>(null)
   const targetLangSelectorRef = useRef<HTMLDivElement | null>(null)
-  const targetScreenRef = useRef<HTMLDivElement | null>(null)
+  const ribbonTrackRef = useRef<HTMLDivElement | null>(null)
+
+  // 磁带滑轨展开时，自动平滑滚动使当前选中语言进入视窗中心
+  useEffect(() => {
+    if (isTargetLangMenuOpen) {
+      const timer = window.setTimeout(() => {
+        const selectedEl = ribbonTrackRef.current?.querySelector('.tape-chip-selected')
+        if (selectedEl) {
+          selectedEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+        }
+      }, 50)
+      return () => window.clearTimeout(timer)
+    }
+    return undefined
+  }, [isTargetLangMenuOpen])
+
+  // 目标语言 Chip 选中视觉样式方案：'vernier'（方案 B 极简游标线）| 'inset'（方案 A 机械物理凹陷）
+  const [chipStyle, setChipStyle] = useState<'vernier' | 'inset'>(() => {
+    return (localStorage.getItem('targetChipStyle') as 'vernier' | 'inset') || 'vernier'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('targetChipStyle', chipStyle)
+  }, [chipStyle])
+
+  // 横向滑轨鼠标滚轮自适应水平滚动
+  const handleRibbonWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
+    if (event.deltaY !== 0) {
+      event.currentTarget.scrollLeft += event.deltaY
+    }
+  }
 
   // 毫秒级根据输入文本自动检测语言
   const detectedInfo = useMemo(() => {
@@ -245,9 +274,13 @@ function App(): React.JSX.Element {
     setStatus('idle')
   }
 
+  // 翻译触发计数器，确保显式触发时必定驱动翻译 Effect 闭环完成
+  const [translateTriggerToken, setTranslateTriggerToken] = useState(0)
+
   const markTranslationPending = (): void => {
     setErrorMessage('')
     setStatus('translating')
+    setTranslateTriggerToken((prev) => prev + 1)
   }
 
   // 监听快捷打开配置面板事件
@@ -333,11 +366,7 @@ function App(): React.JSX.Element {
       if (isSourceLangMenuOpen && !sourceLangSelectorRef.current?.contains(target)) {
         setIsSourceLangMenuOpen(false)
       }
-      if (
-        isTargetLangMenuOpen &&
-        !targetLangSelectorRef.current?.contains(target) &&
-        !targetScreenRef.current?.contains(target)
-      ) {
+      if (isTargetLangMenuOpen && !targetLangSelectorRef.current?.contains(target)) {
         setIsTargetLangMenuOpen(false)
       }
     }
@@ -418,42 +447,9 @@ function App(): React.JSX.Element {
     enableThinking,
     sourceLanguage,
     effectiveTargetLang,
-    detectedInfo.detected
+    detectedInfo.detected,
+    translateTriggerToken
   ])
-
-  // 切换源语言与目标语言方向
-  const handleSwapLanguages = (): void => {
-    setIsSwapping(true)
-    window.setTimeout(() => {
-      setIsSwapping(false)
-    }, 350)
-
-    let nextSource: SupportedLanguage
-    let nextTarget: SupportedLanguage
-
-    if (sourceLanguage !== 'auto') {
-      nextSource = effectiveTargetLang
-      nextTarget = sourceLanguage
-    } else {
-      nextSource = effectiveTargetLang
-      nextTarget = detectedInfo.detected
-    }
-
-    // 防止源语言与目标语言完全一致
-    if (nextSource === nextTarget) {
-      nextTarget = nextSource === 'zh' ? 'en' : 'zh'
-    }
-
-    setSourceLanguage(nextSource)
-    setManualTargetLang(nextTarget)
-    localStorage.setItem('sourceLanguage', nextSource)
-    localStorage.setItem('targetLanguage', nextTarget)
-
-    // 语言方向切换后，若有输入内容，以新方向重新发起翻译
-    if (sourceText.trim()) {
-      markTranslationPending()
-    }
-  }
 
   useEffect(() => {
     return window.api.onFocusInput(() => {
@@ -744,212 +740,225 @@ function App(): React.JSX.Element {
 
         <section className="display-section display-section-target-wrap">
           <div className="display-section-header display-section-header-target">
-            {/* 目标语言选择器 */}
-            <div className="lang-header-item" ref={targetLangSelectorRef}>
-              <button
-                className={`lang-badge-button ${isTargetLangMenuOpen ? 'lang-badge-button-open' : ''}`}
-                type="button"
-                aria-haspopup="listbox"
-                aria-expanded={isTargetLangMenuOpen}
-                aria-label={`当前目标语言: ${getLanguageInfo(effectiveTargetLang).label}，点击在下方屏幕配置`}
-                onClick={() => {
-                  setIsTargetLangMenuOpen((open) => !open)
-                  setIsSourceLangMenuOpen(false)
-                  setIsModelMenuOpen(false)
-                }}
+            {isTargetLangMenuOpen ? (
+              <div
+                className="target-tape-ribbon"
+                ref={targetLangSelectorRef}
+                role="region"
+                aria-label="目标语言磁带滑轨"
               >
-                <span className="section-header-label">TARGET:</span>
-                <span className="section-header-value">
-                  {formatLanguageDisplay(effectiveTargetLang)}
-                </span>
-              </button>
-            </div>
-
-            {/* 中央微型语言互换按键（对称嵌入两屏腰线中心） */}
-            <button
-              className="lang-flow-switch-btn"
-              type="button"
-              onClick={handleSwapLanguages}
-              title="切换源语言与目标语言方向"
-              aria-label="切换源语言与目标语言方向"
-            >
-              <svg
-                className={`lang-flow-icon ${isSwapping ? 'lang-flow-icon-spin' : ''}`}
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M8 4v15m0 0l-3.5-3.5M8 19l3.5-3.5" />
-                <path d="M16 20V5m0 0l-3.5 3.5M16 5l3.5 3.5" />
-              </svg>
-            </button>
-
-            {/* 模型选择器（单行平齐排版） */}
-            <div className="model-selector" ref={modelSelectorRef}>
-              <button
-                className={`model-switcher-trigger ${isModelMenuOpen ? 'model-switcher-trigger-open' : ''}`}
-                type="button"
-                aria-haspopup="listbox"
-                aria-expanded={isModelMenuOpen}
-                aria-label={`当前模型: ${selectedModel}，点击展开模型切换菜单`}
-                onClick={() => {
-                  setIsModelMenuOpen((open) => !open)
-                  setIsSourceLangMenuOpen(false)
-                  setIsTargetLangMenuOpen(false)
-                }}
-              >
-                <span className="section-header-label">MODEL:</span>
-                <span className="section-header-value">{selectedModel}</span>
-              </button>
-
-              {isModelMenuOpen ? (
-                <div className="model-switcher-panel" role="dialog" aria-label="模型切换面板">
-                  <div className="model-switcher-panel-header">
-                    <span>SELECT ENGINE</span>
-                    <span>{modelOptions.length.toString().padStart(2, '0')} UNITS</span>
-                  </div>
-                  <div className="model-switcher-list" role="listbox" aria-label="可用模型列表">
-                    {modelOptions.map((option) => {
-                      const isSelected = option.value === selectedModel
-
-                      return (
-                        <button
-                          key={option.value}
-                          className={`model-option ${isSelected ? 'model-option-selected' : ''}`}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          onClick={() => handleModelSelect(option.value)}
-                        >
-                          <span className="model-option-code">{option.code}</span>
-                          <span className="model-option-body">
-                            <span className="model-option-name">{option.value}</span>
-                            <span className="model-option-profile">{option.profile}</span>
-                          </span>
-                          <span className="model-option-indicator" aria-hidden="true" />
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <div className="model-switcher-panel-footer">
-                    <button
-                      type="button"
-                      className="model-switcher-config-btn"
-                      onClick={() => {
-                        setIsModelMenuOpen(false)
-                        void window.api.openConfigWindow()
-                      }}
-                    >
-                      <svg
-                        width="11"
-                        height="11"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        style={{ marginRight: '5px', verticalAlign: 'middle' }}
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                      </svg>
-                      <span>CONFIGURE ENGINES</span>
-                    </button>
-                  </div>
+                <div className="tape-ribbon-label">
+                  <span className="section-header-label">TARGET:</span>
                 </div>
-              ) : null}
-            </div>
-          </div>
-          <div className="display-screen display-screen-target" ref={targetScreenRef}>
-            <div className="display-screen-body">
-              {isTargetLangMenuOpen ? (
-                <div className="screen-lang-matrix" role="listbox" aria-label="目标语言配置终端">
-                  <div className="screen-lang-matrix-header">
-                    <span className="screen-lang-matrix-title">SELECT TARGET TERMINAL</span>
-                    <button
-                      className="screen-lang-matrix-close-btn"
-                      type="button"
-                      onClick={() => setIsTargetLangMenuOpen(false)}
-                      aria-label="关闭选择模式"
-                      title="关闭模式"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="screen-lang-matrix-list">
-                    <button
-                      className={`matrix-option-auto ${manualTargetLang === null ? 'matrix-option-selected' : ''}`}
-                      type="button"
-                      role="option"
-                      aria-selected={manualTargetLang === null}
-                      onClick={() => {
+                <div
+                  className="tape-ribbon-track"
+                  ref={ribbonTrackRef}
+                  onWheel={handleRibbonWheel}
+                  role="listbox"
+                  aria-label="目标语言选择"
+                >
+                  <button
+                    className={`tape-chip ${
+                      manualTargetLang === null
+                        ? chipStyle === 'vernier'
+                          ? 'tape-chip-selected tape-chip-selected-vernier'
+                          : 'tape-chip-selected tape-chip-selected-inset'
+                        : ''
+                    }`}
+                    type="button"
+                    role="option"
+                    aria-selected={manualTargetLang === null}
+                    title="智能自动匹配 (对偶切换)"
+                    onClick={() => {
+                      setIsTargetLangMenuOpen(false)
+                      if (manualTargetLang !== null) {
                         setManualTargetLang(null)
-                        setIsTargetLangMenuOpen(false)
                         if (sourceText.trim()) {
                           markTranslationPending()
                         }
-                      }}
-                    >
-                      <span className="matrix-code">AUTO</span>
-                      <span className="matrix-name">智能自动匹配 (对偶切换)</span>
-                      <span className="matrix-led" aria-hidden="true" />
-                    </button>
+                      }
+                    }}
+                  >
+                    AUTO
+                  </button>
 
-                    {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => {
-                      const isSelected = manualTargetLang === lang.code
+                  {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => {
+                    const isSelected = manualTargetLang === lang.code
 
-                      return (
-                        <button
-                          key={lang.code}
-                          className={`matrix-option-item ${isSelected ? 'matrix-option-selected' : ''}`}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          onClick={() => {
+                    return (
+                      <button
+                        key={lang.code}
+                        className={`tape-chip ${
+                          isSelected
+                            ? chipStyle === 'vernier'
+                              ? 'tape-chip-selected tape-chip-selected-vernier'
+                              : 'tape-chip-selected tape-chip-selected-inset'
+                            : ''
+                        }`}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        title={lang.label}
+                        onClick={() => {
+                          setIsTargetLangMenuOpen(false)
+                          if (manualTargetLang !== lang.code) {
                             setManualTargetLang(lang.code)
-                            setIsTargetLangMenuOpen(false)
                             if (sourceText.trim()) {
                               markTranslationPending()
                             }
+                          }
+                        }}
+                      >
+                        {lang.shortLabel}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="tape-ribbon-controls">
+                  <button
+                    type="button"
+                    className="tape-style-chip-btn"
+                    onClick={() => setChipStyle((s) => (s === 'vernier' ? 'inset' : 'vernier'))}
+                    title="切换方案 B(极简游标) 与方案 A(机械按键)"
+                    aria-label="切换选中样式风格"
+                  >
+                    {chipStyle === 'vernier' ? 'B: 游标' : 'A: 按键'}
+                  </button>
+                  <button
+                    type="button"
+                    className="tape-close-btn"
+                    onClick={() => setIsTargetLangMenuOpen(false)}
+                    title="收起滑轨"
+                    aria-label="收起滑轨"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* 目标语言选择器 */}
+                <div className="lang-header-item" ref={targetLangSelectorRef}>
+                  <button
+                    className={`lang-badge-button ${isTargetLangMenuOpen ? 'lang-badge-button-open' : ''}`}
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={isTargetLangMenuOpen}
+                    aria-label={`当前目标语言: ${getLanguageInfo(effectiveTargetLang).label}，点击切换`}
+                    onClick={() => {
+                      setIsTargetLangMenuOpen((open) => !open)
+                      setIsSourceLangMenuOpen(false)
+                      setIsModelMenuOpen(false)
+                    }}
+                  >
+                    <span className="section-header-label">TARGET:</span>
+                    <span className="section-header-value">
+                      {formatLanguageDisplay(effectiveTargetLang)}
+                    </span>
+                  </button>
+                </div>
+
+                {/* 模型选择器（单行平齐排版） */}
+                <div className="model-selector" ref={modelSelectorRef}>
+                  <button
+                    className={`model-switcher-trigger ${isModelMenuOpen ? 'model-switcher-trigger-open' : ''}`}
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={isModelMenuOpen}
+                    aria-label={`当前模型: ${selectedModel}，点击展开模型切换菜单`}
+                    onClick={() => {
+                      setIsModelMenuOpen((open) => !open)
+                      setIsSourceLangMenuOpen(false)
+                      setIsTargetLangMenuOpen(false)
+                    }}
+                  >
+                    <span className="section-header-label">MODEL:</span>
+                    <span className="section-header-value">{selectedModel}</span>
+                  </button>
+
+                  {isModelMenuOpen ? (
+                    <div className="model-switcher-panel" role="dialog" aria-label="模型切换面板">
+                      <div className="model-switcher-panel-header">
+                        <span>SELECT ENGINE</span>
+                        <span>{modelOptions.length.toString().padStart(2, '0')} UNITS</span>
+                      </div>
+                      <div className="model-switcher-list" role="listbox" aria-label="可用模型列表">
+                        {modelOptions.map((option) => {
+                          const isSelected = option.value === selectedModel
+
+                          return (
+                            <button
+                              key={option.value}
+                              className={`model-option ${isSelected ? 'model-option-selected' : ''}`}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              onClick={() => handleModelSelect(option.value)}
+                            >
+                              <span className="model-option-code">{option.code}</span>
+                              <span className="model-option-body">
+                                <span className="model-option-name">{option.value}</span>
+                                <span className="model-option-profile">{option.profile}</span>
+                              </span>
+                              <span className="model-option-indicator" aria-hidden="true" />
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="model-switcher-panel-footer">
+                        <button
+                          type="button"
+                          className="model-switcher-config-btn"
+                          onClick={() => {
+                            setIsModelMenuOpen(false)
+                            void window.api.openConfigWindow()
                           }}
                         >
-                          <span className="matrix-code">{lang.shortLabel}</span>
-                          <span className="matrix-name">{lang.label}</span>
-                          <span className="matrix-led" aria-hidden="true" />
+                          <svg
+                            width="11"
+                            height="11"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ marginRight: '5px', verticalAlign: 'middle' }}
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                          </svg>
+                          <span>CONFIGURE ENGINES</span>
                         </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="display-scroll">
-                  {status === 'translating' ? (
-                    <div className="translation-loader" aria-live="polite" aria-label="正在翻译">
-                      <div className="translation-loader-bubble" aria-hidden="true">
-                        <span className="translation-loader-bubble-tail" />
-                        <span className="translation-loader-bubble-dots">
-                          <span />
-                          <span />
-                          <span />
-                          <span />
-                        </span>
                       </div>
                     </div>
-                  ) : (
-                    <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
-                      {targetText || '等待翻译结果...'}
-                    </p>
-                  )}
+                  ) : null}
                 </div>
-              )}
+              </>
+            )}
+          </div>
+          <div className="display-screen display-screen-target">
+            <div className="display-screen-body">
+              <div className="display-scroll">
+                {status === 'translating' ? (
+                  <div className="translation-loader" aria-live="polite" aria-label="正在翻译">
+                    <div className="translation-loader-bubble" aria-hidden="true">
+                      <span className="translation-loader-bubble-tail" />
+                      <span className="translation-loader-bubble-dots">
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
+                    {targetText || '等待翻译结果...'}
+                  </p>
+                )}
+              </div>
               <div className="display-screen-actions">
                 <span className="display-screen-actions-label">OUTPUT ACTIONS</span>
                 <div className="display-screen-actions-list">
