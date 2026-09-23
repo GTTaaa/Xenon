@@ -1,13 +1,13 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { TranslateRequest, TranslateResponse } from '../shared/translate'
-import type { FetchModelsResult, LLMConfig, TestConnectionResult } from '../shared/config'
+import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
 
 interface AppAPI {
   translateText: (request: TranslateRequest) => Promise<TranslateResponse>
   onFocusInput: (callback: () => void) => () => void
-  getConfig: () => Promise<LLMConfig>
-  saveConfig: (config: LLMConfig) => Promise<{ ok: boolean; error?: string }>
-  testConfig: (config: LLMConfig) => Promise<TestConnectionResult>
+  getConfig: () => Promise<AppSettings>
+  saveConfig: (config: AppSettings) => Promise<{ ok: boolean; error?: string }>
+  testConfig: (config: AppSettings) => Promise<TestConnectionResult>
   fetchModels: (params: { baseUrl: string; apiKey: string }) => Promise<FetchModelsResult>
   onOpenConfig: (callback: () => void) => () => void
   captureScreen: () => Promise<{ ok: boolean; message?: string }>
@@ -15,7 +15,9 @@ interface AppAPI {
   setWindowHeight: (height: number) => Promise<void>
   openConfigWindow: () => Promise<void>
   closeConfigWindow: () => Promise<void>
-  onConfigUpdated: (callback: (config: LLMConfig) => void) => () => void
+  toggleAlwaysOnTop: () => Promise<boolean>
+  getAlwaysOnTop: () => Promise<boolean>
+  onConfigUpdated: (callback: (config: AppSettings) => void) => () => void
 }
 
 declare global {

@@ -2,11 +2,20 @@ import { app, net } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type {
+  AppSettings,
   FetchModelsResult,
+  GeneralSettings,
   LLMConfig,
   ProviderItem,
   ProviderModelItem,
-  TestConnectionResult
+  ShortcutSettings,
+  TestConnectionResult,
+  TranslationSettings
+} from '../../shared/config'
+import {
+  DEFAULT_GENERAL_SETTINGS,
+  DEFAULT_SHORTCUTS,
+  DEFAULT_TRANSLATION_SETTINGS
 } from '../../shared/config'
 
 /**
@@ -81,13 +90,73 @@ export const DEFAULT_PROVIDERS: ProviderItem[] = [
 /**
  * 内存中缓存的当前配置
  */
-let cachedConfig: LLMConfig | null = null
+let cachedConfig: AppSettings | null = null
 
 /**
  * 获取配置文件存储路径
  */
 const getConfigFilePath = (): string => {
   return join(app.getPath('userData'), 'llm-config.json')
+}
+
+/**
+ * 清洗规整快捷键配置
+ */
+export const sanitizeShortcuts = (raw?: Partial<ShortcutSettings>): ShortcutSettings => {
+  return {
+    screenshot:
+      typeof raw?.screenshot === 'string' && raw.screenshot.trim()
+        ? raw.screenshot.trim()
+        : DEFAULT_SHORTCUTS.screenshot,
+    inputTranslate:
+      typeof raw?.inputTranslate === 'string' && raw.inputTranslate.trim()
+        ? raw.inputTranslate.trim()
+        : DEFAULT_SHORTCUTS.inputTranslate,
+    openPreferences:
+      typeof raw?.openPreferences === 'string' && raw.openPreferences.trim()
+        ? raw.openPreferences.trim()
+        : DEFAULT_SHORTCUTS.openPreferences
+  }
+}
+
+/**
+ * 清洗规整翻译偏好设置
+ */
+export const sanitizeTranslationSettings = (
+  raw?: Partial<TranslationSettings>
+): TranslationSettings => {
+  return {
+    defaultTargetLanguage:
+      typeof raw?.defaultTargetLanguage === 'string' && raw.defaultTargetLanguage.trim()
+        ? raw.defaultTargetLanguage.trim()
+        : DEFAULT_TRANSLATION_SETTINGS.defaultTargetLanguage,
+    autoCopyResult:
+      typeof raw?.autoCopyResult === 'boolean'
+        ? raw.autoCopyResult
+        : DEFAULT_TRANSLATION_SETTINGS.autoCopyResult,
+    defaultEnableThinking:
+      typeof raw?.defaultEnableThinking === 'boolean'
+        ? raw.defaultEnableThinking
+        : DEFAULT_TRANSLATION_SETTINGS.defaultEnableThinking,
+    customSystemPrompt: typeof raw?.customSystemPrompt === 'string' ? raw.customSystemPrompt : ''
+  }
+}
+
+/**
+ * 清洗规整通用系统偏好
+ */
+export const sanitizeGeneralSettings = (raw?: Partial<GeneralSettings>): GeneralSettings => {
+  return {
+    launchAtLogin:
+      typeof raw?.launchAtLogin === 'boolean'
+        ? raw.launchAtLogin
+        : DEFAULT_GENERAL_SETTINGS.launchAtLogin,
+    alwaysOnTop:
+      typeof raw?.alwaysOnTop === 'boolean'
+        ? raw.alwaysOnTop
+        : DEFAULT_GENERAL_SETTINGS.alwaysOnTop,
+    closeAction: raw?.closeAction === 'quit' ? 'quit' : 'tray'
+  }
 }
 
 /**
@@ -190,9 +259,9 @@ const sanitizeProviders = (
 }
 
 /**
- * 读取当前大模型配置
+ * 读取当前完整应用偏好设置（包含大模型配置、快捷键、翻译行为与通用设置）
  */
-export const getLLMConfig = (): LLMConfig => {
+export const getLLMConfig = (): AppSettings => {
   if (cachedConfig) {
     return cachedConfig
   }
@@ -202,7 +271,7 @@ export const getLLMConfig = (): LLMConfig => {
   try {
     if (existsSync(filePath)) {
       const rawContent = readFileSync(filePath, 'utf-8')
-      const parsed = JSON.parse(rawContent) as Partial<LLMConfig>
+      const parsed = JSON.parse(rawContent) as Partial<AppSettings>
 
       const providers = sanitizeProviders(parsed.providers, parsed)
       const firstEnabled = providers.find((p) => p.enabled) || providers[0]
@@ -223,6 +292,9 @@ export const getLLMConfig = (): LLMConfig => {
         activeProviderId,
         activeModelId,
         providers,
+        shortcuts: sanitizeShortcuts(parsed.shortcuts),
+        translation: sanitizeTranslationSettings(parsed.translation),
+        general: sanitizeGeneralSettings(parsed.general),
         // 兼容字段
         provider: 'openai-compatible',
         baseUrl: currentProvider.baseUrl,
@@ -241,6 +313,9 @@ export const getLLMConfig = (): LLMConfig => {
     activeProviderId: 'deepseek',
     activeModelId: 'deepseek-chat',
     providers: defaultProviders,
+    shortcuts: { ...DEFAULT_SHORTCUTS },
+    translation: { ...DEFAULT_TRANSLATION_SETTINGS },
+    general: { ...DEFAULT_GENERAL_SETTINGS },
     provider: 'openai-compatible',
     baseUrl: defaultProviders[0].baseUrl,
     apiKey: '',
@@ -251,10 +326,10 @@ export const getLLMConfig = (): LLMConfig => {
 }
 
 /**
- * 保存大模型配置至本地持久化文件
+ * 保存应用偏好设置至本地持久化文件
  */
 export const saveLLMConfig = async (
-  newConfig: LLMConfig
+  newConfig: AppSettings
 ): Promise<{ ok: boolean; error?: string }> => {
   try {
     const filePath = getConfigFilePath()
@@ -270,10 +345,13 @@ export const saveLLMConfig = async (
       activeProvider.models[0]?.id ||
       'deepseek-chat'
 
-    const sanitizedConfig: LLMConfig = {
+    const sanitizedConfig: AppSettings = {
       activeProviderId,
       activeModelId,
       providers: sanitizedProviders,
+      shortcuts: sanitizeShortcuts(newConfig.shortcuts),
+      translation: sanitizeTranslationSettings(newConfig.translation),
+      general: sanitizeGeneralSettings(newConfig.general),
       // 兼容字段
       provider: 'openai-compatible',
       baseUrl: activeProvider.baseUrl,
@@ -285,15 +363,17 @@ export const saveLLMConfig = async (
     writeFileSync(filePath, JSON.stringify(sanitizedConfig, null, 2), 'utf-8')
     cachedConfig = sanitizedConfig
 
-    console.log('[main] 厂商隔离配置保存成功', {
+    console.log('[main] 系统偏好配置保存成功', {
       activeProviderId: sanitizedConfig.activeProviderId,
       activeModelId: sanitizedConfig.activeModelId,
-      providerCount: sanitizedConfig.providers.length
+      providerCount: sanitizedConfig.providers.length,
+      shortcuts: sanitizedConfig.shortcuts,
+      alwaysOnTop: sanitizedConfig.general?.alwaysOnTop
     })
 
     return { ok: true }
   } catch (error) {
-    console.error('[main] 保存大模型配置失败', error)
+    console.error('[main] 保存系统偏好配置失败', error)
     return {
       ok: false,
       error: error instanceof Error ? error.message : '保存配置失败'

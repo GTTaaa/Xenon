@@ -1,10 +1,38 @@
 import { useEffect, useState, useMemo } from 'react'
 import type {
-  LLMConfig,
+  AppSettings,
+  GeneralSettings,
   ProviderItem,
   ProviderModelItem,
-  TestConnectionResult
+  ShortcutSettings,
+  TestConnectionResult,
+  TranslationSettings
 } from '../../shared/config'
+import {
+  DEFAULT_GENERAL_SETTINGS,
+  DEFAULT_SHORTCUTS,
+  DEFAULT_TRANSLATION_SETTINGS
+} from '../../shared/config'
+import { SUPPORTED_LANGUAGES } from '../../shared/languageDetector'
+
+/**
+ * 偏好设置一级分类菜单定义
+ */
+type PrefNavCategory = 'providers' | 'shortcuts' | 'translation' | 'general'
+
+interface NavItem {
+  id: PrefNavCategory
+  title: string
+  subtitle: string
+  icon: string
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { id: 'providers', title: 'AI 模型', subtitle: 'PROVIDERS & MODELS', icon: '🤖' },
+  { id: 'shortcuts', title: '快捷键', subtitle: 'GLOBAL SHORTCUTS', icon: '⌨️' },
+  { id: 'translation', title: '翻译偏好', subtitle: 'TRANSLATE BEHAVIOR', icon: '🌐' },
+  { id: 'general', title: '通用设置', subtitle: 'SYSTEM & LAUNCH', icon: '⚙️' }
+]
 
 /**
  * 预设厂商模板定义
@@ -76,12 +104,26 @@ const PRESET_TEMPLATES: ProviderTemplate[] = [
 ]
 
 export const ConfigPage = (): React.JSX.Element => {
+  // 当前处于的左侧分类
+  const [activeCategory, setActiveCategory] = useState<PrefNavCategory>('providers')
+
   // 服务商列表
   const [providers, setProviders] = useState<ProviderItem[]>([])
   // 当前正在查看/编辑的 Tab ID
   const [selectedTabId, setSelectedTabId] = useState<string>('deepseek')
   // 当前软件全局生效的主用服务商 ID
   const [activeProviderId, setActiveProviderId] = useState<string>('deepseek')
+
+  // 全局快捷键设置
+  const [shortcuts, setShortcuts] = useState<ShortcutSettings>({ ...DEFAULT_SHORTCUTS })
+
+  // 翻译偏好设置
+  const [translation, setTranslation] = useState<TranslationSettings>({
+    ...DEFAULT_TRANSLATION_SETTINGS
+  })
+
+  // 通用系统设置
+  const [general, setGeneral] = useState<GeneralSettings>({ ...DEFAULT_GENERAL_SETTINGS })
 
   // API Key 密码遮罩切换
   const [showApiKey, setShowApiKey] = useState(false)
@@ -121,6 +163,16 @@ export const ConfigPage = (): React.JSX.Element => {
           const primaryId = matched ? (cfg.activeProviderId as string) : list[0].id
           setActiveProviderId(primaryId)
           setSelectedTabId(primaryId)
+        }
+
+        if (cfg.shortcuts) {
+          setShortcuts({ ...cfg.shortcuts })
+        }
+        if (cfg.translation) {
+          setTranslation({ ...cfg.translation })
+        }
+        if (cfg.general) {
+          setGeneral({ ...cfg.general })
         }
       })
       .catch((error) => {
@@ -328,7 +380,6 @@ export const ConfigPage = (): React.JSX.Element => {
 
       if (result.ok && Array.isArray(result.models) && result.models.length > 0) {
         setFetchedModels(result.models)
-        // 默认勾选尚未添加进当前模型库的模型
         const initialSelection: Record<string, boolean> = {}
         const existingIds = new Set(activeProvider.models.map((m) => m.id))
         result.models.forEach((mId) => {
@@ -417,7 +468,10 @@ export const ConfigPage = (): React.JSX.Element => {
       const result = await window.api.testConfig({
         activeProviderId: activeProvider.id,
         activeModelId: activeProvider.defaultModel || activeProvider.models[0]?.id,
-        providers
+        providers,
+        shortcuts,
+        translation,
+        general
       })
       setTestResult(result)
     } catch (error) {
@@ -431,7 +485,7 @@ export const ConfigPage = (): React.JSX.Element => {
   }
 
   /**
-   * 保存所有服务商配置
+   * 保存所有系统偏好设置
    */
   const handleSaveAll = async (): Promise<void> => {
     setIsSaving(true)
@@ -445,17 +499,20 @@ export const ConfigPage = (): React.JSX.Element => {
         apiKey: p.apiKey.trim()
       }))
 
-      const payload: LLMConfig = {
+      const payload: AppSettings = {
         activeProviderId: activeProviderId,
         activeModelId:
           sanitizedProviders.find((p) => p.id === activeProviderId)?.defaultModel ||
           sanitizedProviders.find((p) => p.id === activeProviderId)?.models[0]?.id,
-        providers: sanitizedProviders
+        providers: sanitizedProviders,
+        shortcuts,
+        translation,
+        general
       }
 
       const result = await window.api.saveConfig(payload)
       if (result.ok) {
-        setFeedbackMessage('配置已保存生效')
+        setFeedbackMessage('系统偏好设置已保存并生效')
         setTimeout(() => {
           void window.api.closeConfigWindow()
         }, 400)
@@ -487,7 +544,7 @@ export const ConfigPage = (): React.JSX.Element => {
       <header className="pref-header">
         <div className="pref-header-title">
           <span className="pref-title-main">偏好设置</span>
-          <span className="pref-title-sub">PREFERENCES // PROVIDER ARCHITECTURE</span>
+          <span className="pref-title-sub">SYSTEM PREFERENCES // XENON WORKBENCH</span>
         </div>
         <button
           type="button"
@@ -500,316 +557,680 @@ export const ConfigPage = (): React.JSX.Element => {
         </button>
       </header>
 
-      {/* 主体区 */}
-      <main className="pref-body">
-        {/* 顶部：服务商选项卡管理栏 */}
-        <section className="pref-card" style={{ padding: '10px 14px 12px 14px' }}>
-          <div className="pref-card-header" style={{ marginBottom: '8px' }}>
-            <div className="pref-header-with-badge">
-              <h2 className="pref-card-title">独立服务商管理 (PROVIDERS)</h2>
-              <span className="pref-provider-count-tip">已配置 {providers.length} 个渠道</span>
-            </div>
-            <button
-              type="button"
-              className="pref-btn pref-btn-secondary"
-              style={{ fontSize: '11px', padding: '3px 9px' }}
-              onClick={handleAddCustomProvider}
-            >
-              + 新建服务商
-            </button>
-          </div>
-
-          {/* 选项卡列表 */}
-          <div className="pref-provider-tabs">
-            {providers.map((p) => {
-              const isSelected = p.id === selectedTabId
-              const isPrimary = p.id === activeProviderId
+      {/* 左右双栏主体布局 */}
+      <div className="pref-layout-split">
+        {/* 左侧导航栏 */}
+        <aside className="pref-sidebar">
+          <nav className="pref-nav-menu">
+            {NAV_ITEMS.map((item) => {
+              const isActive = item.id === activeCategory
               return (
                 <button
-                  key={p.id}
+                  key={item.id}
                   type="button"
-                  className={`pref-provider-tab ${isSelected ? 'pref-provider-tab-active' : ''} ${
-                    !p.enabled ? 'pref-provider-tab-disabled' : ''
-                  }`}
-                  onClick={() => {
-                    setSelectedTabId(p.id)
-                    setTestResult(null)
-                  }}
-                  title={isPrimary ? '当前全局生效的主用服务商' : '点击查看与编辑此服务商'}
+                  className={`pref-nav-item ${isActive ? 'pref-nav-item-active' : ''}`}
+                  onClick={() => setActiveCategory(item.id)}
                 >
-                  <span
-                    className={`pref-provider-tab-dot ${p.enabled ? 'dot-enabled' : 'dot-disabled'}`}
-                  />
-                  <span className="pref-provider-tab-name">{p.name}</span>
-                  {isPrimary ? <span className="pref-primary-indicator">主用</span> : null}
+                  <span className="pref-nav-icon">{item.icon}</span>
+                  <div className="pref-nav-text-group">
+                    <span className="pref-nav-title">{item.title}</span>
+                    <span className="pref-nav-subtitle">{item.subtitle}</span>
+                  </div>
                 </button>
               )
             })}
-          </div>
+          </nav>
+        </aside>
 
-          {/* 快捷添加预置模板（仅在有未添加模板时展示，彻底消除冗余） */}
-          <div className="pref-preset-row">
-            {unaddedTemplates.length > 0 ? (
-              <>
-                <span className="pref-preset-tip">快捷添加预置：</span>
-                <div className="pref-preset-chips">
-                  {unaddedTemplates.map((tmpl) => (
-                    <button
-                      key={tmpl.id}
-                      type="button"
-                      className="pref-preset-chip"
-                      onClick={() => handleAddFromTemplate(tmpl)}
-                      title={`快捷配置【${tmpl.name}】`}
-                    >
-                      + {tmpl.name}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <span className="pref-preset-tip-dim">
-                ✓ 官方预设服务商模板已全部加入列表，可通过上方【+ 新建服务商】增加自定义渠道
-              </span>
-            )}
-          </div>
-        </section>
-
-        {/* 当前选中厂商的专属配置面板 */}
-        {activeProvider ? (
-          <section className="pref-card">
-            <div className="pref-card-header">
-              <div className="pref-card-title-group">
-                <div className="pref-title-with-actions">
-                  <h2 className="pref-card-title">【{activeProvider.name}】专属连接配置</h2>
-                  {activeProvider.id === activeProviderId ? (
-                    <span className="pref-badge-primary">★ 全局主用服务商</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="pref-btn-set-primary"
-                      onClick={handleSetAsPrimary}
-                      title="点击设为主界面默认使用的大模型渠道"
-                    >
-                      设为主用
-                    </button>
-                  )}
-                </div>
-                <span className="pref-card-subtitle">
-                  与其它厂商完全隔离，独立管理其专属地址、密钥与模型库
-                </span>
-              </div>
-
-              {/* 启用/停用开关 */}
-              <div
-                className="pref-switch-inline"
-                onClick={() => updateActiveProvider({ enabled: !activeProvider.enabled })}
-                title="开启后该厂商的模型才会出现在主界面下拉框中"
-              >
-                <span style={{ fontSize: '11px', color: '#5a5247', marginRight: '6px' }}>
-                  {activeProvider.enabled ? '已启用' : '已停用'}
-                </span>
-                <div className={`pref-switch ${activeProvider.enabled ? 'pref-switch-on' : ''}`}>
-                  <div className="pref-switch-thumb" />
-                </div>
-              </div>
-            </div>
-
-            <div className="pref-fields-grid">
-              {/* 厂商名称 */}
-              <div className="pref-field">
-                <div className="pref-label-row">
-                  <label className="pref-label" htmlFor="prov-name">
-                    服务商显示名称
-                  </label>
-                  {providers.length > 1 ? (
-                    <button
-                      type="button"
-                      className="pref-text-btn"
-                      style={{ color: '#d85c5c' }}
-                      onClick={() => handleDeleteProvider(activeProvider.id)}
-                    >
-                      删除该服务商
-                    </button>
-                  ) : null}
-                </div>
-                <input
-                  id="prov-name"
-                  type="text"
-                  className="pref-input"
-                  value={activeProvider.name}
-                  onChange={(e) => updateActiveProvider({ name: e.target.value })}
-                  placeholder="如：DeepSeek 官方"
-                  spellCheck={false}
-                />
-              </div>
-
-              {/* 服务地址 (Base URL) */}
-              <div className="pref-field">
-                <label className="pref-label" htmlFor="prov-base-url">
-                  服务地址 (Base URL)
-                </label>
-                <input
-                  id="prov-base-url"
-                  type="text"
-                  className="pref-input"
-                  value={activeProvider.baseUrl}
-                  onChange={(e) => updateActiveProvider({ baseUrl: e.target.value })}
-                  onBlur={(e) => {
-                    const cleaned = cleanBaseUrl(e.target.value)
-                    if (cleaned !== e.target.value) {
-                      updateActiveProvider({ baseUrl: cleaned })
-                    }
-                  }}
-                  placeholder="https://api.deepseek.com/v1"
-                  spellCheck={false}
-                  autoComplete="off"
-                />
-              </div>
-
-              {/* 访问密钥 (API Key) */}
-              <div className="pref-field">
-                <div className="pref-label-row">
-                  <label className="pref-label" htmlFor="prov-api-key">
-                    访问密钥 (API Key)
-                  </label>
-                  <div className="pref-field-actions">
-                    {activeProvider.apiKey ? (
-                      <>
-                        <button
-                          type="button"
-                          className="pref-text-btn"
-                          onClick={() => void handleCopyApiKey()}
-                          title="复制 API Key 到剪贴板"
-                        >
-                          复制
-                        </button>
-                        <span className="pref-action-divider">|</span>
-                        <button
-                          type="button"
-                          className="pref-text-btn"
-                          onClick={() => updateActiveProvider({ apiKey: '' })}
-                          title="清空当前输入的密钥"
-                        >
-                          清空
-                        </button>
-                        <span className="pref-action-divider">|</span>
-                      </>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="pref-text-btn"
-                      onClick={() => setShowApiKey((prev) => !prev)}
-                    >
-                      {showApiKey ? '隐藏' : '显示'}
-                    </button>
+        {/* 右侧核心内容面板 */}
+        <main className="pref-main-content">
+          {/* ===================== 分类 1: AI 模型 (Providers) ===================== */}
+          {activeCategory === 'providers' && (
+            <div className="pref-panel-fade">
+              {/* 顶部：服务商选项卡管理栏 */}
+              <section className="pref-card" style={{ padding: '10px 14px 12px 14px' }}>
+                <div className="pref-card-header" style={{ marginBottom: '8px' }}>
+                  <div className="pref-header-with-badge">
+                    <h2 className="pref-card-title">独立服务商管理 (PROVIDERS)</h2>
+                    <span className="pref-provider-count-tip">
+                      已配置 {providers.length} 个渠道
+                    </span>
                   </div>
-                </div>
-                <input
-                  id="prov-api-key"
-                  type={showApiKey ? 'text' : 'password'}
-                  className="pref-input"
-                  value={activeProvider.apiKey}
-                  onChange={(e) => updateActiveProvider({ apiKey: e.target.value })}
-                  onBlur={(e) => {
-                    const trimmed = e.target.value.trim()
-                    if (trimmed !== e.target.value) {
-                      updateActiveProvider({ apiKey: trimmed })
-                    }
-                  }}
-                  placeholder="填入该服务商的 API Key..."
-                  spellCheck={false}
-                  autoComplete="off"
-                />
-              </div>
-
-              {/* 该服务商的专属模型列表 */}
-              <div className="pref-field">
-                <div className="pref-label-row">
-                  <label className="pref-label">
-                    可用模型列表 (MODELS FOR {activeProvider.name.toUpperCase()})
-                  </label>
                   <button
                     type="button"
-                    className="pref-btn-fetch"
-                    onClick={() => void handleFetchModels()}
-                    disabled={isFetchingModels || !activeProvider.baseUrl}
-                    title="从接口端点自动获取该服务商支持的全部模型"
+                    className="pref-btn pref-btn-secondary"
+                    style={{ fontSize: '11px', padding: '3px 9px' }}
+                    onClick={handleAddCustomProvider}
                   >
-                    {isFetchingModels ? '正在拉取...' : '⚡ 自动获取模型列表'}
+                    + 新建服务商
                   </button>
                 </div>
 
-                <div className="pref-pills-wrap">
-                  {activeProvider.models.map((m) => {
-                    const isDefault =
-                      (activeProvider.defaultModel || activeProvider.models[0]?.id) === m.id
+                {/* 选项卡列表 */}
+                <div className="pref-provider-tabs">
+                  {providers.map((p) => {
+                    const isSelected = p.id === selectedTabId
+                    const isPrimary = p.id === activeProviderId
                     return (
-                      <span
-                        key={m.id}
-                        className={`pref-pill ${isDefault ? 'pref-pill-active' : ''}`}
-                        title={isDefault ? '当前默认模型' : '点击设为默认模型'}
-                        onClick={() => updateActiveProvider({ defaultModel: m.id })}
-                        style={{ cursor: 'pointer' }}
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={`pref-provider-tab ${isSelected ? 'pref-provider-tab-active' : ''} ${
+                          !p.enabled ? 'pref-provider-tab-disabled' : ''
+                        }`}
+                        onClick={() => {
+                          setSelectedTabId(p.id)
+                          setTestResult(null)
+                        }}
+                        title={isPrimary ? '当前全局生效的主用服务商' : '点击查看与编辑此服务商'}
                       >
-                        {isDefault ? (
-                          <span style={{ fontSize: '9px', color: '#e06c3a', marginRight: '2px' }}>
-                            ★
-                          </span>
-                        ) : null}
-                        <span className="pref-pill-name">{m.id}</span>
-                        {activeProvider.models.length > 1 ? (
-                          <button
-                            type="button"
-                            className="pref-pill-remove"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleRemoveModelFromActive(m.id)
-                            }}
-                            title={`移除 ${m.id}`}
-                          >
-                            ×
-                          </button>
-                        ) : null}
-                      </span>
+                        <span
+                          className={`pref-provider-tab-dot ${p.enabled ? 'dot-enabled' : 'dot-disabled'}`}
+                        />
+                        <span className="pref-provider-tab-name">{p.name}</span>
+                        {isPrimary ? <span className="pref-primary-indicator">主用</span> : null}
+                      </button>
                     )
                   })}
                 </div>
 
-                {/* 手动追加模型 */}
-                <div className="pref-add-row" style={{ marginTop: '8px' }}>
-                  <input
-                    type="text"
-                    className="pref-input pref-add-input"
-                    value={newModelId}
-                    onChange={(e) => setNewModelId(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleAddModelToActive()
-                      }
-                    }}
-                    placeholder={`手动添加模型 ID 至【${activeProvider.name}】...`}
-                    spellCheck={false}
-                  />
+                {/* 快捷添加预置模板（仅在有未添加模板时展示） */}
+                <div className="pref-preset-row">
+                  {unaddedTemplates.length > 0 ? (
+                    <>
+                      <span className="pref-preset-tip">快捷添加预置：</span>
+                      <div className="pref-preset-chips">
+                        {unaddedTemplates.map((tmpl) => (
+                          <button
+                            key={tmpl.id}
+                            type="button"
+                            className="pref-preset-chip"
+                            onClick={() => handleAddFromTemplate(tmpl)}
+                            title={`快捷配置【${tmpl.name}】`}
+                          >
+                            + {tmpl.name}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <span className="pref-preset-tip-dim">
+                      ✓ 官方预设服务商模板已全部加入列表，可通过上方【+ 新建服务商】增加自定义渠道
+                    </span>
+                  )}
+                </div>
+              </section>
+
+              {/* 当前选中厂商的专属配置面板 */}
+              {activeProvider ? (
+                <section className="pref-card" style={{ marginTop: '12px' }}>
+                  <div className="pref-card-header">
+                    <div className="pref-card-title-group">
+                      <div className="pref-title-with-actions">
+                        <h2 className="pref-card-title">【{activeProvider.name}】专属连接配置</h2>
+                        {activeProvider.id === activeProviderId ? (
+                          <span className="pref-badge-primary">★ 全局主用服务商</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="pref-btn-set-primary"
+                            onClick={handleSetAsPrimary}
+                            title="点击设为主界面默认使用的大模型渠道"
+                          >
+                            设为主用
+                          </button>
+                        )}
+                      </div>
+                      <span className="pref-card-subtitle">
+                        与其它厂商完全隔离，独立管理其专属地址、密钥与模型库
+                      </span>
+                    </div>
+
+                    {/* 启用/停用开关 */}
+                    <div
+                      className="pref-switch-inline"
+                      onClick={() => updateActiveProvider({ enabled: !activeProvider.enabled })}
+                      title="开启后该厂商的模型才会出现在主界面下拉框中"
+                    >
+                      <span style={{ fontSize: '11px', color: '#5a5247', marginRight: '6px' }}>
+                        {activeProvider.enabled ? '已启用' : '已停用'}
+                      </span>
+                      <div
+                        className={`pref-switch ${activeProvider.enabled ? 'pref-switch-on' : ''}`}
+                      >
+                        <div className="pref-switch-thumb" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pref-fields-grid">
+                    {/* 厂商名称 */}
+                    <div className="pref-field">
+                      <div className="pref-label-row">
+                        <label className="pref-label" htmlFor="prov-name">
+                          服务商显示名称
+                        </label>
+                        {providers.length > 1 ? (
+                          <button
+                            type="button"
+                            className="pref-text-btn"
+                            style={{ color: '#d85c5c' }}
+                            onClick={() => handleDeleteProvider(activeProvider.id)}
+                          >
+                            删除该服务商
+                          </button>
+                        ) : null}
+                      </div>
+                      <input
+                        id="prov-name"
+                        type="text"
+                        className="pref-input"
+                        value={activeProvider.name}
+                        onChange={(e) => updateActiveProvider({ name: e.target.value })}
+                        placeholder="如：DeepSeek 官方"
+                        spellCheck={false}
+                      />
+                    </div>
+
+                    {/* 服务地址 (Base URL) */}
+                    <div className="pref-field">
+                      <label className="pref-label" htmlFor="prov-base-url">
+                        服务地址 (Base URL)
+                      </label>
+                      <input
+                        id="prov-base-url"
+                        type="text"
+                        className="pref-input"
+                        value={activeProvider.baseUrl}
+                        onChange={(e) => updateActiveProvider({ baseUrl: e.target.value })}
+                        onBlur={(e) => {
+                          const cleaned = cleanBaseUrl(e.target.value)
+                          if (cleaned !== e.target.value) {
+                            updateActiveProvider({ baseUrl: cleaned })
+                          }
+                        }}
+                        placeholder="https://api.deepseek.com/v1"
+                        spellCheck={false}
+                        autoComplete="off"
+                      />
+                    </div>
+
+                    {/* 访问密钥 (API Key) */}
+                    <div className="pref-field">
+                      <div className="pref-label-row">
+                        <label className="pref-label" htmlFor="prov-api-key">
+                          访问密钥 (API Key)
+                        </label>
+                        <div className="pref-field-actions">
+                          {activeProvider.apiKey ? (
+                            <>
+                              <button
+                                type="button"
+                                className="pref-text-btn"
+                                onClick={() => void handleCopyApiKey()}
+                                title="复制 API Key 到剪贴板"
+                              >
+                                复制
+                              </button>
+                              <span className="pref-action-divider">|</span>
+                              <button
+                                type="button"
+                                className="pref-text-btn"
+                                onClick={() => updateActiveProvider({ apiKey: '' })}
+                                title="清空当前输入的密钥"
+                              >
+                                清空
+                              </button>
+                              <span className="pref-action-divider">|</span>
+                            </>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="pref-text-btn"
+                            onClick={() => setShowApiKey((prev) => !prev)}
+                          >
+                            {showApiKey ? '隐藏' : '显示'}
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        id="prov-api-key"
+                        type={showApiKey ? 'text' : 'password'}
+                        className="pref-input"
+                        value={activeProvider.apiKey}
+                        onChange={(e) => updateActiveProvider({ apiKey: e.target.value })}
+                        onBlur={(e) => {
+                          const trimmed = e.target.value.trim()
+                          if (trimmed !== e.target.value) {
+                            updateActiveProvider({ apiKey: trimmed })
+                          }
+                        }}
+                        placeholder="填入该服务商的 API Key..."
+                        spellCheck={false}
+                        autoComplete="off"
+                      />
+                    </div>
+
+                    {/* 可用模型列表 */}
+                    <div className="pref-field">
+                      <div className="pref-label-row">
+                        <label className="pref-label">
+                          可用模型列表 (MODELS FOR {activeProvider.name.toUpperCase()})
+                        </label>
+                        <button
+                          type="button"
+                          className="pref-btn-fetch"
+                          onClick={() => void handleFetchModels()}
+                          disabled={isFetchingModels || !activeProvider.baseUrl}
+                          title="从接口端点自动获取该服务商支持的全部模型"
+                        >
+                          {isFetchingModels ? '正在拉取...' : '⚡ 自动获取模型列表'}
+                        </button>
+                      </div>
+
+                      <div className="pref-pills-wrap">
+                        {activeProvider.models.map((m) => {
+                          const isDefault =
+                            (activeProvider.defaultModel || activeProvider.models[0]?.id) === m.id
+                          return (
+                            <span
+                              key={m.id}
+                              className={`pref-pill ${isDefault ? 'pref-pill-active' : ''}`}
+                              title={isDefault ? '当前默认模型' : '点击设为默认模型'}
+                              onClick={() => updateActiveProvider({ defaultModel: m.id })}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              {isDefault ? (
+                                <span
+                                  style={{ fontSize: '9px', color: '#e06c3a', marginRight: '2px' }}
+                                >
+                                  ★
+                                </span>
+                              ) : null}
+                              <span className="pref-pill-name">{m.id}</span>
+                              {activeProvider.models.length > 1 ? (
+                                <button
+                                  type="button"
+                                  className="pref-pill-remove"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleRemoveModelFromActive(m.id)
+                                  }}
+                                  title={`移除 ${m.id}`}
+                                >
+                                  ×
+                                </button>
+                              ) : null}
+                            </span>
+                          )
+                        })}
+                      </div>
+
+                      {/* 手动追加模型 */}
+                      <div className="pref-add-row" style={{ marginTop: '8px' }}>
+                        <input
+                          type="text"
+                          className="pref-input pref-add-input"
+                          value={newModelId}
+                          onChange={(e) => setNewModelId(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              handleAddModelToActive()
+                            }
+                          }}
+                          placeholder={`手动添加模型 ID 至【${activeProvider.name}】...`}
+                          spellCheck={false}
+                        />
+                        <button
+                          type="button"
+                          className="pref-btn pref-btn-secondary"
+                          onClick={handleAddModelToActive}
+                          disabled={!newModelId.trim()}
+                        >
+                          + 添加模型
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          )}
+
+          {/* ===================== 分类 2: 快捷键 (Shortcuts) ===================== */}
+          {activeCategory === 'shortcuts' && (
+            <div className="pref-panel-fade">
+              <section className="pref-card">
+                <div className="pref-card-header">
+                  <div className="pref-card-title-group">
+                    <h2 className="pref-card-title">全局呼出快捷键 (GLOBAL SHORTCUTS)</h2>
+                    <span className="pref-card-subtitle">
+                      在任何应用或前台全屏状态下，均可使用全局组合键呼出翻译功能
+                    </span>
+                  </div>
                   <button
                     type="button"
                     className="pref-btn pref-btn-secondary"
-                    onClick={handleAddModelToActive}
-                    disabled={!newModelId.trim()}
+                    style={{ fontSize: '11px', padding: '3px 8px' }}
+                    onClick={() => {
+                      setShortcuts({ ...DEFAULT_SHORTCUTS })
+                      setFeedbackMessage('快捷键已重置为默认值')
+                    }}
                   >
-                    + 添加模型
+                    恢复默认快捷键
                   </button>
                 </div>
-              </div>
+
+                <div className="pref-fields-grid" style={{ marginTop: '6px' }}>
+                  {/* 截屏翻译 */}
+                  <div className="pref-field">
+                    <div className="pref-label-row">
+                      <label className="pref-label" htmlFor="sc-screenshot">
+                        📸 截屏识别翻译
+                      </label>
+                      <span className="pref-shortcut-tip">推荐: Alt+S 或 Option+S</span>
+                    </div>
+                    <div className="pref-shortcut-input-group">
+                      <input
+                        id="sc-screenshot"
+                        type="text"
+                        className="pref-input"
+                        value={shortcuts.screenshot}
+                        onChange={(e) =>
+                          setShortcuts((prev) => ({ ...prev, screenshot: e.target.value.trim() }))
+                        }
+                        placeholder="例如: Alt+S 或 CommandOrControl+Shift+S"
+                        spellCheck={false}
+                      />
+                      <div className="pref-quick-chips">
+                        {['Alt+S', 'CommandOrControl+Shift+S', 'Alt+Shift+S'].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            className="pref-preset-chip"
+                            onClick={() =>
+                              setShortcuts((prev) => ({ ...prev, screenshot: preset }))
+                            }
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 输入翻译 */}
+                  <div className="pref-field">
+                    <div className="pref-label-row">
+                      <label className="pref-label" htmlFor="sc-input">
+                        💬 呼出输入翻译窗口
+                      </label>
+                      <span className="pref-shortcut-tip">推荐: Alt+A 或 Option+A</span>
+                    </div>
+                    <div className="pref-shortcut-input-group">
+                      <input
+                        id="sc-input"
+                        type="text"
+                        className="pref-input"
+                        value={shortcuts.inputTranslate}
+                        onChange={(e) =>
+                          setShortcuts((prev) => ({
+                            ...prev,
+                            inputTranslate: e.target.value.trim()
+                          }))
+                        }
+                        placeholder="例如: Alt+A 或 CommandOrControl+Shift+A"
+                        spellCheck={false}
+                      />
+                      <div className="pref-quick-chips">
+                        {['Alt+A', 'CommandOrControl+Shift+A', 'Alt+Space'].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            className="pref-preset-chip"
+                            onClick={() =>
+                              setShortcuts((prev) => ({ ...prev, inputTranslate: preset }))
+                            }
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 偏好设置窗口 */}
+                  <div className="pref-field">
+                    <div className="pref-label-row">
+                      <label className="pref-label" htmlFor="sc-pref">
+                        ⚙️ 打开偏好设置
+                      </label>
+                      <span className="pref-shortcut-tip">通用规范: CommandOrControl+,</span>
+                    </div>
+                    <input
+                      id="sc-pref"
+                      type="text"
+                      className="pref-input"
+                      value={shortcuts.openPreferences}
+                      onChange={(e) =>
+                        setShortcuts((prev) => ({
+                          ...prev,
+                          openPreferences: e.target.value.trim()
+                        }))
+                      }
+                      placeholder="CommandOrControl+,"
+                      spellCheck={false}
+                    />
+                  </div>
+                </div>
+              </section>
             </div>
-          </section>
-        ) : null}
-      </main>
+          )}
+
+          {/* ===================== 分类 3: 翻译偏好 (Translation) ===================== */}
+          {activeCategory === 'translation' && (
+            <div className="pref-panel-fade">
+              <section className="pref-card">
+                <div className="pref-card-header">
+                  <div className="pref-card-title-group">
+                    <h2 className="pref-card-title">翻译与交互行为 (TRANSLATION BEHAVIOR)</h2>
+                    <span className="pref-card-subtitle">
+                      定制默认目标语言、自动剪贴板同步及大模型提示词微调
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pref-fields-grid" style={{ marginTop: '6px' }}>
+                  {/* 默认目标语言 */}
+                  <div className="pref-field">
+                    <label className="pref-label" htmlFor="pref-target-lang">
+                      默认翻译目标语言
+                    </label>
+                    <select
+                      id="pref-target-lang"
+                      className="pref-input pref-select"
+                      value={translation.defaultTargetLanguage}
+                      onChange={(e) =>
+                        setTranslation((prev) => ({
+                          ...prev,
+                          defaultTargetLanguage: e.target.value
+                        }))
+                      }
+                    >
+                      {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => (
+                        <option key={lang.code} value={lang.code}>
+                          {lang.label} ({lang.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 自动复制结果到剪贴板 */}
+                  <div
+                    className="pref-switch-row"
+                    onClick={() =>
+                      setTranslation((prev) => ({ ...prev, autoCopyResult: !prev.autoCopyResult }))
+                    }
+                  >
+                    <div className="pref-switch-desc">
+                      <span className="pref-switch-name">翻译成功后自动复制到剪贴板</span>
+                      <span className="pref-switch-sub">
+                        开启后，截屏翻译或文本翻译完成时自动将目标译文写入系统剪贴板，无需手动点击复制
+                      </span>
+                    </div>
+                    <div
+                      className={`pref-switch ${translation.autoCopyResult ? 'pref-switch-on' : ''}`}
+                    >
+                      <div className="pref-switch-thumb" />
+                    </div>
+                  </div>
+
+                  {/* 默认启用深度思考推理 */}
+                  <div
+                    className="pref-switch-row"
+                    onClick={() =>
+                      setTranslation((prev) => ({
+                        ...prev,
+                        defaultEnableThinking: !prev.defaultEnableThinking
+                      }))
+                    }
+                  >
+                    <div className="pref-switch-desc">
+                      <span className="pref-switch-name">默认开启深度思考推理模式 (Thinking)</span>
+                      <span className="pref-switch-sub">
+                        若模型支持（如 DeepSeek-R1 /
+                        QwQ），将开启深度逻辑链思考，译文更考究但在响应上略有延迟
+                      </span>
+                    </div>
+                    <div
+                      className={`pref-switch ${translation.defaultEnableThinking ? 'pref-switch-on' : ''}`}
+                    >
+                      <div className="pref-switch-thumb" />
+                    </div>
+                  </div>
+
+                  {/* 自定义翻译系统提示词 */}
+                  <div className="pref-field" style={{ marginTop: '4px' }}>
+                    <div className="pref-label-row">
+                      <label className="pref-label" htmlFor="pref-prompt">
+                        自定义系统提示词 (SYSTEM PROMPT)
+                      </label>
+                      {translation.customSystemPrompt ? (
+                        <button
+                          type="button"
+                          className="pref-text-btn"
+                          onClick={() =>
+                            setTranslation((prev) => ({ ...prev, customSystemPrompt: '' }))
+                          }
+                        >
+                          恢复内置提示词
+                        </button>
+                      ) : null}
+                    </div>
+                    <textarea
+                      id="pref-prompt"
+                      className="pref-textarea"
+                      rows={4}
+                      value={translation.customSystemPrompt || ''}
+                      onChange={(e) =>
+                        setTranslation((prev) => ({ ...prev, customSystemPrompt: e.target.value }))
+                      }
+                      placeholder="留空时默认采用系统精密格式保留与纯净翻译指令；您也可输入如：'你是一名专业学术翻译专家，请将文本翻译为学术级专业术语，仅输出译文。'"
+                      spellCheck={false}
+                    />
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {/* ===================== 分类 4: 通用设置 (General) ===================== */}
+          {activeCategory === 'general' && (
+            <div className="pref-panel-fade">
+              <section className="pref-card">
+                <div className="pref-card-header">
+                  <div className="pref-card-title-group">
+                    <h2 className="pref-card-title">系统与窗口行为 (SYSTEM & WINDOW)</h2>
+                    <span className="pref-card-subtitle">
+                      管理开机自动启动、主窗口悬浮层级与托盘驻留策略
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pref-fields-grid" style={{ marginTop: '6px' }}>
+                  {/* 开机自动启动 */}
+                  <div
+                    className="pref-switch-row"
+                    onClick={() =>
+                      setGeneral((prev) => ({ ...prev, launchAtLogin: !prev.launchAtLogin }))
+                    }
+                  >
+                    <div className="pref-switch-desc">
+                      <span className="pref-switch-name">开机自动启动 (Launch at Startup)</span>
+                      <span className="pref-switch-sub">
+                        随系统登录自动启动并在后台托盘静默就绪，随时按下快捷键即可调用
+                      </span>
+                    </div>
+                    <div className={`pref-switch ${general.launchAtLogin ? 'pref-switch-on' : ''}`}>
+                      <div className="pref-switch-thumb" />
+                    </div>
+                  </div>
+
+                  {/* 主窗口默认置顶 */}
+                  <div
+                    className="pref-switch-row"
+                    onClick={() =>
+                      setGeneral((prev) => ({ ...prev, alwaysOnTop: !prev.alwaysOnTop }))
+                    }
+                  >
+                    <div className="pref-switch-desc">
+                      <span className="pref-switch-name">主翻译窗口始终保持置顶</span>
+                      <span className="pref-switch-sub">
+                        开启后主掌机窗口浮动在所有应用程序之上，也可随时点击主界面右上角图钉按钮临时切换
+                      </span>
+                    </div>
+                    <div className={`pref-switch ${general.alwaysOnTop ? 'pref-switch-on' : ''}`}>
+                      <div className="pref-switch-thumb" />
+                    </div>
+                  </div>
+
+                  {/* 关闭主窗口时的行为 */}
+                  <div className="pref-field" style={{ marginTop: '4px' }}>
+                    <label className="pref-label">点击主窗口右上角关闭按钮时：</label>
+                    <div className="pref-radio-group">
+                      <label className="pref-radio-item">
+                        <input
+                          type="radio"
+                          name="closeAction"
+                          checked={general.closeAction === 'tray'}
+                          onChange={() => setGeneral((prev) => ({ ...prev, closeAction: 'tray' }))}
+                        />
+                        <span>最小化隐藏到系统托盘（推荐，保持快捷键随时可用）</span>
+                      </label>
+                      <label className="pref-radio-item">
+                        <input
+                          type="radio"
+                          name="closeAction"
+                          checked={general.closeAction === 'quit'}
+                          onChange={() => setGeneral((prev) => ({ ...prev, closeAction: 'quit' }))}
+                        />
+                        <span>彻底退出应用程序</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* 底部操作工具栏 */}
       <footer className="pref-footer">
         <div className="pref-footer-left">
-          {activeProvider ? (
+          {/* 只有在 AI 模型面板才展示连通性测试按钮 */}
+          {activeCategory === 'providers' && activeProvider ? (
             <button
               type="button"
               className="pref-btn pref-btn-test"
@@ -822,7 +1243,7 @@ export const ConfigPage = (): React.JSX.Element => {
           ) : null}
 
           {/* 测试连通性结果反馈 */}
-          {testResult ? (
+          {activeCategory === 'providers' && testResult ? (
             <div className="pref-test-result-group">
               <span
                 className={`pref-test-status ${

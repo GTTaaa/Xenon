@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { TranslateRequest, TranslateResponse } from '../shared/translate'
-import type { FetchModelsResult, LLMConfig, TestConnectionResult } from '../shared/config'
+import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
 
 // 暴露给渲染进程的应用 API
 const api = {
@@ -20,17 +20,23 @@ const api = {
       ipcRenderer.removeListener('translate:focus-input', listener)
     }
   },
-  getConfig: (): Promise<LLMConfig> => {
+  getConfig: (): Promise<AppSettings> => {
     return ipcRenderer.invoke('config:get')
   },
-  saveConfig: (config: LLMConfig): Promise<{ ok: boolean; error?: string }> => {
+  saveConfig: (config: AppSettings): Promise<{ ok: boolean; error?: string }> => {
     return ipcRenderer.invoke('config:save', config)
   },
-  testConfig: (config: LLMConfig): Promise<TestConnectionResult> => {
+  testConfig: (config: AppSettings): Promise<TestConnectionResult> => {
     return ipcRenderer.invoke('config:test', config)
   },
   fetchModels: (params: { baseUrl: string; apiKey: string }): Promise<FetchModelsResult> => {
     return ipcRenderer.invoke('config:fetch-models', params)
+  },
+  toggleAlwaysOnTop: (): Promise<boolean> => {
+    return ipcRenderer.invoke('window:toggle-always-on-top')
+  },
+  getAlwaysOnTop: (): Promise<boolean> => {
+    return ipcRenderer.invoke('window:get-always-on-top')
   },
   onOpenConfig: (callback: () => void): (() => void) => {
     const listener = (): void => {
@@ -66,8 +72,8 @@ const api = {
   closeConfigWindow: (): Promise<void> => {
     return ipcRenderer.invoke('window:close-config')
   },
-  onConfigUpdated: (callback: (config: LLMConfig) => void): (() => void) => {
-    const listener = (_: unknown, config: LLMConfig): void => {
+  onConfigUpdated: (callback: (config: AppSettings) => void): (() => void) => {
+    const listener = (_: unknown, config: AppSettings): void => {
       callback(config)
     }
 

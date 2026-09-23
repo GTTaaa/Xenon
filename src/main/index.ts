@@ -15,7 +15,8 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import trayIcon2x from '../../resources/trayTemplate@2x.png?asset'
 import type { TranslateRequest } from '../shared/translate'
-import type { LLMConfig } from '../shared/config'
+import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
+import { DEFAULT_SHORTCUTS } from '../shared/config'
 import { translateText } from './services/translator'
 import {
   fetchProviderModels,
@@ -48,10 +49,10 @@ function openConfigWindow(): void {
   }
 
   configWindow = new BrowserWindow({
-    width: 600,
-    height: 680,
-    minWidth: 500,
-    minHeight: 540,
+    width: 720,
+    height: 600,
+    minWidth: 640,
+    minHeight: 480,
     resizable: true,
     frame: false,
     show: false,
@@ -97,6 +98,7 @@ function closeConfigWindow(): void {
 }
 
 function createWindow(): void {
+  const cfg = getLLMConfig()
   mainWindow = new BrowserWindow({
     useContentSize: true,
     width: 358,
@@ -108,6 +110,7 @@ function createWindow(): void {
     resizable: false,
     frame: false,
     show: false,
+    alwaysOnTop: Boolean(cfg.general?.alwaysOnTop),
     autoHideMenuBar: true,
     icon,
     webPreferences: {
@@ -118,6 +121,14 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
+  })
+
+  mainWindow.on('close', (event) => {
+    const currentConfig = getLLMConfig()
+    if (currentConfig.general?.closeAction === 'tray') {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
   })
 
   mainWindow.on('closed', () => {
@@ -269,10 +280,12 @@ app.whenReady().then(async () => {
     return getLLMConfig()
   })
 
-  ipcMain.handle('config:save', async (_, config: LLMConfig) => {
+  ipcMain.handle('config:save', async (_, config: AppSettings) => {
     const result = await saveLLMConfig(config)
     if (result.ok) {
       const latestConfig = getLLMConfig()
+      applyShortcuts(latestConfig.shortcuts)
+      applyGeneralSettings(latestConfig.general)
       mainWindow?.webContents.send('config:updated', latestConfig)
     }
     return result
@@ -286,7 +299,7 @@ app.whenReady().then(async () => {
     closeConfigWindow()
   })
 
-  ipcMain.handle('config:test', async (_, config: LLMConfig) => {
+  ipcMain.handle('config:test', async (_, config: AppSettings) => {
     return await testLLMConnection(config)
   })
 
@@ -298,6 +311,18 @@ app.whenReady().then(async () => {
     return await triggerScreenshotTranslation(() => mainWindow)
   })
 
+  ipcMain.handle('window:toggle-always-on-top', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false
+    const nextState = !mainWindow.isAlwaysOnTop()
+    mainWindow.setAlwaysOnTop(nextState, 'floating')
+    return nextState
+  })
+
+  ipcMain.handle('window:get-always-on-top', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false
+    return mainWindow.isAlwaysOnTop()
+  })
+
   ipcMain.handle('window:set-height', (_, targetHeight: number) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     const [width, currentHeight] = mainWindow.getContentSize()
@@ -306,38 +331,90 @@ app.whenReady().then(async () => {
       mainWindow.setContentSize(width, clampedHeight, true)
     }
   })
+
   createWindow()
   createTray()
 
-  const isInputTranslateShortcutRegistered = globalShortcut.register('Alt+A', () => {
-    showInputTranslateWindow()
-  })
+  // 动态注册与管理全局快捷键
+  let currentRegisteredShortcuts: ShortcutSettings | null = null
 
-  if (!isInputTranslateShortcutRegistered) {
-    console.warn('[main] failed to register input translate shortcut: Alt+A')
-  } else {
-    console.log('[main] registered input translate shortcut: Alt+A')
+  function applyShortcuts(shortcuts?: ShortcutSettings): void {
+    const nextShortcuts = shortcuts || DEFAULT_SHORTCUTS
+
+    if (currentRegisteredShortcuts) {
+      try {
+        if (currentRegisteredShortcuts.inputTranslate) {
+          globalShortcut.unregister(currentRegisteredShortcuts.inputTranslate)
+        }
+        if (currentRegisteredShortcuts.screenshot) {
+          globalShortcut.unregister(currentRegisteredShortcuts.screenshot)
+        }
+        if (currentRegisteredShortcuts.openPreferences) {
+          globalShortcut.unregister(currentRegisteredShortcuts.openPreferences)
+        }
+      } catch (err) {
+        console.warn('[main] 注销旧快捷键失败:', err)
+      }
+    }
+
+    if (nextShortcuts.inputTranslate) {
+      try {
+        const ok = globalShortcut.register(nextShortcuts.inputTranslate, () => {
+          showInputTranslateWindow()
+        })
+        if (!ok) console.warn(`[main] 注册输入快捷键失败: ${nextShortcuts.inputTranslate}`)
+        else console.log(`[main] 注册输入快捷键成功: ${nextShortcuts.inputTranslate}`)
+      } catch (e) {
+        console.warn(`[main] 快捷键格式错误: ${nextShortcuts.inputTranslate}`, e)
+      }
+    }
+
+    if (nextShortcuts.screenshot) {
+      try {
+        const ok = globalShortcut.register(nextShortcuts.screenshot, () => {
+          void triggerScreenshotTranslation(() => mainWindow)
+        })
+        if (!ok) console.warn(`[main] 注册截屏快捷键失败: ${nextShortcuts.screenshot}`)
+        else console.log(`[main] 注册截屏快捷键成功: ${nextShortcuts.screenshot}`)
+      } catch (e) {
+        console.warn(`[main] 快捷键格式错误: ${nextShortcuts.screenshot}`, e)
+      }
+    }
+
+    if (nextShortcuts.openPreferences) {
+      try {
+        const ok = globalShortcut.register(nextShortcuts.openPreferences, () => {
+          openConfigWindow()
+        })
+        if (!ok) console.warn(`[main] 注册偏好设置快捷键失败: ${nextShortcuts.openPreferences}`)
+        else console.log(`[main] 注册偏好设置快捷键成功: ${nextShortcuts.openPreferences}`)
+      } catch (e) {
+        console.warn(`[main] 快捷键格式错误: ${nextShortcuts.openPreferences}`, e)
+      }
+    }
+
+    currentRegisteredShortcuts = { ...nextShortcuts }
   }
 
-  const isScreenshotShortcutRegistered = globalShortcut.register('Alt+S', () => {
-    void triggerScreenshotTranslation(() => mainWindow)
-  })
+  function applyGeneralSettings(general?: GeneralSettings): void {
+    if (!general) return
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: Boolean(general.launchAtLogin)
+      })
+    } catch (err) {
+      console.warn('[main] 设置开机自启失败:', err)
+    }
 
-  if (!isScreenshotShortcutRegistered) {
-    console.warn('[main] failed to register screenshot shortcut: Alt+S')
-  } else {
-    console.log('[main] registered screenshot shortcut: Alt+S')
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setAlwaysOnTop(Boolean(general.alwaysOnTop), 'floating')
+    }
   }
 
-  const isPreferencesShortcutRegistered = globalShortcut.register('CommandOrControl+,', () => {
-    openConfigWindow()
-  })
-
-  if (!isPreferencesShortcutRegistered) {
-    console.warn('[main] failed to register preferences shortcut: CommandOrControl+,')
-  } else {
-    console.log('[main] registered preferences shortcut: CommandOrControl+,')
-  }
+  // 初始化应用快捷键与通用系统设置
+  const initialConfig = getLLMConfig()
+  applyShortcuts(initialConfig.shortcuts)
+  applyGeneralSettings(initialConfig.general)
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

@@ -112,3 +112,81 @@ export interface FetchModelsResult {
   /** 原始响应或调试详情 */
   errorDetail?: string
 }
+
+/**
+ * 全局快捷键偏好设置
+ */
+export interface ShortcutSettings {
+  /** 截屏翻译快捷键，如 'Alt+S' 或 'CommandOrControl+Shift+S' */
+  screenshot: string
+  /** 唤起输入翻译主窗口快捷键，如 'Alt+A' */
+  inputTranslate: string
+  /** 打开系统偏好设置快捷键，如 'CommandOrControl+,' */
+  openPreferences: string
+}
+
+/**
+ * 翻译行为偏好设置
+ */
+export interface TranslationSettings {
+  /** 默认目标语言代码，如 'zh-CN', 'en', 'ja', 'ko' 等 */
+  defaultTargetLanguage: string
+  /** 翻译成功后是否自动写入系统剪贴板 */
+  autoCopyResult: boolean
+  /** 默认是否开启深度思考推理模式 */
+  defaultEnableThinking: boolean
+  /** 自定义翻译系统提示词（留空使用系统内置精准提示词） */
+  customSystemPrompt?: string
+}
+
+/**
+ * 通用系统偏好设置
+ */
+export interface GeneralSettings {
+  /** 是否开机自动启动 */
+  launchAtLogin: boolean
+  /** 主窗口是否始终置顶浮动 */
+  alwaysOnTop: boolean
+  /** 关闭主窗口时的行为：'tray' (最小化到托盘) | 'quit' (退出应用) */
+  closeAction: 'tray' | 'quit'
+}
+
+/**
+ * 综合应用完整偏好设置（包含大模型配置、快捷键、翻译行为与通用设置）
+ */
+export interface AppSettings extends LLMConfig {
+  /** 快捷键设置 */
+  shortcuts?: ShortcutSettings
+  /** 翻译偏好设置 */
+  translation?: TranslationSettings
+  /** 通用系统设置 */
+  general?: GeneralSettings
+}
+
+/**
+ * 默认快捷键设置
+ */
+export const DEFAULT_SHORTCUTS: ShortcutSettings = {
+  screenshot: 'Alt+S',
+  inputTranslate: 'Alt+A',
+  openPreferences: 'CommandOrControl+,'
+}
+
+/**
+ * 默认翻译偏好设置
+ */
+export const DEFAULT_TRANSLATION_SETTINGS: TranslationSettings = {
+  defaultTargetLanguage: 'zh-CN',
+  autoCopyResult: false,
+  defaultEnableThinking: false,
+  customSystemPrompt: ''
+}
+
+/**
+ * 默认通用系统设置
+ */
+export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
+  launchAtLogin: false,
+  alwaysOnTop: false,
+  closeAction: 'tray'
+}

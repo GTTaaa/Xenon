@@ -147,6 +147,24 @@ function App(): React.JSX.Element {
       : null
   })
 
+  // 窗口置顶状态
+  const [isPinned, setIsPinned] = useState(false)
+  // 自动复制结果引用（避免频繁闭包捕获）
+  const autoCopyRef = useRef(false)
+
+  useEffect(() => {
+    window.api.getAlwaysOnTop().then(setIsPinned).catch(console.error)
+  }, [])
+
+  const handleTogglePin = async (): Promise<void> => {
+    try {
+      const nextState = await window.api.toggleAlwaysOnTop()
+      setIsPinned(nextState)
+    } catch (err) {
+      console.error('[renderer] 切换窗口置顶失败', err)
+    }
+  }
+
   const [isSourceLangMenuOpen, setIsSourceLangMenuOpen] = useState(false)
   const [isTargetLangMenuOpen, setIsTargetLangMenuOpen] = useState(false)
   const sourceLangSelectorRef = useRef<HTMLDivElement | null>(null)
@@ -298,6 +316,13 @@ function App(): React.JSX.Element {
         ) {
           setEnableThinking(cfg.enableThinking)
         }
+
+        if (cfg.translation) {
+          autoCopyRef.current = Boolean(cfg.translation.autoCopyResult)
+        }
+        if (typeof cfg.general?.alwaysOnTop === 'boolean') {
+          setIsPinned(cfg.general.alwaysOnTop)
+        }
       })
       .catch((err) => {
         console.error('[renderer] 初始化加载配置失败', err)
@@ -321,6 +346,13 @@ function App(): React.JSX.Element {
           newCfg.activeModelId || prov.defaultModel || prov.models[0]?.id || 'deepseek-chat'
         setSelectedModel(finalModel)
         localStorage.setItem('selectedModel', finalModel)
+      }
+
+      if (newCfg.translation) {
+        autoCopyRef.current = Boolean(newCfg.translation.autoCopyResult)
+      }
+      if (typeof newCfg.general?.alwaysOnTop === 'boolean') {
+        setIsPinned(newCfg.general.alwaysOnTop)
       }
     })
   }, [])
@@ -491,6 +523,17 @@ function App(): React.JSX.Element {
         setTargetText(response.text)
         setErrorMessage('')
         setStatus('idle')
+
+        if (autoCopyRef.current && response.text.trim()) {
+          void navigator.clipboard
+            .writeText(response.text)
+            .then(() => {
+              setCopyState('done')
+            })
+            .catch((copyErr) => {
+              console.warn('[renderer] 自动复制剪贴板失败:', copyErr)
+            })
+        }
         return
       }
 
@@ -623,7 +666,13 @@ function App(): React.JSX.Element {
             </div>
           </div>
 
-          <button className="panel-button pin-button" type="button" aria-label="固定窗口">
+          <button
+            className={`panel-button pin-button ${isPinned ? 'panel-button-pinned' : ''}`}
+            type="button"
+            aria-label={isPinned ? '取消固定窗口' : '固定窗口置顶'}
+            title={isPinned ? '当前已置顶（点击取消）' : '点击置顶窗口'}
+            onClick={() => void handleTogglePin()}
+          >
             <img className="panel-icon" src={pinIcon} alt="" />
           </button>
         </header>

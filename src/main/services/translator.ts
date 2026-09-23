@@ -1,7 +1,7 @@
 import { net } from 'electron'
 import type { TranslateRequest, TranslateResponse } from '../../shared/translate'
 import { getLLMConfig } from './configManager'
-import type { LLMConfig } from '../../shared/config'
+import type { AppSettings } from '../../shared/config'
 
 class TranslateServiceError extends Error {
   code: string
@@ -36,7 +36,7 @@ const mockTranslate = async (request: TranslateRequest): Promise<TranslateRespon
 
 const translateWithOpenAICompatible = async (
   request: TranslateRequest,
-  config: LLMConfig
+  config: AppSettings
 ): Promise<TranslateResponse> => {
   if (!config.apiKey) {
     throw new TranslateServiceError('CONFIG_MISSING_API_KEY', '缺少 API Key，请在设置中配置')
@@ -50,30 +50,41 @@ const translateWithOpenAICompatible = async (
     .replace(/\/$/, '')
   const endpoint = `${cleanBaseUrl}/chat/completions`
   const model = request.options?.model || config.model || 'gpt-4o-mini'
-  const enableThinking = request.options?.enableThinking ?? config.enableThinking ?? false
+  const enableThinking =
+    request.options?.enableThinking ??
+    config.enableThinking ??
+    config.translation?.defaultEnableThinking ??
+    false
 
-  const systemContent = enableThinking
-    ? [
-        'You are a translation engine with deep reasoning enabled.',
-        'Translate the user text accurately.',
-        'Preserve the original structure exactly:',
-        '- keep the same line breaks and paragraph breaks',
-        '- do not merge or split lines',
-        '- keep URLs, list structure, headings, dates, and separators in their original positions',
-        '- translate only the text content; do not rewrite, summarize, or reformat',
-        'Output only the translated text.'
-      ].join('\n')
-    : [
-        'You are a translation engine.',
-        'Translate the user text accurately.',
-        'Preserve the original structure exactly:',
-        '- keep the same line breaks and paragraph breaks',
-        '- do not merge or split lines',
-        '- keep URLs, list structure, headings, dates, and separators in their original positions',
-        '- translate only the text content; do not rewrite, summarize, or reformat',
-        'Direct translation only. Do not output any thinking process, reasoning, or <think> tags.',
-        'Output only the translated text.'
-      ].join('\n')
+  const customPrompt = config.translation?.customSystemPrompt?.trim()
+  let systemContent = ''
+
+  if (customPrompt) {
+    systemContent = customPrompt
+  } else if (enableThinking) {
+    systemContent = [
+      'You are a translation engine with deep reasoning enabled.',
+      'Translate the user text accurately.',
+      'Preserve the original structure exactly:',
+      '- keep the same line breaks and paragraph breaks',
+      '- do not merge or split lines',
+      '- keep URLs, list structure, headings, dates, and separators in their original positions',
+      '- translate only the text content; do not rewrite, summarize, or reformat',
+      'Output only the translated text.'
+    ].join('\n')
+  } else {
+    systemContent = [
+      'You are a translation engine.',
+      'Translate the user text accurately.',
+      'Preserve the original structure exactly:',
+      '- keep the same line breaks and paragraph breaks',
+      '- do not merge or split lines',
+      '- keep URLs, list structure, headings, dates, and separators in their original positions',
+      '- translate only the text content; do not rewrite, summarize, or reformat',
+      'Direct translation only. Do not output any thinking process, reasoning, or <think> tags.',
+      'Output only the translated text.'
+    ].join('\n')
+  }
 
   try {
     const requestBody: Record<string, unknown> = {
@@ -269,7 +280,7 @@ export const translateText = async (request: TranslateRequest): Promise<Translat
       }
     }
 
-    const effectiveConfig: LLMConfig = {
+    const effectiveConfig: AppSettings = {
       ...config,
       provider: effectiveProviderType,
       baseUrl: effectiveBaseUrl,
