@@ -17,7 +17,12 @@ import trayIcon2x from '../../resources/trayTemplate@2x.png?asset'
 import type { TranslateRequest } from '../shared/translate'
 import type { LLMConfig } from '../shared/config'
 import { translateText } from './services/translator'
-import { getLLMConfig, saveLLMConfig, testLLMConnection } from './services/configManager'
+import {
+  fetchProviderModels,
+  getLLMConfig,
+  saveLLMConfig,
+  testLLMConnection
+} from './services/configManager'
 import { triggerScreenshotTranslation } from './services/screenCapture'
 
 loadEnv({ path: resolve(process.cwd(), '.env') })
@@ -283,6 +288,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('config:test', async (_, config: LLMConfig) => {
     return await testLLMConnection(config)
+  })
+
+  ipcMain.handle('config:fetch-models', async (_, params: { baseUrl: string; apiKey: string }) => {
+    return await fetchProviderModels(params)
   })
 
   ipcMain.handle('capture:screen', async () => {

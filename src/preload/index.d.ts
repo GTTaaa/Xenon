@@ -1,6 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { TranslateRequest, TranslateResponse } from '../shared/translate'
-import type { LLMConfig, TestConnectionResult } from '../shared/config'
+import type { FetchModelsResult, LLMConfig, TestConnectionResult } from '../shared/config'
 
 interface AppAPI {
   translateText: (request: TranslateRequest) => Promise<TranslateResponse>
@@ -8,6 +8,7 @@ interface AppAPI {
   getConfig: () => Promise<LLMConfig>
   saveConfig: (config: LLMConfig) => Promise<{ ok: boolean; error?: string }>
   testConfig: (config: LLMConfig) => Promise<TestConnectionResult>
+  fetchModels: (params: { baseUrl: string; apiKey: string }) => Promise<FetchModelsResult>
   onOpenConfig: (callback: () => void) => () => void
   captureScreen: () => Promise<{ ok: boolean; message?: string }>
   onApplySourceText: (callback: (text: string) => void) => () => void

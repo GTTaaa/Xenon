@@ -13,7 +13,6 @@ import {
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
-const DEFAULT_MODEL = 'step-3.5-flash'
 const INITIAL_SOURCE_TEXT = 'hello'
 const INITIAL_MODEL_OPTIONS: ModelOptionItem[] = [
   {
@@ -1035,83 +1034,86 @@ function App(): React.JSX.Element {
                   </button>
                 </div>
                 <div className="terminal-engine-deck-list" role="listbox" aria-label="可用引擎列表">
-                  {enabledProviders.length > 0 ? (
-                    enabledProviders.map((prov) => {
-                      const host = prov.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
+                  {enabledProviders.length > 0
+                    ? enabledProviders.map((prov) => {
+                        const host = prov.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
 
-                      return (
-                        <div key={prov.id} className="terminal-engine-provider-group">
-                          <div className="terminal-engine-group-title">
-                            <span className="terminal-engine-group-badge">{prov.name.toUpperCase()}</span>
-                            <span className="terminal-engine-group-sub">{host}</span>
-                          </div>
-                          {prov.models.map((item, idx) => {
-                            const isSelected =
-                              prov.id === selectedProviderId && item.id === selectedModel
-                            const modelCode = (idx + 1).toString().padStart(2, '0')
+                        return (
+                          <div key={prov.id} className="terminal-engine-provider-group">
+                            <div className="terminal-engine-group-title">
+                              <span className="terminal-engine-group-badge">
+                                {prov.name.toUpperCase()}
+                              </span>
+                              <span className="terminal-engine-group-sub">{host}</span>
+                            </div>
+                            {prov.models.map((item, idx) => {
+                              const isSelected =
+                                prov.id === selectedProviderId && item.id === selectedModel
+                              const modelCode = (idx + 1).toString().padStart(2, '0')
 
-                            return (
-                              <button
-                                key={`${prov.id}-${item.id}`}
-                                className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
-                                type="button"
-                                role="option"
-                                aria-selected={isSelected}
-                                onClick={() => handleModelSelect(prov.id, item.id)}
-                              >
-                                <span className="terminal-engine-code">{modelCode}</span>
-                                <span className="terminal-engine-body">
-                                  <span className="terminal-engine-name">{item.id}</span>
-                                  <span className="terminal-engine-profile">
-                                    {item.label || prov.name}
+                              return (
+                                <button
+                                  key={`${prov.id}-${item.id}`}
+                                  className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={isSelected}
+                                  onClick={() => handleModelSelect(prov.id, item.id)}
+                                >
+                                  <span className="terminal-engine-code">{modelCode}</span>
+                                  <span className="terminal-engine-body">
+                                    <span className="terminal-engine-name">{item.id}</span>
+                                    <span className="terminal-engine-profile">
+                                      {item.label || prov.name}
+                                    </span>
                                   </span>
-                                </span>
-                                {isSelected ? (
-                                  <span className="terminal-engine-active-tag">ACTIVE</span>
-                                ) : (
-                                  <span className="terminal-engine-dot-standby" aria-hidden="true" />
-                                )}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )
-                    })
-                  ) : (
-                    modelOptions.map((option) => {
-                      const isSelected = option.value === selectedModel
+                                  {isSelected ? (
+                                    <span className="terminal-engine-active-tag">ACTIVE</span>
+                                  ) : (
+                                    <span
+                                      className="terminal-engine-dot-standby"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )
+                      })
+                    : modelOptions.map((option) => {
+                        const isSelected = option.value === selectedModel
 
-                      return (
-                        <button
-                          key={option.value}
-                          className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          onClick={() => handleModelSelect('deepseek', option.value)}
-                        >
-                          <span className="terminal-engine-code">{option.code}</span>
-                          <span className="terminal-engine-body">
-                            <span className="terminal-engine-name">{option.value}</span>
-                            <span className="terminal-engine-profile">
-                              {option.profile &&
-                              option.profile !== 'CUSTOM' &&
-                              option.profile !== 'CUSTOM MODEL'
-                                ? option.profile
-                                : option.baseUrl
-                                  ? option.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
-                                  : option.profile}
+                        return (
+                          <button
+                            key={option.value}
+                            className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => handleModelSelect('deepseek', option.value)}
+                          >
+                            <span className="terminal-engine-code">{option.code}</span>
+                            <span className="terminal-engine-body">
+                              <span className="terminal-engine-name">{option.value}</span>
+                              <span className="terminal-engine-profile">
+                                {option.profile &&
+                                option.profile !== 'CUSTOM' &&
+                                option.profile !== 'CUSTOM MODEL'
+                                  ? option.profile
+                                  : option.baseUrl
+                                    ? option.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
+                                    : option.profile}
+                              </span>
                             </span>
-                          </span>
-                          {isSelected ? (
-                            <span className="terminal-engine-active-tag">ACTIVE</span>
-                          ) : (
-                            <span className="terminal-engine-dot-standby" aria-hidden="true" />
-                          )}
-                        </button>
-                      )
-                    })
-                  )}
+                            {isSelected ? (
+                              <span className="terminal-engine-active-tag">ACTIVE</span>
+                            ) : (
+                              <span className="terminal-engine-dot-standby" aria-hidden="true" />
+                            )}
+                          </button>
+                        )
+                      })}
                 </div>
                 <div className="terminal-engine-deck-footer">
                   <button

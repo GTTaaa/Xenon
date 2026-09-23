@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { TranslateRequest, TranslateResponse } from '../shared/translate'
-import type { LLMConfig, TestConnectionResult } from '../shared/config'
+import type { FetchModelsResult, LLMConfig, TestConnectionResult } from '../shared/config'
 
 // 暴露给渲染进程的应用 API
 const api = {
@@ -28,6 +28,9 @@ const api = {
   },
   testConfig: (config: LLMConfig): Promise<TestConnectionResult> => {
     return ipcRenderer.invoke('config:test', config)
+  },
+  fetchModels: (params: { baseUrl: string; apiKey: string }): Promise<FetchModelsResult> => {
+    return ipcRenderer.invoke('config:fetch-models', params)
   },
   onOpenConfig: (callback: () => void): (() => void) => {
     const listener = (): void => {

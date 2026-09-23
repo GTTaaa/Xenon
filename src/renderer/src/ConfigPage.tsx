@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import type {
   LLMConfig,
   ProviderItem,
@@ -7,7 +7,7 @@ import type {
 } from '../../shared/config'
 
 /**
- * 预设厂商模板
+ * 预设厂商模板定义
  */
 interface ProviderTemplate {
   id: string
@@ -76,11 +76,14 @@ const PRESET_TEMPLATES: ProviderTemplate[] = [
 ]
 
 export const ConfigPage = (): React.JSX.Element => {
-  // 服务商列表及当前选中的 Tab
+  // 服务商列表
   const [providers, setProviders] = useState<ProviderItem[]>([])
-  const [activeTabId, setActiveTabId] = useState<string>('deepseek')
+  // 当前正在查看/编辑的 Tab ID
+  const [selectedTabId, setSelectedTabId] = useState<string>('deepseek')
+  // 当前软件全局生效的主用服务商 ID
+  const [activeProviderId, setActiveProviderId] = useState<string>('deepseek')
 
-  // 是否显示密码
+  // API Key 密码遮罩切换
   const [showApiKey, setShowApiKey] = useState(false)
 
   // 连通性测试状态
@@ -91,10 +94,20 @@ export const ConfigPage = (): React.JSX.Element => {
   const [isSaving, setIsSaving] = useState(false)
   const [feedbackMessage, setFeedbackMessage] = useState('')
 
-  // 当前厂商新加模型输入框
+  // 当前厂商新加单模型输入框
   const [newModelId, setNewModelId] = useState('')
 
-  // 初始化加载配置
+  // 一键拉取模型状态与弹窗
+  const [isFetchingModels, setIsFetchingModels] = useState(false)
+  const [fetchedModels, setFetchedModels] = useState<string[]>([])
+  const [showFetchModal, setShowFetchModal] = useState(false)
+  const [selectedModelsToAdd, setSelectedModelsToAdd] = useState<Record<string, boolean>>({})
+  const [modelSearchQuery, setModelSearchQuery] = useState('')
+
+  // 错误详情弹窗
+  const [showErrorModal, setShowErrorModal] = useState(false)
+
+  // 初始化加载全局配置
   useEffect(() => {
     let isMounted = true
     window.api
@@ -105,7 +118,9 @@ export const ConfigPage = (): React.JSX.Element => {
         setProviders(list)
         if (list.length > 0) {
           const matched = cfg.activeProviderId && list.some((p) => p.id === cfg.activeProviderId)
-          setActiveTabId(matched ? (cfg.activeProviderId as string) : list[0].id)
+          const primaryId = matched ? (cfg.activeProviderId as string) : list[0].id
+          setActiveProviderId(primaryId)
+          setSelectedTabId(primaryId)
         }
       })
       .catch((error) => {
@@ -117,10 +132,18 @@ export const ConfigPage = (): React.JSX.Element => {
     }
   }, [])
 
-  // 监听 ESC 键关闭窗口
+  // 监听 ESC 键关闭窗口或弹窗
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        if (showFetchModal) {
+          setShowFetchModal(false)
+          return
+        }
+        if (showErrorModal) {
+          setShowErrorModal(false)
+          return
+        }
         void window.api.closeConfigWindow()
       }
     }
@@ -128,10 +151,20 @@ export const ConfigPage = (): React.JSX.Element => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [])
+  }, [showFetchModal, showErrorModal])
 
-  // 当前选中的厂商
-  const activeProvider = providers.find((p) => p.id === activeTabId) || providers[0]
+  // 当前正在查看编辑的厂商
+  const activeProvider = providers.find((p) => p.id === selectedTabId) || providers[0]
+
+  /**
+   * 自动清洗 Base URL
+   */
+  const cleanBaseUrl = (url: string): string => {
+    return url
+      .trim()
+      .replace(/\/chat\/completions\/?$/, '')
+      .replace(/\/$/, '')
+  }
 
   /**
    * 更新当前正在编辑的厂商字段
@@ -145,14 +178,25 @@ export const ConfigPage = (): React.JSX.Element => {
   }
 
   /**
+   * 显式将当前查看的厂商设为全局主用服务商
+   */
+  const handleSetAsPrimary = (): void => {
+    if (!activeProvider) return
+    setActiveProviderId(activeProvider.id)
+    if (!activeProvider.enabled) {
+      updateActiveProvider({ enabled: true })
+    }
+    setFeedbackMessage(`已将【${activeProvider.name}】设为全局主用服务商`)
+  }
+
+  /**
    * 从模板快速添加一个新服务商
    */
   const handleAddFromTemplate = (template: ProviderTemplate): void => {
-    // 检查是否已存在同 ID 厂商
     const exists = providers.some((p) => p.id === template.id)
     if (exists) {
-      setActiveTabId(template.id)
-      setFeedbackMessage(`已切换至【${template.name}】`)
+      setSelectedTabId(template.id)
+      setFeedbackMessage(`已定位至【${template.name}】`)
       return
     }
 
@@ -168,8 +212,8 @@ export const ConfigPage = (): React.JSX.Element => {
     }
 
     setProviders((prev) => [...prev, newProvider])
-    setActiveTabId(newProvider.id)
-    setFeedbackMessage(`已添加服务商【${template.name}】，请填写对应的 API Key`)
+    setSelectedTabId(newProvider.id)
+    setFeedbackMessage(`已添加服务商【${template.name}】，请配置对应 API Key`)
   }
 
   /**
@@ -189,7 +233,7 @@ export const ConfigPage = (): React.JSX.Element => {
     }
 
     setProviders((prev) => [...prev, newProvider])
-    setActiveTabId(customId)
+    setSelectedTabId(customId)
     setFeedbackMessage('已创建新服务商，请填写其名称、Base URL 与 API Key')
   }
 
@@ -204,14 +248,21 @@ export const ConfigPage = (): React.JSX.Element => {
 
     const nextList = providers.filter((p) => p.id !== providerIdToDelete)
     setProviders(nextList)
-    if (activeTabId === providerIdToDelete) {
-      setActiveTabId(nextList[0].id)
+
+    if (selectedTabId === providerIdToDelete) {
+      setSelectedTabId(nextList[0].id)
     }
+
+    // 若删除的是主用服务商，自动将首项设为主用
+    if (activeProviderId === providerIdToDelete) {
+      setActiveProviderId(nextList[0].id)
+    }
+
     setFeedbackMessage('已移除该服务商')
   }
 
   /**
-   * 为当前厂商添加新模型
+   * 为当前厂商手动添加新模型
    */
   const handleAddModelToActive = (): void => {
     if (!activeProvider) return
@@ -219,7 +270,7 @@ export const ConfigPage = (): React.JSX.Element => {
     if (!trimmed) return
 
     if (activeProvider.models.some((m) => m.id === trimmed)) {
-      setFeedbackMessage(`模型 ${trimmed} 已在当前列表中`)
+      setFeedbackMessage(`模型 ${trimmed} 已在列表中`)
       setNewModelId('')
       return
     }
@@ -256,6 +307,104 @@ export const ConfigPage = (): React.JSX.Element => {
   }
 
   /**
+   * 自动从服务商端点拉取模型列表
+   */
+  const handleFetchModels = async (): Promise<void> => {
+    if (!activeProvider) return
+    const targetUrl = cleanBaseUrl(activeProvider.baseUrl)
+    if (!targetUrl) {
+      setFeedbackMessage('请先输入有效的服务地址 (Base URL)')
+      return
+    }
+
+    setIsFetchingModels(true)
+    setFeedbackMessage('正在从服务商接口拉取模型列表...')
+
+    try {
+      const result = await window.api.fetchModels({
+        baseUrl: targetUrl,
+        apiKey: activeProvider.apiKey.trim()
+      })
+
+      if (result.ok && Array.isArray(result.models) && result.models.length > 0) {
+        setFetchedModels(result.models)
+        // 默认勾选尚未添加进当前模型库的模型
+        const initialSelection: Record<string, boolean> = {}
+        const existingIds = new Set(activeProvider.models.map((m) => m.id))
+        result.models.forEach((mId) => {
+          if (!existingIds.has(mId)) {
+            initialSelection[mId] = true
+          }
+        })
+        setSelectedModelsToAdd(initialSelection)
+        setModelSearchQuery('')
+        setShowFetchModal(true)
+        setFeedbackMessage(`成功获取到 ${result.models.length} 个模型`)
+      } else {
+        setFeedbackMessage(`拉取模型失败: ${result.error || '未返回有效模型'}`)
+        if (result.errorDetail) {
+          setTestResult({
+            ok: false,
+            message: `拉取模型失败: ${result.error || '请求异常'}`,
+            errorDetail: result.errorDetail
+          })
+        }
+      }
+    } catch (err) {
+      setFeedbackMessage(`拉取异常: ${err instanceof Error ? err.message : '网络错误'}`)
+    } finally {
+      setIsFetchingModels(false)
+    }
+  }
+
+  /**
+   * 批量将勾选的模型添加入当前厂商
+   */
+  const handleConfirmAddFetchedModels = (): void => {
+    if (!activeProvider) return
+    const idsToAdd = Object.keys(selectedModelsToAdd).filter((id) => selectedModelsToAdd[id])
+    if (idsToAdd.length === 0) {
+      setShowFetchModal(false)
+      return
+    }
+
+    const existingIds = new Set(activeProvider.models.map((m) => m.id))
+    const newItems: ProviderModelItem[] = idsToAdd
+      .filter((id) => !existingIds.has(id))
+      .map((id) => ({ id }))
+
+    if (newItems.length === 0) {
+      setShowFetchModal(false)
+      setFeedbackMessage('所选模型已全部存在于列表中')
+      return
+    }
+
+    const updated = [...activeProvider.models, ...newItems]
+    updateActiveProvider({
+      models: updated,
+      defaultModel: activeProvider.defaultModel || newItems[0].id
+    })
+    setShowFetchModal(false)
+    setFeedbackMessage(`已成功为【${activeProvider.name}】添加 ${newItems.length} 个模型`)
+  }
+
+  /**
+   * 复制 API Key 到剪贴板
+   */
+  const handleCopyApiKey = async (): Promise<void> => {
+    if (!activeProvider?.apiKey) {
+      setFeedbackMessage('当前 API Key 为空，无需复制')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(activeProvider.apiKey)
+      setFeedbackMessage('API Key 已复制到剪贴板')
+    } catch {
+      setFeedbackMessage('复制失败，请手动选取复制')
+    }
+  }
+
+  /**
    * 测试当前正在查看的厂商连通性
    */
   const handleTestCurrentProvider = async (): Promise<void> => {
@@ -289,10 +438,19 @@ export const ConfigPage = (): React.JSX.Element => {
     setFeedbackMessage('')
 
     try {
+      // 智能清洗当前厂商地址与密钥
+      const sanitizedProviders = providers.map((p) => ({
+        ...p,
+        baseUrl: cleanBaseUrl(p.baseUrl),
+        apiKey: p.apiKey.trim()
+      }))
+
       const payload: LLMConfig = {
-        activeProviderId: activeTabId,
-        activeModelId: activeProvider?.defaultModel || activeProvider?.models[0]?.id,
-        providers
+        activeProviderId: activeProviderId,
+        activeModelId:
+          sanitizedProviders.find((p) => p.id === activeProviderId)?.defaultModel ||
+          sanitizedProviders.find((p) => p.id === activeProviderId)?.models[0]?.id,
+        providers: sanitizedProviders
       }
 
       const result = await window.api.saveConfig(payload)
@@ -310,6 +468,18 @@ export const ConfigPage = (): React.JSX.Element => {
       setIsSaving(false)
     }
   }
+
+  // 尚未添加的预置模板
+  const unaddedTemplates = useMemo(() => {
+    return PRESET_TEMPLATES.filter((tmpl) => !providers.some((p) => p.id === tmpl.id))
+  }, [providers])
+
+  // 过滤拉取到的模型列表
+  const filteredFetchedModels = useMemo(() => {
+    if (!modelSearchQuery.trim()) return fetchedModels
+    const q = modelSearchQuery.toLowerCase()
+    return fetchedModels.filter((m) => m.toLowerCase().includes(q))
+  }, [fetchedModels, modelSearchQuery])
 
   return (
     <div className="pref-root">
@@ -332,24 +502,28 @@ export const ConfigPage = (): React.JSX.Element => {
 
       {/* 主体区 */}
       <main className="pref-body">
-        {/* 顶部：厂商选项卡切换栏 */}
-        <section className="pref-card" style={{ padding: '8px 12px 12px 12px' }}>
+        {/* 顶部：服务商选项卡管理栏 */}
+        <section className="pref-card" style={{ padding: '10px 14px 12px 14px' }}>
           <div className="pref-card-header" style={{ marginBottom: '8px' }}>
-            <h2 className="pref-card-title">独立服务商管理 (PROVIDERS)</h2>
+            <div className="pref-header-with-badge">
+              <h2 className="pref-card-title">独立服务商管理 (PROVIDERS)</h2>
+              <span className="pref-provider-count-tip">已配置 {providers.length} 个渠道</span>
+            </div>
             <button
               type="button"
               className="pref-btn pref-btn-secondary"
-              style={{ fontSize: '11px', padding: '3px 8px' }}
+              style={{ fontSize: '11px', padding: '3px 9px' }}
               onClick={handleAddCustomProvider}
             >
               + 新建服务商
             </button>
           </div>
 
-          {/* 选项卡行 */}
+          {/* 选项卡列表 */}
           <div className="pref-provider-tabs">
             {providers.map((p) => {
-              const isSelected = p.id === activeTabId
+              const isSelected = p.id === selectedTabId
+              const isPrimary = p.id === activeProviderId
               return (
                 <button
                   key={p.id}
@@ -358,51 +532,70 @@ export const ConfigPage = (): React.JSX.Element => {
                     !p.enabled ? 'pref-provider-tab-disabled' : ''
                   }`}
                   onClick={() => {
-                    setActiveTabId(p.id)
+                    setSelectedTabId(p.id)
                     setTestResult(null)
                   }}
+                  title={isPrimary ? '当前全局生效的主用服务商' : '点击查看与编辑此服务商'}
                 >
                   <span
                     className={`pref-provider-tab-dot ${p.enabled ? 'dot-enabled' : 'dot-disabled'}`}
                   />
                   <span className="pref-provider-tab-name">{p.name}</span>
+                  {isPrimary ? <span className="pref-primary-indicator">主用</span> : null}
                 </button>
               )
             })}
           </div>
 
-          {/* 快速快捷填入预设模板 */}
-          <div className="pref-preset-row" style={{ marginTop: '10px' }}>
-            <span className="pref-preset-tip">快捷添加：</span>
-            <div className="pref-preset-chips">
-              {PRESET_TEMPLATES.map((tmpl) => {
-                const isAlreadyAdded = providers.some((p) => p.id === tmpl.id)
-                return (
-                  <button
-                    key={tmpl.id}
-                    type="button"
-                    className="pref-preset-chip"
-                    onClick={() => handleAddFromTemplate(tmpl)}
-                    title={`添加或激活 ${tmpl.name}`}
-                  >
-                    {isAlreadyAdded ? `切换: ${tmpl.name}` : `+ ${tmpl.name}`}
-                  </button>
-                )
-              })}
-            </div>
+          {/* 快捷添加预置模板（仅在有未添加模板时展示，彻底消除冗余） */}
+          <div className="pref-preset-row">
+            {unaddedTemplates.length > 0 ? (
+              <>
+                <span className="pref-preset-tip">快捷添加预置：</span>
+                <div className="pref-preset-chips">
+                  {unaddedTemplates.map((tmpl) => (
+                    <button
+                      key={tmpl.id}
+                      type="button"
+                      className="pref-preset-chip"
+                      onClick={() => handleAddFromTemplate(tmpl)}
+                      title={`快捷配置【${tmpl.name}】`}
+                    >
+                      + {tmpl.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <span className="pref-preset-tip-dim">
+                ✓ 官方预设服务商模板已全部加入列表，可通过上方【+ 新建服务商】增加自定义渠道
+              </span>
+            )}
           </div>
         </section>
 
-        {/* 当前厂商的专属配置面板 */}
+        {/* 当前选中厂商的专属配置面板 */}
         {activeProvider ? (
           <section className="pref-card">
             <div className="pref-card-header">
               <div className="pref-card-title-group">
-                <h2 className="pref-card-title">
-                  【{activeProvider.name}】专属连接配置
-                </h2>
+                <div className="pref-title-with-actions">
+                  <h2 className="pref-card-title">【{activeProvider.name}】专属连接配置</h2>
+                  {activeProvider.id === activeProviderId ? (
+                    <span className="pref-badge-primary">★ 全局主用服务商</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="pref-btn-set-primary"
+                      onClick={handleSetAsPrimary}
+                      title="点击设为主界面默认使用的大模型渠道"
+                    >
+                      设为主用
+                    </button>
+                  )}
+                </div>
                 <span className="pref-card-subtitle">
-                  与其它厂商完全隔离，独立管理其专属地址与密钥
+                  与其它厂商完全隔离，独立管理其专属地址、密钥与模型库
                 </span>
               </div>
 
@@ -461,6 +654,12 @@ export const ConfigPage = (): React.JSX.Element => {
                   className="pref-input"
                   value={activeProvider.baseUrl}
                   onChange={(e) => updateActiveProvider({ baseUrl: e.target.value })}
+                  onBlur={(e) => {
+                    const cleaned = cleanBaseUrl(e.target.value)
+                    if (cleaned !== e.target.value) {
+                      updateActiveProvider({ baseUrl: cleaned })
+                    }
+                  }}
                   placeholder="https://api.deepseek.com/v1"
                   spellCheck={false}
                   autoComplete="off"
@@ -473,13 +672,37 @@ export const ConfigPage = (): React.JSX.Element => {
                   <label className="pref-label" htmlFor="prov-api-key">
                     访问密钥 (API Key)
                   </label>
-                  <button
-                    type="button"
-                    className="pref-text-btn"
-                    onClick={() => setShowApiKey((prev) => !prev)}
-                  >
-                    {showApiKey ? '隐藏' : '显示'}
-                  </button>
+                  <div className="pref-field-actions">
+                    {activeProvider.apiKey ? (
+                      <>
+                        <button
+                          type="button"
+                          className="pref-text-btn"
+                          onClick={() => void handleCopyApiKey()}
+                          title="复制 API Key 到剪贴板"
+                        >
+                          复制
+                        </button>
+                        <span className="pref-action-divider">|</span>
+                        <button
+                          type="button"
+                          className="pref-text-btn"
+                          onClick={() => updateActiveProvider({ apiKey: '' })}
+                          title="清空当前输入的密钥"
+                        >
+                          清空
+                        </button>
+                        <span className="pref-action-divider">|</span>
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="pref-text-btn"
+                      onClick={() => setShowApiKey((prev) => !prev)}
+                    >
+                      {showApiKey ? '隐藏' : '显示'}
+                    </button>
+                  </div>
                 </div>
                 <input
                   id="prov-api-key"
@@ -487,6 +710,12 @@ export const ConfigPage = (): React.JSX.Element => {
                   className="pref-input"
                   value={activeProvider.apiKey}
                   onChange={(e) => updateActiveProvider({ apiKey: e.target.value })}
+                  onBlur={(e) => {
+                    const trimmed = e.target.value.trim()
+                    if (trimmed !== e.target.value) {
+                      updateActiveProvider({ apiKey: trimmed })
+                    }
+                  }}
                   placeholder="填入该服务商的 API Key..."
                   spellCheck={false}
                   autoComplete="off"
@@ -495,22 +724,37 @@ export const ConfigPage = (): React.JSX.Element => {
 
               {/* 该服务商的专属模型列表 */}
               <div className="pref-field">
-                <label className="pref-label">
-                  可用模型列表 (MODELS FOR {activeProvider.name.toUpperCase()})
-                </label>
+                <div className="pref-label-row">
+                  <label className="pref-label">
+                    可用模型列表 (MODELS FOR {activeProvider.name.toUpperCase()})
+                  </label>
+                  <button
+                    type="button"
+                    className="pref-btn-fetch"
+                    onClick={() => void handleFetchModels()}
+                    disabled={isFetchingModels || !activeProvider.baseUrl}
+                    title="从接口端点自动获取该服务商支持的全部模型"
+                  >
+                    {isFetchingModels ? '正在拉取...' : '⚡ 自动获取模型列表'}
+                  </button>
+                </div>
+
                 <div className="pref-pills-wrap">
                   {activeProvider.models.map((m) => {
-                    const isDefault = (activeProvider.defaultModel || activeProvider.models[0]?.id) === m.id
+                    const isDefault =
+                      (activeProvider.defaultModel || activeProvider.models[0]?.id) === m.id
                     return (
                       <span
                         key={m.id}
                         className={`pref-pill ${isDefault ? 'pref-pill-active' : ''}`}
-                        title={isDefault ? '当前厂商的默认模型' : '点击设为默认模型'}
+                        title={isDefault ? '当前默认模型' : '点击设为默认模型'}
                         onClick={() => updateActiveProvider({ defaultModel: m.id })}
                         style={{ cursor: 'pointer' }}
                       >
                         {isDefault ? (
-                          <span style={{ fontSize: '9px', color: '#e06c3a', marginRight: '2px' }}>★</span>
+                          <span style={{ fontSize: '9px', color: '#e06c3a', marginRight: '2px' }}>
+                            ★
+                          </span>
                         ) : null}
                         <span className="pref-pill-name">{m.id}</span>
                         {activeProvider.models.length > 1 ? (
@@ -531,8 +775,8 @@ export const ConfigPage = (): React.JSX.Element => {
                   })}
                 </div>
 
-                {/* 增加模型 */}
-                <div className="pref-add-row" style={{ marginTop: '6px' }}>
+                {/* 手动追加模型 */}
+                <div className="pref-add-row" style={{ marginTop: '8px' }}>
                   <input
                     type="text"
                     className="pref-input pref-add-input"
@@ -544,7 +788,7 @@ export const ConfigPage = (): React.JSX.Element => {
                         handleAddModelToActive()
                       }
                     }}
-                    placeholder={`添加模型至【${activeProvider.name}】...`}
+                    placeholder={`手动添加模型 ID 至【${activeProvider.name}】...`}
                     spellCheck={false}
                   />
                   <button
@@ -570,7 +814,7 @@ export const ConfigPage = (): React.JSX.Element => {
               type="button"
               className="pref-btn pref-btn-test"
               onClick={handleTestCurrentProvider}
-              disabled={isTesting || !activeProvider.baseUrl || !activeProvider.apiKey}
+              disabled={isTesting || !activeProvider.baseUrl}
               title={`测试【${activeProvider.name}】的连通性 (${activeProvider.baseUrl})`}
             >
               {isTesting ? '正在测试...' : '测试当前连接'}
@@ -579,18 +823,32 @@ export const ConfigPage = (): React.JSX.Element => {
 
           {/* 测试连通性结果反馈 */}
           {testResult ? (
-            <span
-              className={`pref-test-status ${
-                testResult.ok ? 'pref-test-status-ok' : 'pref-test-status-fail'
-              }`}
-              title={`${testResult.message}${testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}`}
-            >
-              <span className="pref-status-dot" />
-              <span className="pref-test-status-text">
-                {testResult.message}
-                {testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}
+            <div className="pref-test-result-group">
+              <span
+                className={`pref-test-status ${
+                  testResult.ok ? 'pref-test-status-ok' : 'pref-test-status-fail'
+                }`}
+                title={testResult.message}
+              >
+                <span className="pref-status-dot" />
+                <span className="pref-test-status-text">
+                  {testResult.message}
+                  {testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}
+                </span>
               </span>
-            </span>
+
+              {/* 报错详情入口 */}
+              {!testResult.ok && testResult.errorDetail ? (
+                <button
+                  type="button"
+                  className="pref-btn-error-detail"
+                  onClick={() => setShowErrorModal(true)}
+                  title="查看详细错误信息与原始响应"
+                >
+                  查看详情
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           {feedbackMessage ? (
@@ -618,6 +876,180 @@ export const ConfigPage = (): React.JSX.Element => {
           </button>
         </div>
       </footer>
+
+      {/* 自动拉取模型列表对话框 */}
+      {showFetchModal ? (
+        <div className="pref-modal-mask" onClick={() => setShowFetchModal(false)}>
+          <div className="pref-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="pref-modal-header">
+              <div className="pref-modal-title">
+                <span>从【{activeProvider?.name}】获取模型</span>
+                <span className="pref-modal-badge">{fetchedModels.length} 个模型</span>
+              </div>
+              <button
+                type="button"
+                className="pref-modal-close"
+                onClick={() => setShowFetchModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="pref-modal-filter-row">
+              <input
+                type="text"
+                className="pref-input pref-modal-search"
+                placeholder="搜索模型名称过滤..."
+                value={modelSearchQuery}
+                onChange={(e) => setModelSearchQuery(e.target.value)}
+                autoFocus
+              />
+              <div className="pref-modal-quick-select">
+                <button
+                  type="button"
+                  className="pref-text-btn"
+                  onClick={() => {
+                    const next: Record<string, boolean> = {}
+                    const existing = new Set(activeProvider?.models.map((m) => m.id))
+                    filteredFetchedModels.forEach((id) => {
+                      if (!existing.has(id)) next[id] = true
+                    })
+                    setSelectedModelsToAdd(next)
+                  }}
+                >
+                  全选未添加
+                </button>
+                <span className="pref-action-divider">|</span>
+                <button
+                  type="button"
+                  className="pref-text-btn"
+                  onClick={() => setSelectedModelsToAdd({})}
+                >
+                  取消全选
+                </button>
+              </div>
+            </div>
+
+            <div className="pref-modal-model-list">
+              {filteredFetchedModels.length === 0 ? (
+                <div className="pref-modal-empty">无匹配的模型</div>
+              ) : (
+                filteredFetchedModels.map((mId) => {
+                  const alreadyInList = activeProvider?.models.some((m) => m.id === mId)
+                  const isChecked = Boolean(selectedModelsToAdd[mId])
+                  return (
+                    <label
+                      key={mId}
+                      className={`pref-modal-model-item ${alreadyInList ? 'item-already-added' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={alreadyInList || isChecked}
+                        disabled={alreadyInList}
+                        onChange={(e) => {
+                          setSelectedModelsToAdd((prev) => ({
+                            ...prev,
+                            [mId]: e.target.checked
+                          }))
+                        }}
+                      />
+                      <span className="pref-modal-model-id">{mId}</span>
+                      {alreadyInList ? <span className="pref-modal-item-tag">已在列表</span> : null}
+                    </label>
+                  )
+                })
+              )}
+            </div>
+
+            <div className="pref-modal-footer">
+              <span className="pref-modal-selected-tip">
+                已选中{' '}
+                {Object.keys(selectedModelsToAdd).filter((k) => selectedModelsToAdd[k]).length}{' '}
+                个新模型
+              </span>
+              <div className="pref-modal-footer-btns">
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-cancel"
+                  onClick={() => setShowFetchModal(false)}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-save"
+                  onClick={handleConfirmAddFetchedModels}
+                >
+                  确认导入勾选模型
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 连通性测试报错详情弹窗 */}
+      {showErrorModal && testResult?.errorDetail ? (
+        <div className="pref-modal-mask" onClick={() => setShowErrorModal(false)}>
+          <div
+            className="pref-modal-card pref-modal-card-error"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pref-modal-header">
+              <div className="pref-modal-title" style={{ color: '#d85c5c' }}>
+                <span>连通性诊断报告</span>
+              </div>
+              <button
+                type="button"
+                className="pref-modal-close"
+                onClick={() => setShowErrorModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="pref-modal-error-content">
+              <div className="pref-error-meta-row">
+                <span className="pref-error-meta-label">测试服务商：</span>
+                <span className="pref-error-meta-val">{activeProvider?.name}</span>
+              </div>
+              <div className="pref-error-meta-row">
+                <span className="pref-error-meta-label">接口地址：</span>
+                <span className="pref-error-meta-val">{activeProvider?.baseUrl}</span>
+              </div>
+              <div className="pref-error-meta-row">
+                <span className="pref-error-meta-label">错误概要：</span>
+                <span className="pref-error-meta-val" style={{ color: '#d85c5c' }}>
+                  {testResult.message}
+                </span>
+              </div>
+
+              <div className="pref-error-body-title">服务端原始响应体 / 异常堆栈：</div>
+              <pre className="pref-error-body-pre">{testResult.errorDetail}</pre>
+            </div>
+
+            <div className="pref-modal-footer">
+              <button
+                type="button"
+                className="pref-btn pref-btn-secondary"
+                onClick={() => {
+                  void navigator.clipboard.writeText(testResult.errorDetail || '')
+                  setFeedbackMessage('错误日志已复制')
+                }}
+              >
+                复制错误日志
+              </button>
+              <button
+                type="button"
+                className="pref-btn pref-btn-cancel"
+                onClick={() => setShowErrorModal(false)}
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

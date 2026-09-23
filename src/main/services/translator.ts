@@ -44,7 +44,10 @@ const translateWithOpenAICompatible = async (
   if (!config.baseUrl) {
     throw new TranslateServiceError('CONFIG_MISSING_BASE_URL', '缺少 Base URL，请在设置中配置')
   }
-  const cleanBaseUrl = config.baseUrl.trim().replace(/\/chat\/completions\/?$/, '').replace(/\/$/, '')
+  const cleanBaseUrl = config.baseUrl
+    .trim()
+    .replace(/\/chat\/completions\/?$/, '')
+    .replace(/\/$/, '')
   const endpoint = `${cleanBaseUrl}/chat/completions`
   const model = request.options?.model || config.model || 'gpt-4o-mini'
   const enableThinking = request.options?.enableThinking ?? config.enableThinking ?? false
@@ -127,11 +130,15 @@ const translateWithOpenAICompatible = async (
       data = JSON.parse(rawResponseText)
     } catch {
       console.error('[main] 模型返回非 JSON 格式响应:', rawResponseText)
-      throw new TranslateServiceError(`HTTP_${response.status}`, `模型响应非 JSON: ${rawResponseText.slice(0, 100)}`)
+      throw new TranslateServiceError(
+        `HTTP_${response.status}`,
+        `模型响应非 JSON: ${rawResponseText.slice(0, 100)}`
+      )
     }
 
     if (!response.ok) {
-      const errorMsg = data.error?.message ?? `模型请求失败：${response.status} (${rawResponseText.slice(0, 150)})`
+      const errorMsg =
+        data.error?.message ?? `模型请求失败：${response.status} (${rawResponseText.slice(0, 150)})`
       console.error('[main] 模型返回错误状态码:', response.status, errorMsg)
       throw new TranslateServiceError(`HTTP_${response.status}`, errorMsg)
     }
@@ -146,7 +153,10 @@ const translateWithOpenAICompatible = async (
     if (typeof messageContent === 'string') {
       text = messageContent.trim()
     } else if (Array.isArray(messageContent)) {
-      text = messageContent.map((item) => (typeof item === 'object' ? item.text || item.content || '' : String(item))).join('').trim()
+      text = messageContent
+        .map((item) => (typeof item === 'object' ? item.text || item.content || '' : String(item)))
+        .join('')
+        .trim()
     } else if (firstChoice?.message?.reasoning_content) {
       text = firstChoice.message.reasoning_content.trim()
     } else if (typeof firstChoice?.text === 'string') {
@@ -179,7 +189,10 @@ const translateWithOpenAICompatible = async (
 
     const cause = (error as { cause?: unknown })?.cause
     const causeText = cause ? ` (${String(cause)})` : ''
-    throw new TranslateServiceError('NETWORK_ERROR', error instanceof Error ? `${error.message}${causeText}` : '无法连接到模型服务')
+    throw new TranslateServiceError(
+      'NETWORK_ERROR',
+      error instanceof Error ? `${error.message}${causeText}` : '无法连接到模型服务'
+    )
   }
 }
 

@@ -95,4 +95,20 @@ export interface TestConnectionResult {
   message: string
   /** 响应延迟（毫秒） */
   latencyMs?: number
+  /** 详细错误信息或 HTTP 响应体，供排查诊断 */
+  errorDetail?: string
+}
+
+/**
+ * 自动拉取服务商模型列表的返回结果
+ */
+export interface FetchModelsResult {
+  /** 是否拉取成功 */
+  ok: boolean
+  /** 获取到的模型 ID 列表 */
+  models?: string[]
+  /** 失败原因说明 */
+  error?: string
+  /** 原始响应或调试详情 */
+  errorDetail?: string
 }

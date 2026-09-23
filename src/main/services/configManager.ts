@@ -2,8 +2,8 @@ import { app, net } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type {
+  FetchModelsResult,
   LLMConfig,
-  ModelOptionItem,
   ProviderItem,
   ProviderModelItem,
   TestConnectionResult
@@ -13,7 +13,10 @@ import type {
  * 规整 Base URL，自动去除末尾的 /chat/completions 与多余斜杠
  */
 export const normalizeBaseUrl = (url: string): string => {
-  return url.trim().replace(/\/chat\/completions\/?$/, '').replace(/\/$/, '')
+  return url
+    .trim()
+    .replace(/\/chat\/completions\/?$/, '')
+    .replace(/\/$/, '')
 }
 
 /**
@@ -311,7 +314,12 @@ export const testLLMConnection = async (
   let apiKey = ''
   let model = ''
 
-  if ('baseUrl' in target && 'apiKey' in target && typeof target.baseUrl === 'string') {
+  if (
+    'baseUrl' in target &&
+    'apiKey' in target &&
+    typeof target.baseUrl === 'string' &&
+    typeof target.apiKey === 'string'
+  ) {
     baseUrl = normalizeBaseUrl(target.baseUrl)
     apiKey = target.apiKey.trim()
     if ('models' in target && Array.isArray(target.models) && target.models.length > 0) {
@@ -411,27 +419,31 @@ export const testLLMConnection = async (
     if (response.status === 401) {
       return {
         ok: false,
-        message: '鉴权失败 (401)：API Key 无效或未授权'
+        message: '鉴权失败 (401)：API Key 无效或未授权',
+        errorDetail: rawResponseText
       }
     }
 
     if (response.status === 404) {
       return {
         ok: false,
-        message: '端点不存在 (404)：请检查 Base URL 是否正确'
+        message: '端点不存在 (404)：请检查 Base URL 是否正确',
+        errorDetail: rawResponseText
       }
     }
 
     if (response.status === 429) {
       return {
         ok: false,
-        message: '速率超限或配额用尽 (429)'
+        message: '速率超限或配额用尽 (429)',
+        errorDetail: rawResponseText
       }
     }
 
     return {
       ok: false,
-      message: `请求失败 (${response.status})${errorDetail ? `: ${errorDetail}` : ''}`
+      message: `请求失败 (${response.status})${errorDetail ? `: ${errorDetail}` : ''}`,
+      errorDetail: rawResponseText
     }
   } catch (error) {
     clearTimeout(timeoutId)
@@ -450,8 +462,135 @@ export const testLLMConnection = async (
     return {
       ok: false,
       message:
-        error instanceof Error ? `连接异常: ${error.message}${causeText}` : '无法连接到模型服务'
+        error instanceof Error ? `连接异常: ${error.message}${causeText}` : '无法连接到模型服务',
+      errorDetail: error instanceof Error ? String(error.stack || error.message) : undefined
     }
   }
 }
 
+/**
+ * 自动拉取指定服务商的可用模型列表（基于标准 GET /v1/models）
+ */
+export const fetchProviderModels = async ({
+  baseUrl,
+  apiKey
+}: {
+  baseUrl: string
+  apiKey: string
+}): Promise<FetchModelsResult> => {
+  const cleanBase = normalizeBaseUrl(baseUrl)
+  if (!cleanBase) {
+    return { ok: false, error: 'Base URL 不能为空' }
+  }
+
+  const endpoint = `${cleanBase}/models`
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 12000)
+
+  console.log('[main] fetchProviderModels 开始拉取模型列表:', endpoint)
+
+  try {
+    const response = await net.fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        ...(apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : {}),
+        'User-Agent': 'screenshot-translator/1.0'
+      },
+      signal: controller.signal
+    })
+
+    clearTimeout(timeoutId)
+
+    const rawText = await response.text()
+    if (!response.ok) {
+      let failMsg = `服务商返回状态码 ${response.status}`
+      try {
+        const errObj = JSON.parse(rawText) as {
+          error?: { message?: string } | string
+          message?: string
+        }
+        const parsedMsg =
+          typeof errObj.error === 'string' ? errObj.error : errObj.error?.message || errObj.message
+        if (parsedMsg) {
+          failMsg = `[${response.status}] ${parsedMsg}`
+        }
+      } catch {
+        // 忽略 JSON 解析失败
+      }
+      return {
+        ok: false,
+        error: failMsg,
+        errorDetail: rawText
+      }
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(rawText)
+    } catch {
+      return {
+        ok: false,
+        error: '服务商返回的数据不是合法的 JSON 格式',
+        errorDetail: rawText.slice(0, 300)
+      }
+    }
+
+    // 标准 OpenAI 返回结构为 { data: [{ id: 'xxx' }, ...] }
+    // 部分聚合网关可能返回 { models: [...] } 或顶层数组 [...]
+    let rawList: unknown[] = []
+    if (parsed && typeof parsed === 'object') {
+      if (Array.isArray((parsed as { data?: unknown[] }).data)) {
+        rawList = (parsed as { data: unknown[] }).data
+      } else if (Array.isArray((parsed as { models?: unknown[] }).models)) {
+        rawList = (parsed as { models: unknown[] }).models
+      } else if (Array.isArray(parsed)) {
+        rawList = parsed
+      }
+    }
+
+    const modelIds: string[] = []
+    for (const item of rawList) {
+      if (typeof item === 'string' && item.trim()) {
+        modelIds.push(item.trim())
+      } else if (item && typeof item === 'object') {
+        const id =
+          (item as { id?: unknown; name?: unknown; model?: unknown }).id ||
+          (item as { name?: unknown }).name ||
+          (item as { model?: unknown }).model
+        if (typeof id === 'string' && id.trim()) {
+          modelIds.push(id.trim())
+        }
+      }
+    }
+
+    // 去重并按首字母排序
+    const uniqueIds = Array.from(new Set(modelIds)).sort((a, b) => a.localeCompare(b))
+
+    if (uniqueIds.length === 0) {
+      return {
+        ok: false,
+        error: '未能从响应中解析到任何有效模型 ID（请核对接口结构）',
+        errorDetail: rawText.slice(0, 500)
+      }
+    }
+
+    return {
+      ok: true,
+      models: uniqueIds
+    }
+  } catch (error) {
+    clearTimeout(timeoutId)
+    console.error('[main] fetchProviderModels 请求异常:', error)
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        ok: false,
+        error: '拉取模型超时（12秒内未收到响应，请检查网络或代理）'
+      }
+    }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : '网络请求失败',
+      errorDetail: error instanceof Error ? String(error.stack || error.message) : undefined
+    }
+  }
+}
