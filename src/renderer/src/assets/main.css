@@ -2602,7 +2602,13 @@ button:focus-visible {
   border-radius: 50%;
 }
 
-/* 新建服务商紧凑按钮 */
+/* 添加服务商下拉容器与按钮 */
+.pref-add-dropdown-container {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
 .pref-btn-add-provider {
   height: 26px;
   padding: 0 10px;
@@ -2617,19 +2623,97 @@ button:focus-visible {
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   transition: all 120ms ease;
-  flex-shrink: 0;
 }
 
-.pref-btn-add-provider:hover {
+.pref-btn-add-provider:hover,
+.pref-btn-add-active {
   background: #dfd7c5;
   border-color: #837662;
   color: #1a202c;
 }
 
-.pref-btn-add-provider:active {
-  transform: translateY(1px);
+.pref-dropdown-arrow {
+  font-size: 9px;
+  color: #7b8595;
+  line-height: 1;
+}
+
+/* 渠道添加下拉气泡菜单 */
+.pref-add-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 176px;
+  background: #ffffff;
+  border: 1px solid #c9c1b3;
+  border-radius: 5px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  padding: 4px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: prefMenuFade 100ms ease-out;
+}
+
+@keyframes prefMenuFade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pref-add-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: #2e3644;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms ease;
+  white-space: nowrap;
+}
+
+.pref-add-menu-item:hover {
+  background: #f0ebe2;
+  color: #1a202c;
+}
+
+.pref-menu-item-icon {
+  font-weight: 700;
+  color: #e06c3a;
+}
+
+.pref-menu-item-bullet {
+  color: #8c96a7;
+  font-size: 12px;
+}
+
+.pref-add-menu-divider {
+  height: 1px;
+  background: #e8e2d7;
+  margin: 3px 0;
+}
+
+.pref-add-menu-label {
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #8a95a5;
+  user-select: none;
 }
 
 /* 激活服务商主配置卡片 */
@@ -2719,6 +2803,7 @@ button:focus-visible {
   user-select: none;
   transition: all 120ms ease;
   box-sizing: border-box;
+  max-width: 250px;
 }
 
 .pref-pill:hover {
@@ -2756,10 +2841,55 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   user-select: none;
+  flex-shrink: 0;
 }
 
+/* 模型名称：支持组织前缀与核心主体排版 */
 .pref-pill-name {
+  display: inline-flex;
+  align-items: baseline;
   line-height: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.pref-pill-prefix {
+  font-size: 10px;
+  color: #818c9e;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.pref-pill-main-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 模型列表内虚线录入微按钮 */
+.pref-pill-btn-add {
+  height: 23px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #636e80;
+  background: #ece6dc;
+  border: 1px dashed #b9b0a1;
+  border-radius: 3px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.pref-pill-btn-add:hover {
+  background: #dfd7cb;
+  border-color: #827663;
+  color: #1a202c;
 }
 
 /* 精致矢量删除按钮 */

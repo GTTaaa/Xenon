@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import type {
   AppSettings,
   GeneralSettings,
@@ -148,6 +148,25 @@ export const ConfigPage = (): React.JSX.Element => {
   // 错误详情弹窗与复制反馈
   const [showErrorModal, setShowErrorModal] = useState(false)
   const [copiedErrorLog, setCopiedErrorLog] = useState(false)
+
+  // 添加服务商下拉菜单控制
+  const [showAddMenu, setShowAddMenu] = useState(false)
+  const addMenuRef = useRef<HTMLDivElement | null>(null)
+
+  // 手动录入单模型展开状态（默认收起以释放纵向空间）
+  const [showManualAdd, setShowManualAdd] = useState(false)
+
+  // 点击外部自动收起添加服务商下拉菜单
+  useEffect(() => {
+    if (!showAddMenu) return
+    const handleClickOutside = (e: MouseEvent): void => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setShowAddMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showAddMenu])
 
   // 初始化加载全局配置
   useEffect(() => {
@@ -334,6 +353,20 @@ export const ConfigPage = (): React.JSX.Element => {
     })
     setNewModelId('')
     setFeedbackMessage(`已为【${activeProvider.name}】添加模型 ${trimmed}`)
+  }
+
+  /**
+   * 格式化模型名称显示：支持拆分组织前缀与核心模型名，提升长模型名的排版可读性
+   */
+  const formatModelDisplay = (id: string): { prefix: string; name: string } => {
+    const slashIndex = id.indexOf('/')
+    if (slashIndex !== -1) {
+      return {
+        prefix: id.slice(0, slashIndex + 1),
+        name: id.slice(slashIndex + 1)
+      }
+    }
+    return { prefix: '', name: id }
   }
 
   /**
@@ -615,35 +648,57 @@ export const ConfigPage = (): React.JSX.Element => {
                       )
                     })}
                   </div>
-                  <button
-                    type="button"
-                    className="pref-btn-add-provider"
-                    onClick={handleAddCustomProvider}
-                    title="添加新的服务商渠道"
-                  >
-                    + 新建服务商
-                  </button>
-                </div>
 
-                {/* 快捷添加预置模板（轻量芯片行，仅在有未添加模板时展示） */}
-                {unaddedTemplates.length > 0 ? (
-                  <div className="pref-preset-row">
-                    <span className="pref-preset-tip">快捷预置：</span>
-                    <div className="pref-preset-chips">
-                      {unaddedTemplates.map((tmpl) => (
+                  {/* 整合 + 新建与预设导入的下拉选择器 */}
+                  <div className="pref-add-dropdown-container" ref={addMenuRef}>
+                    <button
+                      type="button"
+                      className={`pref-btn-add-provider ${showAddMenu ? 'pref-btn-add-active' : ''}`}
+                      onClick={() => setShowAddMenu((prev) => !prev)}
+                      title="添加服务商（自定义或从官方预置快速导入）"
+                    >
+                      <span>+ 添加渠道</span>
+                      <span className="pref-dropdown-arrow">{showAddMenu ? '▴' : '▾'}</span>
+                    </button>
+
+                    {showAddMenu ? (
+                      <div className="pref-add-menu">
                         <button
-                          key={tmpl.id}
                           type="button"
-                          className="pref-preset-chip"
-                          onClick={() => handleAddFromTemplate(tmpl)}
-                          title={`快捷配置【${tmpl.name}】`}
+                          className="pref-add-menu-item"
+                          onClick={() => {
+                            setShowAddMenu(false)
+                            handleAddCustomProvider()
+                          }}
                         >
-                          + {tmpl.name}
+                          <span className="pref-menu-item-icon">+</span>
+                          <span>自定义空白服务商</span>
                         </button>
-                      ))}
-                    </div>
+
+                        {unaddedTemplates.length > 0 ? (
+                          <>
+                            <div className="pref-add-menu-divider" />
+                            <div className="pref-add-menu-label">从官方预置快速导入：</div>
+                            {unaddedTemplates.map((tmpl) => (
+                              <button
+                                key={tmpl.id}
+                                type="button"
+                                className="pref-add-menu-item"
+                                onClick={() => {
+                                  setShowAddMenu(false)
+                                  handleAddFromTemplate(tmpl)
+                                }}
+                              >
+                                <span className="pref-menu-item-bullet">•</span>
+                                <span>{tmpl.name}</span>
+                              </button>
+                            ))}
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
+                </div>
               </div>
 
               {/* 当前选中厂商的核心连接配置面板 */}
@@ -652,9 +707,7 @@ export const ConfigPage = (): React.JSX.Element => {
                   <div className="pref-card-header">
                     <div className="pref-title-with-actions">
                       <h2 className="pref-card-title">{activeProvider.name}</h2>
-                      {activeProvider.id === activeProviderId ? (
-                        <span className="pref-badge-primary">默认服务商</span>
-                      ) : (
+                      {activeProvider.id !== activeProviderId ? (
                         <button
                           type="button"
                           className="pref-field-btn pref-field-btn-primary"
@@ -663,7 +716,7 @@ export const ConfigPage = (): React.JSX.Element => {
                         >
                           设为默认服务商
                         </button>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* 启用/停用开关 */}
@@ -814,11 +867,16 @@ export const ConfigPage = (): React.JSX.Element => {
                         {activeProvider.models.map((m) => {
                           const isDefault =
                             (activeProvider.defaultModel || activeProvider.models[0]?.id) === m.id
+                          const { prefix, name } = formatModelDisplay(m.id)
                           return (
                             <span
                               key={m.id}
                               className={`pref-pill ${isDefault ? 'pref-pill-active' : ''}`}
-                              title={isDefault ? '当前渠道的默认模型' : '点击将此模型设为默认'}
+                              title={
+                                isDefault
+                                  ? `当前渠道的默认模型: ${m.id}`
+                                  : `点击将【${m.id}】设为默认模型`
+                              }
                               onClick={() => updateActiveProvider({ defaultModel: m.id })}
                             >
                               {isDefault ? (
@@ -826,7 +884,14 @@ export const ConfigPage = (): React.JSX.Element => {
                                   DEF
                                 </span>
                               ) : null}
-                              <span className="pref-pill-name">{m.id}</span>
+                              <span className="pref-pill-name">
+                                {prefix ? (
+                                  <span className="pref-pill-prefix" title={m.id}>
+                                    {prefix}
+                                  </span>
+                                ) : null}
+                                <span className="pref-pill-main-name">{name}</span>
+                              </span>
                               {activeProvider.models.length > 1 ? (
                                 <button
                                   type="button"
@@ -858,33 +923,56 @@ export const ConfigPage = (): React.JSX.Element => {
                             </span>
                           )
                         })}
-                      </div>
 
-                      {/* 手动追加模型 */}
-                      <div className="pref-add-row" style={{ marginTop: '8px' }}>
-                        <input
-                          type="text"
-                          className="pref-input pref-add-input"
-                          value={newModelId}
-                          onChange={(e) => setNewModelId(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault()
-                              handleAddModelToActive()
-                            }
-                          }}
-                          placeholder={`手动添加模型 ID 至【${activeProvider.name}】...`}
-                          spellCheck={false}
-                        />
+                        {/* 手动录入触发按键（以紧凑虚线微胶囊呈现，平时不占大行） */}
                         <button
                           type="button"
-                          className="pref-btn pref-btn-secondary"
-                          onClick={handleAddModelToActive}
-                          disabled={!newModelId.trim()}
+                          className="pref-pill-btn-add"
+                          onClick={() => setShowManualAdd((prev) => !prev)}
+                          title="手动录入单个自定义模型 ID"
                         >
-                          + 添加模型
+                          {showManualAdd ? '取消录入' : '+ 手动录入'}
                         </button>
                       </div>
+
+                      {/* 手动追加模型输入栏（仅在点击手动录入时展开） */}
+                      {showManualAdd ? (
+                        <div className="pref-add-row" style={{ marginTop: '8px' }}>
+                          <input
+                            type="text"
+                            className="pref-input pref-add-input"
+                            value={newModelId}
+                            onChange={(e) => setNewModelId(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                handleAddModelToActive()
+                              }
+                            }}
+                            placeholder="输入模型 ID（如 gpt-4o、claude-3-5-sonnet...）"
+                            spellCheck={false}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            className="pref-field-btn pref-field-btn-primary"
+                            onClick={handleAddModelToActive}
+                            disabled={!newModelId.trim()}
+                          >
+                            + 保存模型
+                          </button>
+                          <button
+                            type="button"
+                            className="pref-field-btn"
+                            onClick={() => {
+                              setNewModelId('')
+                              setShowManualAdd(false)
+                            }}
+                          >
+                            收起
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </section>
