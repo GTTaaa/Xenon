@@ -43,10 +43,10 @@ function openConfigWindow(): void {
   }
 
   configWindow = new BrowserWindow({
-    width: 560,
-    height: 660,
-    minWidth: 480,
-    minHeight: 520,
+    width: 600,
+    height: 680,
+    minWidth: 500,
+    minHeight: 540,
     resizable: true,
     frame: false,
     show: false,

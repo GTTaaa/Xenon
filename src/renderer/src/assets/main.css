@@ -2684,7 +2684,7 @@ button:focus-visible {
 
 /* 底栏操作工具栏 */
 .pref-footer {
-  height: 48px;
+  height: 52px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -2692,25 +2692,41 @@ button:focus-visible {
   padding: 0 18px;
   background: #e2dcd3;
   border-top: 1px solid #c7beaf;
+  gap: 12px;
+  box-sizing: border-box;
 }
 
-.pref-footer-left,
-.pref-footer-right {
+.pref-footer-left {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.pref-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .pref-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 29px;
-  padding: 0 13px;
-  font-size: 11px;
+  height: 30px;
+  padding: 0 14px;
+  font-size: 11.5px;
   font-weight: 600;
   border-radius: 4px;
   cursor: pointer;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  user-select: none;
+  box-sizing: border-box;
+  line-height: 1;
   transition: all 120ms ease;
 }
 
@@ -2722,6 +2738,7 @@ button:focus-visible {
 
 .pref-btn-test:hover:not(:disabled) {
   background: #e6dfd4;
+  border-color: #a39b8d;
 }
 
 .pref-btn-secondary {
@@ -2736,9 +2753,9 @@ button:focus-visible {
 }
 
 .pref-btn-cancel {
-  background: transparent;
+  background: #ded7cc;
   border: 1px solid #b8b0a2;
-  color: #626e82;
+  color: #556071;
 }
 
 .pref-btn-cancel:hover {
@@ -2750,11 +2767,13 @@ button:focus-visible {
   background: #27ae60;
   border: 1px solid #1e8449;
   color: #ffffff;
-  box-shadow: 0 1px 2px rgba(39, 174, 96, 0.2);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(39, 174, 96, 0.25);
 }
 
 .pref-btn-save:hover:not(:disabled) {
   background: #2ecc71;
+  border-color: #27ae60;
 }
 
 .pref-btn-save:active:not(:disabled) {
@@ -2766,16 +2785,27 @@ button:focus-visible {
   cursor: not-allowed;
 }
 
-/* 测试状态指示 */
+/* 测试状态胶囊指示徽标 */
 .pref-test-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  max-width: 210px;
+  line-height: 1.2;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  max-width: 250px;
+  min-width: 0;
+  overflow: hidden;
   white-space: nowrap;
+  flex-shrink: 1;
+}
+
+.pref-test-status-text {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pref-status-dot {
@@ -2787,6 +2817,8 @@ button:focus-visible {
 
 .pref-test-status-ok {
   color: #1e7e34;
+  border: 1px solid rgba(39, 174, 96, 0.25);
+  background: rgba(39, 174, 96, 0.08);
 }
 
 .pref-test-status-ok .pref-status-dot {
@@ -2796,14 +2828,21 @@ button:focus-visible {
 
 .pref-test-status-fail {
   color: #a83232;
+  border: 1px solid rgba(216, 92, 92, 0.25);
+  background: rgba(216, 92, 92, 0.08);
 }
 
 .pref-test-status-fail .pref-status-dot {
   background: #d85c5c;
+  box-shadow: 0 0 4px rgba(216, 92, 92, 0.5);
 }
 
 .pref-feedback-text {
   font-size: 11px;
   font-weight: 600;
   color: #27ae60;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }

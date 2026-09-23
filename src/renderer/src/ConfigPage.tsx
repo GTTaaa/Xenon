@@ -568,44 +568,49 @@ export const ConfigPage = (): React.JSX.Element => {
           {activeProvider ? (
             <button
               type="button"
-              className="pref-btn pref-btn-secondary"
+              className="pref-btn pref-btn-test"
               onClick={handleTestCurrentProvider}
               disabled={isTesting || !activeProvider.baseUrl || !activeProvider.apiKey}
-              title={`仅测试【${activeProvider.name}】的连通性`}
+              title={`测试【${activeProvider.name}】的连通性 (${activeProvider.baseUrl})`}
             >
-              {isTesting ? '正在测试...' : `测试【${activeProvider.name}】连接`}
+              {isTesting ? '正在测试...' : '测试当前连接'}
             </button>
           ) : null}
 
           {/* 测试连通性结果反馈 */}
           {testResult ? (
             <span
-              className={`pref-test-badge ${
-                testResult.ok ? 'pref-test-badge-ok' : 'pref-test-badge-err'
+              className={`pref-test-status ${
+                testResult.ok ? 'pref-test-status-ok' : 'pref-test-status-fail'
               }`}
+              title={`${testResult.message}${testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}`}
             >
-              <span className="pref-test-dot" />
-              <span>
+              <span className="pref-status-dot" />
+              <span className="pref-test-status-text">
                 {testResult.message}
                 {testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}
               </span>
             </span>
           ) : null}
 
-          {feedbackMessage ? <span className="pref-feedback-text">{feedbackMessage}</span> : null}
+          {feedbackMessage ? (
+            <span className="pref-feedback-text" title={feedbackMessage}>
+              {feedbackMessage}
+            </span>
+          ) : null}
         </div>
 
         <div className="pref-footer-right">
           <button
             type="button"
-            className="pref-btn pref-btn-secondary"
+            className="pref-btn pref-btn-cancel"
             onClick={() => void window.api.closeConfigWindow()}
           >
             取消
           </button>
           <button
             type="button"
-            className="pref-btn pref-btn-primary"
+            className="pref-btn pref-btn-save"
             onClick={handleSaveAll}
             disabled={isSaving}
           >
