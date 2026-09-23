@@ -1,98 +1,115 @@
 import { useEffect, useState } from 'react'
 import type {
   LLMConfig,
-  LLMProviderType,
-  ModelOptionItem,
+  ProviderItem,
+  ProviderModelItem,
   TestConnectionResult
 } from '../../shared/config'
 
 /**
- * 常用厂商快捷填充预设
+ * 预设厂商模板
  */
-interface ProviderPreset {
+interface ProviderTemplate {
+  id: string
   name: string
   baseUrl: string
   defaultModel: string
-  profile: string
+  models: ProviderModelItem[]
 }
 
-const PRESETS: ProviderPreset[] = [
+const PRESET_TEMPLATES: ProviderTemplate[] = [
   {
+    id: 'deepseek',
     name: 'DeepSeek 官方',
     baseUrl: 'https://api.deepseek.com/v1',
     defaultModel: 'deepseek-chat',
-    profile: 'DEEPSEEK'
+    models: [
+      { id: 'deepseek-chat', label: 'DeepSeek-V3 对话' },
+      { id: 'deepseek-reasoner', label: 'DeepSeek-R1 深度推理', enableThinking: true }
+    ]
   },
   {
+    id: 'cline',
     name: 'ClinePass',
     baseUrl: 'https://api.cline.bot/api/v1',
     defaultModel: 'cline-pass/deepseek-v4.1-flash',
-    profile: 'CLINEPASS'
+    models: [
+      { id: 'cline-pass/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' },
+      { id: 'cline-pass/qwen3.7-max', label: 'Qwen 3.7 Max' },
+      { id: 'cline-pass/muse-spark-1.3-contributor', label: 'Muse Spark 1.3' }
+    ]
   },
   {
-    name: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    defaultModel: 'gpt-4o-mini',
-    profile: 'OPENAI'
-  },
-  {
+    id: 'qwen',
     name: '通义千问',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     defaultModel: 'qwen-plus',
-    profile: 'ALIBABA'
+    models: [
+      { id: 'qwen-plus', label: 'Qwen Plus 平衡版' },
+      { id: 'qwen-max', label: 'Qwen Max 旗舰版' }
+    ]
   },
   {
+    id: 'openai',
+    name: 'OpenAI 官方',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModel: 'gpt-4o-mini',
+    models: [
+      { id: 'gpt-4o-mini', label: 'GPT-4o Mini 极速' },
+      { id: 'gpt-4o', label: 'GPT-4o 旗舰' }
+    ]
+  },
+  {
+    id: 'ollama',
     name: 'Ollama 本地',
     baseUrl: 'http://localhost:11434/v1',
     defaultModel: 'llama3:latest',
-    profile: 'OLLAMA'
+    models: [{ id: 'llama3:latest', label: 'Llama 3' }]
   },
   {
+    id: 'stepfun',
     name: '阶跃星辰',
     baseUrl: 'https://api.stepfun.com/v1',
     defaultModel: 'step-1-8k',
-    profile: 'STEPFUN'
+    models: [{ id: 'step-1-8k', label: 'Step 1 8k' }]
   }
 ]
 
 export const ConfigPage = (): React.JSX.Element => {
-  const [provider, setProvider] = useState<LLMProviderType>('openai-compatible')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('')
-  const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>([])
+  // 服务商列表及当前选中的 Tab
+  const [providers, setProviders] = useState<ProviderItem[]>([])
+  const [activeTabId, setActiveTabId] = useState<string>('deepseek')
+
+  // 是否显示密码
   const [showApiKey, setShowApiKey] = useState(false)
-  const [enableThinking, setEnableThinking] = useState(false)
 
   // 连通性测试状态
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null)
 
-  // 保存中状态与消息提示
+  // 保存状态与消息提示
   const [isSaving, setIsSaving] = useState(false)
   const [feedbackMessage, setFeedbackMessage] = useState('')
 
-  // 新增备选模型临时输入
-  const [newModelName, setNewModelName] = useState('')
+  // 当前厂商新加模型输入框
+  const [newModelId, setNewModelId] = useState('')
 
-  // 初始化加载当前持久化配置
+  // 初始化加载配置
   useEffect(() => {
     let isMounted = true
     window.api
       .getConfig()
-      .then((config) => {
+      .then((cfg) => {
         if (!isMounted) return
-        setProvider(config.provider || 'openai-compatible')
-        setBaseUrl(config.baseUrl || '')
-        setApiKey(config.apiKey || '')
-        setModel(config.model || '')
-        setModelOptions(config.modelOptions || [])
-        setEnableThinking(Boolean(config.enableThinking))
-        setTestResult(null)
-        setFeedbackMessage('')
+        const list = Array.isArray(cfg.providers) && cfg.providers.length > 0 ? cfg.providers : []
+        setProviders(list)
+        if (list.length > 0) {
+          const matched = cfg.activeProviderId && list.some((p) => p.id === cfg.activeProviderId)
+          setActiveTabId(matched ? (cfg.activeProviderId as string) : list[0].id)
+        }
       })
       .catch((error) => {
-        console.error('[renderer] 获取大模型配置失败', error)
+        console.error('[renderer] 读取服务商配置失败', error)
       })
 
     return () => {
@@ -100,125 +117,159 @@ export const ConfigPage = (): React.JSX.Element => {
     }
   }, [])
 
-  // 监听 ESC 键关闭独立设置窗口
+  // 监听 ESC 键关闭窗口
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         void window.api.closeConfigWindow()
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
 
+  // 当前选中的厂商
+  const activeProvider = providers.find((p) => p.id === activeTabId) || providers[0]
+
   /**
-   * 应用快捷预设
+   * 更新当前正在编辑的厂商字段
    */
-  const handleApplyPreset = (preset: ProviderPreset): void => {
-    setProvider('openai-compatible')
-    setBaseUrl(preset.baseUrl)
-    setModel(preset.defaultModel)
-
-    // 检查并自动将预设模型追加进模型池备选
-    const exists = modelOptions.some((item) => item.value === preset.defaultModel)
-    if (!exists) {
-      const codeIndex = modelOptions.length + 1
-      const generatedCode = `U${codeIndex}`
-      setModelOptions((prev) => [
-        ...prev,
-        {
-          value: preset.defaultModel,
-          code: generatedCode,
-          profile: preset.profile,
-          baseUrl: preset.baseUrl,
-          provider: 'openai-compatible'
-        }
-      ])
-    }
-
+  const updateActiveProvider = (patch: Partial<ProviderItem>): void => {
+    if (!activeProvider) return
+    setProviders((prev) =>
+      prev.map((item) => (item.id === activeProvider.id ? { ...item, ...patch } : item))
+    )
     setTestResult(null)
-    setFeedbackMessage(`已填入 ${preset.name} 预设参数，请确认 API Key 后保存`)
   }
 
   /**
-   * 将当前表单的配置作为专属通道绑定保存至模型池
+   * 从模板快速添加一个新服务商
    */
-  const handleBindCurrentToPool = (): void => {
-    const trimmedModel = model.trim()
-    if (!trimmedModel) {
-      setFeedbackMessage('请先在上方输入模型名称')
+  const handleAddFromTemplate = (template: ProviderTemplate): void => {
+    // 检查是否已存在同 ID 厂商
+    const exists = providers.some((p) => p.id === template.id)
+    if (exists) {
+      setActiveTabId(template.id)
+      setFeedbackMessage(`已切换至【${template.name}】`)
       return
     }
 
-    const existingIndex = modelOptions.findIndex((item) => item.value === trimmedModel)
-    const code = existingIndex >= 0 ? modelOptions[existingIndex].code : `U${modelOptions.length + 1}`
-
-    let inferredProfile = 'CUSTOM'
-    if (baseUrl.includes('deepseek.com')) inferredProfile = 'DEEPSEEK'
-    else if (baseUrl.includes('cline.bot')) inferredProfile = 'CLINEPASS'
-    else if (baseUrl.includes('openai.com')) inferredProfile = 'OPENAI'
-    else if (baseUrl.includes('dashscope')) inferredProfile = 'ALIBABA'
-    else if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) inferredProfile = 'LOCAL'
-    else if (existingIndex >= 0 && modelOptions[existingIndex].profile) {
-      inferredProfile = modelOptions[existingIndex].profile
+    const newProvider: ProviderItem = {
+      id: template.id,
+      name: template.name,
+      providerType: 'openai-compatible',
+      baseUrl: template.baseUrl,
+      apiKey: '',
+      enabled: true,
+      models: template.models,
+      defaultModel: template.defaultModel
     }
 
-    const updatedItem: ModelOptionItem = {
-      value: trimmedModel,
-      code,
-      profile: inferredProfile,
-      baseUrl: baseUrl.trim(),
-      apiKey: apiKey.trim(),
-      provider,
-      enableThinking
-    }
-
-    if (existingIndex >= 0) {
-      const nextList = [...modelOptions]
-      nextList[existingIndex] = updatedItem
-      setModelOptions(nextList)
-      setFeedbackMessage(`已更新 [${trimmedModel}] 的专属渠道配置`)
-    } else {
-      setModelOptions((prev) => [...prev, updatedItem])
-      setFeedbackMessage(`已将 [${trimmedModel}] 作为独立通道添加至模型池`)
-    }
+    setProviders((prev) => [...prev, newProvider])
+    setActiveTabId(newProvider.id)
+    setFeedbackMessage(`已添加服务商【${template.name}】，请填写对应的 API Key`)
   }
 
   /**
-   * 点击模型池项，载入其专属连接配置
+   * 添加一个自定义空白厂商
    */
-  const handleSelectModelOption = (option: ModelOptionItem): void => {
-    setModel(option.value)
-    if (option.baseUrl) setBaseUrl(option.baseUrl)
-    if (option.apiKey) setApiKey(option.apiKey)
-    if (option.provider) setProvider(option.provider)
-    if (typeof option.enableThinking === 'boolean') setEnableThinking(option.enableThinking)
-    setTestResult(null)
-    setFeedbackMessage(`已载入模型 [${option.value}] 的连接配置，可直接点击测试或编辑`)
+  const handleAddCustomProvider = (): void => {
+    const customId = `custom_${Date.now()}`
+    const newProvider: ProviderItem = {
+      id: customId,
+      name: `自定义服务商 ${providers.length + 1}`,
+      providerType: 'openai-compatible',
+      baseUrl: 'https://',
+      apiKey: '',
+      enabled: true,
+      models: [{ id: 'custom-model', label: '默认模型' }],
+      defaultModel: 'custom-model'
+    }
+
+    setProviders((prev) => [...prev, newProvider])
+    setActiveTabId(customId)
+    setFeedbackMessage('已创建新服务商，请填写其名称、Base URL 与 API Key')
   }
 
   /**
-   * 执行连通性测试
+   * 删除某个厂商
    */
-  const handleTestConnection = async (): Promise<void> => {
+  const handleDeleteProvider = (providerIdToDelete: string): void => {
+    if (providers.length <= 1) {
+      setFeedbackMessage('至少需要保留一个服务商')
+      return
+    }
+
+    const nextList = providers.filter((p) => p.id !== providerIdToDelete)
+    setProviders(nextList)
+    if (activeTabId === providerIdToDelete) {
+      setActiveTabId(nextList[0].id)
+    }
+    setFeedbackMessage('已移除该服务商')
+  }
+
+  /**
+   * 为当前厂商添加新模型
+   */
+  const handleAddModelToActive = (): void => {
+    if (!activeProvider) return
+    const trimmed = newModelId.trim()
+    if (!trimmed) return
+
+    if (activeProvider.models.some((m) => m.id === trimmed)) {
+      setFeedbackMessage(`模型 ${trimmed} 已在当前列表中`)
+      setNewModelId('')
+      return
+    }
+
+    const updatedModels: ProviderModelItem[] = [...activeProvider.models, { id: trimmed }]
+    updateActiveProvider({
+      models: updatedModels,
+      defaultModel: activeProvider.defaultModel || trimmed
+    })
+    setNewModelId('')
+    setFeedbackMessage(`已为【${activeProvider.name}】添加模型 ${trimmed}`)
+  }
+
+  /**
+   * 为当前厂商移除模型
+   */
+  const handleRemoveModelFromActive = (modelIdToRemove: string): void => {
+    if (!activeProvider) return
+    if (activeProvider.models.length <= 1) {
+      setFeedbackMessage('每个服务商至少保留一个可用模型')
+      return
+    }
+
+    const updatedModels = activeProvider.models.filter((m) => m.id !== modelIdToRemove)
+    const newDefault =
+      activeProvider.defaultModel === modelIdToRemove
+        ? updatedModels[0].id
+        : activeProvider.defaultModel
+
+    updateActiveProvider({
+      models: updatedModels,
+      defaultModel: newDefault
+    })
+  }
+
+  /**
+   * 测试当前正在查看的厂商连通性
+   */
+  const handleTestCurrentProvider = async (): Promise<void> => {
+    if (!activeProvider) return
     setIsTesting(true)
     setTestResult(null)
     setFeedbackMessage('')
 
-    const currentDraftConfig: LLMConfig = {
-      provider,
-      baseUrl: baseUrl.trim(),
-      apiKey: apiKey.trim(),
-      model: model.trim() || 'gpt-4o-mini',
-      modelOptions,
-      enableThinking
-    }
-
     try {
-      const result = await window.api.testConfig(currentDraftConfig)
+      const result = await window.api.testConfig({
+        activeProviderId: activeProvider.id,
+        activeModelId: activeProvider.defaultModel || activeProvider.models[0]?.id,
+        providers
+      })
       setTestResult(result)
     } catch (error) {
       setTestResult({
@@ -231,51 +282,19 @@ export const ConfigPage = (): React.JSX.Element => {
   }
 
   /**
-   * 保存并应用配置
+   * 保存所有服务商配置
    */
-  const handleSave = async (): Promise<void> => {
+  const handleSaveAll = async (): Promise<void> => {
     setIsSaving(true)
     setFeedbackMessage('')
 
-    // 确保当前选中的主模型在模型库中有对应项并同步其当前连接配置
-    const currentOptions = [...modelOptions]
-    const trimmedModel = model.trim()
-    if (trimmedModel) {
-      const existingIdx = currentOptions.findIndex((item) => item.value === trimmedModel)
-      const currentItem: ModelOptionItem = {
-        value: trimmedModel,
-        code: existingIdx >= 0 ? currentOptions[existingIdx].code : 'A0',
-        profile:
-          existingIdx >= 0 && currentOptions[existingIdx].profile
-            ? currentOptions[existingIdx].profile
-            : baseUrl.includes('cline.bot')
-              ? 'CLINEPASS'
-              : baseUrl.includes('deepseek.com')
-                ? 'DEEPSEEK'
-                : 'PRIMARY',
-        baseUrl: baseUrl.trim(),
-        apiKey: apiKey.trim(),
-        provider,
-        enableThinking
-      }
-
-      if (existingIdx >= 0) {
-        currentOptions[existingIdx] = currentItem
-      } else {
-        currentOptions.unshift(currentItem)
-      }
-    }
-
-    const payload: LLMConfig = {
-      provider,
-      baseUrl: baseUrl.trim(),
-      apiKey: apiKey.trim(),
-      model: trimmedModel || 'step-3.5-flash',
-      modelOptions: currentOptions,
-      enableThinking
-    }
-
     try {
+      const payload: LLMConfig = {
+        activeProviderId: activeTabId,
+        activeModelId: activeProvider?.defaultModel || activeProvider?.models[0]?.id,
+        providers
+      }
+
       const result = await window.api.saveConfig(payload)
       if (result.ok) {
         setFeedbackMessage('配置已保存生效')
@@ -292,44 +311,13 @@ export const ConfigPage = (): React.JSX.Element => {
     }
   }
 
-  /**
-   * 添加自定义备选模型
-   */
-  const handleAddModelOption = (): void => {
-    const trimmed = newModelName.trim()
-    if (!trimmed) return
-    if (modelOptions.some((item) => item.value === trimmed)) {
-      setFeedbackMessage(`模型 ${trimmed} 已在列表中`)
-      setNewModelName('')
-      return
-    }
-
-    const code = `U${modelOptions.length + 1}`
-    setModelOptions((prev) => [
-      ...prev,
-      {
-        value: trimmed,
-        code,
-        profile: 'CUSTOM MODEL'
-      }
-    ])
-    setNewModelName('')
-  }
-
-  /**
-   * 移除备选模型
-   */
-  const handleRemoveModelOption = (valueToRemove: string): void => {
-    setModelOptions((prev) => prev.filter((item) => item.value !== valueToRemove))
-  }
-
   return (
     <div className="pref-root">
       {/* 顶部标题栏 */}
       <header className="pref-header">
         <div className="pref-header-title">
           <span className="pref-title-main">偏好设置</span>
-          <span className="pref-title-sub">PREFERENCES // LLM CONFIG</span>
+          <span className="pref-title-sub">PREFERENCES // PROVIDER ARCHITECTURE</span>
         </div>
         <button
           type="button"
@@ -342,201 +330,198 @@ export const ConfigPage = (): React.JSX.Element => {
         </button>
       </header>
 
-      {/* 主体设置表单区 */}
+      {/* 主体区 */}
       <main className="pref-body">
-        {/* 模块一：服务模式与厂商预设 */}
-        <section className="pref-card">
-          <div className="pref-card-header">
-            <h2 className="pref-card-title">模型服务与厂商</h2>
-            {/* 分段模式选择器 */}
-            <div className="pref-seg-control">
-              <button
-                type="button"
-                className={`pref-seg-btn ${
-                  provider === 'openai-compatible' ? 'pref-seg-btn-active' : ''
-                }`}
-                onClick={() => setProvider('openai-compatible')}
-              >
-                OpenAI 兼容接口
-              </button>
-              <button
-                type="button"
-                className={`pref-seg-btn ${provider === 'mock' ? 'pref-seg-btn-active' : ''}`}
-                onClick={() => setProvider('mock')}
-              >
-                Mock 离线演练
-              </button>
-            </div>
+        {/* 顶部：厂商选项卡切换栏 */}
+        <section className="pref-card" style={{ padding: '8px 12px 12px 12px' }}>
+          <div className="pref-card-header" style={{ marginBottom: '8px' }}>
+            <h2 className="pref-card-title">独立服务商管理 (PROVIDERS)</h2>
+            <button
+              type="button"
+              className="pref-btn pref-btn-secondary"
+              style={{ fontSize: '11px', padding: '3px 8px' }}
+              onClick={handleAddCustomProvider}
+            >
+              + 新建服务商
+            </button>
           </div>
 
-          {provider === 'openai-compatible' ? (
-            <div className="pref-preset-row">
-              <span className="pref-preset-tip">快速填入：</span>
-              <div className="pref-preset-chips">
-                {PRESETS.map((preset) => (
+          {/* 选项卡行 */}
+          <div className="pref-provider-tabs">
+            {providers.map((p) => {
+              const isSelected = p.id === activeTabId
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`pref-provider-tab ${isSelected ? 'pref-provider-tab-active' : ''} ${
+                    !p.enabled ? 'pref-provider-tab-disabled' : ''
+                  }`}
+                  onClick={() => {
+                    setActiveTabId(p.id)
+                    setTestResult(null)
+                  }}
+                >
+                  <span
+                    className={`pref-provider-tab-dot ${p.enabled ? 'dot-enabled' : 'dot-disabled'}`}
+                  />
+                  <span className="pref-provider-tab-name">{p.name}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* 快速快捷填入预设模板 */}
+          <div className="pref-preset-row" style={{ marginTop: '10px' }}>
+            <span className="pref-preset-tip">快捷添加：</span>
+            <div className="pref-preset-chips">
+              {PRESET_TEMPLATES.map((tmpl) => {
+                const isAlreadyAdded = providers.some((p) => p.id === tmpl.id)
+                return (
                   <button
-                    key={preset.name}
+                    key={tmpl.id}
                     type="button"
                     className="pref-preset-chip"
-                    onClick={() => handleApplyPreset(preset)}
-                    title={`填充 Base URL 与 ${preset.defaultModel}`}
+                    onClick={() => handleAddFromTemplate(tmpl)}
+                    title={`添加或激活 ${tmpl.name}`}
                   >
-                    {preset.name}
+                    {isAlreadyAdded ? `切换: ${tmpl.name}` : `+ ${tmpl.name}`}
                   </button>
-                ))}
-              </div>
+                )
+              })}
             </div>
-          ) : (
-            <p className="pref-mock-hint">当前为离线演练模式，将返回预设翻译结果，无需网络请求。</p>
-          )}
+          </div>
         </section>
 
-        {provider === 'openai-compatible' ? (
-          <>
-            {/* 模块二：接口连接与模型配置 */}
-            <section className="pref-card">
-              <div className="pref-card-header">
-                <h2 className="pref-card-title">接口连接与主模型</h2>
+        {/* 当前厂商的专属配置面板 */}
+        {activeProvider ? (
+          <section className="pref-card">
+            <div className="pref-card-header">
+              <div className="pref-card-title-group">
+                <h2 className="pref-card-title">
+                  【{activeProvider.name}】专属连接配置
+                </h2>
+                <span className="pref-card-subtitle">
+                  与其它厂商完全隔离，独立管理其专属地址与密钥
+                </span>
               </div>
 
-              <div className="pref-fields-grid">
-                {/* 服务地址 */}
-                <div className="pref-field">
-                  <label className="pref-label" htmlFor="llm-base-url">
-                    服务地址 (Base URL)
-                  </label>
-                  <input
-                    id="llm-base-url"
-                    type="text"
-                    className="pref-input"
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    placeholder="https://api.deepseek.com/v1"
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
+              {/* 启用/停用开关 */}
+              <div
+                className="pref-switch-inline"
+                onClick={() => updateActiveProvider({ enabled: !activeProvider.enabled })}
+                title="开启后该厂商的模型才会出现在主界面下拉框中"
+              >
+                <span style={{ fontSize: '11px', color: '#5a5247', marginRight: '6px' }}>
+                  {activeProvider.enabled ? '已启用' : '已停用'}
+                </span>
+                <div className={`pref-switch ${activeProvider.enabled ? 'pref-switch-on' : ''}`}>
+                  <div className="pref-switch-thumb" />
                 </div>
+              </div>
+            </div>
 
-                {/* 访问密钥 */}
-                <div className="pref-field">
-                  <div className="pref-label-row">
-                    <label className="pref-label" htmlFor="llm-api-key">
-                      访问密钥 (API Key)
-                    </label>
+            <div className="pref-fields-grid">
+              {/* 厂商名称 */}
+              <div className="pref-field">
+                <div className="pref-label-row">
+                  <label className="pref-label" htmlFor="prov-name">
+                    服务商显示名称
+                  </label>
+                  {providers.length > 1 ? (
                     <button
                       type="button"
                       className="pref-text-btn"
-                      onClick={() => setShowApiKey((prev) => !prev)}
+                      style={{ color: '#d85c5c' }}
+                      onClick={() => handleDeleteProvider(activeProvider.id)}
                     >
-                      {showApiKey ? '隐藏' : '显示'}
+                      删除该服务商
                     </button>
-                  </div>
-                  <input
-                    id="llm-api-key"
-                    type={showApiKey ? 'text' : 'password'}
-                    className="pref-input"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="sk-..."
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
+                  ) : null}
                 </div>
+                <input
+                  id="prov-name"
+                  type="text"
+                  className="pref-input"
+                  value={activeProvider.name}
+                  onChange={(e) => updateActiveProvider({ name: e.target.value })}
+                  placeholder="如：DeepSeek 官方"
+                  spellCheck={false}
+                />
+              </div>
 
-                {/* 默认模型 */}
-                <div className="pref-field">
-                  <label className="pref-label" htmlFor="llm-model-name">
-                    默认模型 (Model ID)
+              {/* 服务地址 (Base URL) */}
+              <div className="pref-field">
+                <label className="pref-label" htmlFor="prov-base-url">
+                  服务地址 (Base URL)
+                </label>
+                <input
+                  id="prov-base-url"
+                  type="text"
+                  className="pref-input"
+                  value={activeProvider.baseUrl}
+                  onChange={(e) => updateActiveProvider({ baseUrl: e.target.value })}
+                  placeholder="https://api.deepseek.com/v1"
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+              </div>
+
+              {/* 访问密钥 (API Key) */}
+              <div className="pref-field">
+                <div className="pref-label-row">
+                  <label className="pref-label" htmlFor="prov-api-key">
+                    访问密钥 (API Key)
                   </label>
-                  <input
-                    id="llm-model-name"
-                    type="text"
-                    className="pref-input"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    placeholder="例如: deepseek-chat 或 gpt-4o-mini"
-                    spellCheck={false}
-                  />
+                  <button
+                    type="button"
+                    className="pref-text-btn"
+                    onClick={() => setShowApiKey((prev) => !prev)}
+                  >
+                    {showApiKey ? '隐藏' : '显示'}
+                  </button>
                 </div>
-
-                {/* 深度思考模式 Switch 开关 */}
-                <div className="pref-switch-row" onClick={() => setEnableThinking((prev) => !prev)}>
-                  <div className="pref-switch-desc">
-                    <span className="pref-switch-name">深度思考推理模式</span>
-                    <span className="pref-switch-sub">
-                      让模型输出思维推导链（支持 DeepSeek-R1 / o1 / o3 等）
-                    </span>
-                  </div>
-                  <div className={`pref-switch ${enableThinking ? 'pref-switch-on' : ''}`}>
-                    <div className="pref-switch-thumb" />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* 模块三：主窗口快捷模型库 */}
-            <section className="pref-card">
-              <div className="pref-card-header">
-                <div className="pref-card-title-group">
-                  <h2 className="pref-card-title">快捷切换模型池</h2>
-                  <span className="pref-card-subtitle">
-                    点击下方卡片可快速载入该模型专属配置；主翻译界面可下拉无缝切换
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="pref-btn pref-btn-secondary"
-                  style={{ fontSize: '11px', padding: '4px 10px' }}
-                  onClick={handleBindCurrentToPool}
-                  title="将上方填写的服务地址、密钥及模型名称作为独立通道保存/更新到模型池"
-                >
-                  ⚡ 保存当前配置为模型通道
-                </button>
+                <input
+                  id="prov-api-key"
+                  type={showApiKey ? 'text' : 'password'}
+                  className="pref-input"
+                  value={activeProvider.apiKey}
+                  onChange={(e) => updateActiveProvider({ apiKey: e.target.value })}
+                  placeholder="填入该服务商的 API Key..."
+                  spellCheck={false}
+                  autoComplete="off"
+                />
               </div>
 
-              <div className="pref-pool-container">
-                {/* 标签胶囊池 */}
+              {/* 该服务商的专属模型列表 */}
+              <div className="pref-field">
+                <label className="pref-label">
+                  可用模型列表 (MODELS FOR {activeProvider.name.toUpperCase()})
+                </label>
                 <div className="pref-pills-wrap">
-                  {modelOptions.map((opt) => {
-                    const isEditing = model === opt.value
-                    const channelTag =
-                      opt.profile && opt.profile !== 'CUSTOM' && opt.profile !== 'CUSTOM MODEL'
-                        ? opt.profile
-                        : opt.baseUrl
-                          ? opt.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
-                          : '全局'
-
+                  {activeProvider.models.map((m) => {
+                    const isDefault = (activeProvider.defaultModel || activeProvider.models[0]?.id) === m.id
                     return (
                       <span
-                        key={opt.value}
-                        className={`pref-pill ${isEditing ? 'pref-pill-active' : ''}`}
-                        onClick={() => handleSelectModelOption(opt)}
+                        key={m.id}
+                        className={`pref-pill ${isDefault ? 'pref-pill-active' : ''}`}
+                        title={isDefault ? '当前厂商的默认模型' : '点击设为默认模型'}
+                        onClick={() => updateActiveProvider({ defaultModel: m.id })}
                         style={{ cursor: 'pointer' }}
-                        title={`点击载入此模型通道\n服务地址: ${opt.baseUrl || '继承全局'}\n密钥: ${opt.apiKey ? '已配置独立密钥' : '继承全局'}`}
                       >
-                        <span
-                          style={{
-                            fontSize: '9px',
-                            padding: '1px 4px',
-                            borderRadius: '3px',
-                            background: '#d4ccbf',
-                            color: '#5a5247',
-                            marginRight: '2px',
-                            fontWeight: 'normal'
-                          }}
-                        >
-                          {channelTag}
-                        </span>
-                        <span className="pref-pill-name">{opt.value}</span>
-                        {modelOptions.length > 1 ? (
+                        {isDefault ? (
+                          <span style={{ fontSize: '9px', color: '#e06c3a', marginRight: '2px' }}>★</span>
+                        ) : null}
+                        <span className="pref-pill-name">{m.id}</span>
+                        {activeProvider.models.length > 1 ? (
                           <button
                             type="button"
                             className="pref-pill-remove"
                             onClick={(e) => {
                               e.stopPropagation()
-                              handleRemoveModelOption(opt.value)
+                              handleRemoveModelFromActive(m.id)
                             }}
-                            title={`移除 ${opt.value}`}
+                            title={`移除 ${m.id}`}
                           >
                             ×
                           </button>
@@ -546,86 +531,85 @@ export const ConfigPage = (): React.JSX.Element => {
                   })}
                 </div>
 
-                {/* 紧凑添加行 */}
-                <div className="pref-add-row">
+                {/* 增加模型 */}
+                <div className="pref-add-row" style={{ marginTop: '6px' }}>
                   <input
                     type="text"
                     className="pref-input pref-add-input"
-                    value={newModelName}
-                    onChange={(e) => setNewModelName(e.target.value)}
+                    value={newModelId}
+                    onChange={(e) => setNewModelId(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
-                        handleAddModelOption()
+                        handleAddModelToActive()
                       }
                     }}
-                    placeholder="添加新模型名称，如 deepseek-chat..."
+                    placeholder={`添加模型至【${activeProvider.name}】...`}
                     spellCheck={false}
                   />
                   <button
                     type="button"
                     className="pref-btn pref-btn-secondary"
-                    onClick={handleAddModelOption}
-                    disabled={!newModelName.trim()}
+                    onClick={handleAddModelToActive}
+                    disabled={!newModelId.trim()}
                   >
-                    + 加入模型池
+                    + 添加模型
                   </button>
                 </div>
               </div>
-            </section>
-          </>
+            </div>
+          </section>
         ) : null}
       </main>
 
       {/* 底部操作工具栏 */}
       <footer className="pref-footer">
         <div className="pref-footer-left">
-          {provider === 'openai-compatible' ? (
+          {activeProvider ? (
             <button
               type="button"
-              className="pref-btn pref-btn-test"
-              onClick={() => void handleTestConnection()}
-              disabled={isTesting || isSaving}
+              className="pref-btn pref-btn-secondary"
+              onClick={handleTestCurrentProvider}
+              disabled={isTesting || !activeProvider.baseUrl || !activeProvider.apiKey}
+              title={`仅测试【${activeProvider.name}】的连通性`}
             >
-              {isTesting ? '正在测试...' : '测试连接'}
+              {isTesting ? '正在测试...' : `测试【${activeProvider.name}】连接`}
             </button>
           ) : null}
 
+          {/* 测试连通性结果反馈 */}
           {testResult ? (
-            <div
-              className={`pref-test-status ${
-                testResult.ok ? 'pref-test-status-ok' : 'pref-test-status-fail'
+            <span
+              className={`pref-test-badge ${
+                testResult.ok ? 'pref-test-badge-ok' : 'pref-test-badge-err'
               }`}
             >
-              <span className="pref-status-dot" />
-              <span className="pref-status-text">
-                {testResult.ok
-                  ? `连接成功 (${testResult.latencyMs ?? 0}ms)`
-                  : `连接失败: ${testResult.message}`}
+              <span className="pref-test-dot" />
+              <span>
+                {testResult.message}
+                {testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}
               </span>
-            </div>
+            </span>
           ) : null}
+
+          {feedbackMessage ? <span className="pref-feedback-text">{feedbackMessage}</span> : null}
         </div>
 
         <div className="pref-footer-right">
-          {feedbackMessage ? <span className="pref-feedback-text">{feedbackMessage}</span> : null}
-
           <button
             type="button"
-            className="pref-btn pref-btn-cancel"
+            className="pref-btn pref-btn-secondary"
             onClick={() => void window.api.closeConfigWindow()}
-            disabled={isSaving}
           >
             取消
           </button>
-
           <button
             type="button"
-            className="pref-btn pref-btn-save"
-            onClick={() => void handleSave()}
-            disabled={isSaving || isTesting}
+            className="pref-btn pref-btn-primary"
+            onClick={handleSaveAll}
+            disabled={isSaving}
           >
-            {isSaving ? '保存中...' : '保存设置'}
+            {isSaving ? '正在保存...' : '保存所有设置'}
           </button>
         </div>
       </footer>

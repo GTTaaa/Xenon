@@ -1,33 +1,77 @@
 import { app, net } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import type { LLMConfig, ModelOptionItem, TestConnectionResult } from '../../shared/config'
+import type {
+  LLMConfig,
+  ModelOptionItem,
+  ProviderItem,
+  ProviderModelItem,
+  TestConnectionResult
+} from '../../shared/config'
 
 /**
  * 规整 Base URL，自动去除末尾的 /chat/completions 与多余斜杠
  */
-const normalizeBaseUrl = (url: string): string => {
+export const normalizeBaseUrl = (url: string): string => {
   return url.trim().replace(/\/chat\/completions\/?$/, '').replace(/\/$/, '')
 }
 
 /**
- * 默认预设模型列表
+ * 默认内置的预设厂商列表
  */
-const DEFAULT_MODEL_OPTIONS: ModelOptionItem[] = [
+export const DEFAULT_PROVIDERS: ProviderItem[] = [
   {
-    value: 'step-3.5-flash',
-    code: 'A1',
-    profile: 'FAST RESPONSE'
+    id: 'deepseek',
+    name: 'DeepSeek 官方',
+    providerType: 'openai-compatible',
+    baseUrl: 'https://api.deepseek.com/v1',
+    apiKey: '',
+    enabled: true,
+    models: [
+      { id: 'deepseek-chat', label: 'DeepSeek-V3 对话模型' },
+      { id: 'deepseek-reasoner', label: 'DeepSeek-R1 深度推理', enableThinking: true }
+    ],
+    defaultModel: 'deepseek-chat'
   },
   {
-    value: 'gpt-4o-mini',
-    code: 'B2',
-    profile: 'BALANCED MODE'
+    id: 'cline',
+    name: 'ClinePass',
+    providerType: 'openai-compatible',
+    baseUrl: 'https://api.cline.bot/api/v1',
+    apiKey: '',
+    enabled: true,
+    models: [
+      { id: 'cline-pass/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' },
+      { id: 'cline-pass/qwen3.7-max', label: 'Qwen 3.7 Max' },
+      { id: 'cline-pass/muse-spark-1.3-contributor', label: 'Muse Spark 1.3' }
+    ],
+    defaultModel: 'cline-pass/deepseek-v4.1-flash'
   },
   {
-    value: 'claude-3.5-haiku',
-    code: 'C3',
-    profile: 'LOW COST'
+    id: 'qwen',
+    name: '通义千问',
+    providerType: 'openai-compatible',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    apiKey: '',
+    enabled: false,
+    models: [
+      { id: 'qwen-plus', label: 'Qwen Plus 平衡版' },
+      { id: 'qwen-max', label: 'Qwen Max 旗舰版' }
+    ],
+    defaultModel: 'qwen-plus'
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI 官方',
+    providerType: 'openai-compatible',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: '',
+    enabled: false,
+    models: [
+      { id: 'gpt-4o-mini', label: 'GPT-4o Mini 极速' },
+      { id: 'gpt-4o', label: 'GPT-4o 旗舰' }
+    ],
+    defaultModel: 'gpt-4o-mini'
   }
 ]
 
@@ -44,66 +88,106 @@ const getConfigFilePath = (): string => {
 }
 
 /**
- * 从环境变量读取初值作为兜底配置
+ * 清洗并规整厂商列表数据，并对老版本配置进行平滑无损迁移
  */
-const getDefaultConfigFromEnv = (): LLMConfig => {
-  const envProvider = process.env.TRANSLATE_PROVIDER
-  const provider =
-    envProvider === 'openai-compatible' || envProvider === 'mock' ? envProvider : 'mock'
-  const apiKey = process.env.LLM_API_KEY ?? ''
-  const baseUrl = process.env.LLM_BASE_URL ?? ''
-  const model = process.env.LLM_MODEL ?? 'step-3.5-flash'
+const sanitizeProviders = (
+  rawProviders: unknown,
+  legacyConfig?: Partial<LLMConfig>
+): ProviderItem[] => {
+  let list: ProviderItem[] = []
 
-  return {
-    provider,
-    apiKey,
-    baseUrl,
-    model,
-    enableThinking: false,
-    modelOptions: DEFAULT_MODEL_OPTIONS
+  if (Array.isArray(rawProviders) && rawProviders.length > 0) {
+    list = rawProviders
+      .map((item): ProviderItem | null => {
+        if (!item || typeof item !== 'object') return null
+        const id =
+          typeof item.id === 'string' && item.id.trim() ? item.id.trim() : `p_${Date.now()}`
+        const name =
+          typeof item.name === 'string' && item.name.trim() ? item.name.trim() : '未命名服务商'
+        const baseUrl = typeof item.baseUrl === 'string' ? normalizeBaseUrl(item.baseUrl) : ''
+        const apiKey = typeof item.apiKey === 'string' ? item.apiKey.trim() : ''
+        const enabled = typeof item.enabled === 'boolean' ? item.enabled : true
+        const defaultModel =
+          typeof item.defaultModel === 'string' ? item.defaultModel.trim() : undefined
+        const models: ProviderModelItem[] = Array.isArray(item.models)
+          ? item.models
+              .map((m: unknown) => {
+                if (typeof m === 'string' && m.trim()) return { id: m.trim() }
+                if (m && typeof m === 'object' && typeof (m as { id?: string }).id === 'string') {
+                  const obj = m as { id: string; label?: string; enableThinking?: boolean }
+                  return {
+                    id: obj.id.trim(),
+                    label: typeof obj.label === 'string' ? obj.label.trim() : undefined,
+                    enableThinking:
+                      typeof obj.enableThinking === 'boolean' ? obj.enableThinking : undefined
+                  }
+                }
+                return null
+              })
+              .filter((m): m is ProviderModelItem => m !== null)
+          : []
+
+        return {
+          id,
+          name,
+          providerType: 'openai-compatible',
+          baseUrl,
+          apiKey,
+          enabled,
+          models,
+          defaultModel
+        }
+      })
+      .filter((item): item is ProviderItem => item !== null)
   }
-}
 
-/**
- * 清洗并规整模型通道列表数据
- */
-const sanitizeModelOptions = (rawList: unknown): ModelOptionItem[] => {
-  if (!Array.isArray(rawList) || rawList.length === 0) return DEFAULT_MODEL_OPTIONS
-  const sanitized = rawList
-    .map((item, idx) => {
-      if (!item || typeof item !== 'object') return null
-      const value = typeof item.value === 'string' ? item.value.trim() : ''
-      if (!value) return null
-      const code = typeof item.code === 'string' && item.code ? item.code.trim() : `U${idx + 1}`
-      const profile = typeof item.profile === 'string' && item.profile ? item.profile.trim() : 'CUSTOM'
-      const baseUrl =
-        typeof item.baseUrl === 'string' && item.baseUrl.trim()
-          ? normalizeBaseUrl(item.baseUrl)
-          : undefined
-      const apiKey = typeof item.apiKey === 'string' && item.apiKey.trim() ? item.apiKey.trim() : undefined
-      const provider =
-        item.provider === 'openai-compatible' || item.provider === 'mock' ? item.provider : undefined
-      const enableThinking = typeof item.enableThinking === 'boolean' ? item.enableThinking : undefined
+  // 若无有效配置，使用默认厂商模板
+  if (list.length === 0) {
+    list = JSON.parse(JSON.stringify(DEFAULT_PROVIDERS))
+  }
 
-      const option: ModelOptionItem = {
-        value,
-        code,
-        profile,
-        ...(baseUrl ? { baseUrl } : {}),
-        ...(apiKey ? { apiKey } : {}),
-        ...(provider ? { provider } : {}),
-        ...(typeof enableThinking === 'boolean' ? { enableThinking } : {})
+  // 确保内置的 DeepSeek 和 Cline 至少存在于列表中
+  for (const preset of DEFAULT_PROVIDERS) {
+    if (!list.some((p) => p.id === preset.id)) {
+      list.push(JSON.parse(JSON.stringify(preset)))
+    }
+  }
+
+  // 若存在老配置，提取老密钥自动归位至相应厂商
+  if (legacyConfig) {
+    const legacyUrl = (legacyConfig.baseUrl || '').toLowerCase()
+    const legacyKey = (legacyConfig.apiKey || '').trim()
+
+    if (legacyKey) {
+      if (legacyUrl.includes('cline.bot')) {
+        const clineP = list.find((p) => p.id === 'cline')
+        if (clineP && !clineP.apiKey) clineP.apiKey = legacyKey
+      } else if (legacyUrl.includes('deepseek.com')) {
+        const dsP = list.find((p) => p.id === 'deepseek')
+        if (dsP && !dsP.apiKey) dsP.apiKey = legacyKey
       }
-      return option
-    })
-    .filter((item): item is ModelOptionItem => item !== null)
+    }
 
-  return sanitized.length > 0 ? sanitized : DEFAULT_MODEL_OPTIONS
+    if (Array.isArray(legacyConfig.modelOptions)) {
+      for (const opt of legacyConfig.modelOptions) {
+        if (!opt || !opt.apiKey) continue
+        const optUrl = (opt.baseUrl || '').toLowerCase()
+        if (optUrl.includes('cline.bot')) {
+          const clineP = list.find((p) => p.id === 'cline')
+          if (clineP && !clineP.apiKey) clineP.apiKey = opt.apiKey.trim()
+        } else if (optUrl.includes('deepseek.com')) {
+          const dsP = list.find((p) => p.id === 'deepseek')
+          if (dsP && !dsP.apiKey) dsP.apiKey = opt.apiKey.trim()
+        }
+      }
+    }
+  }
+
+  return list
 }
 
 /**
  * 读取当前大模型配置
- * 优先读取本地持久化文件，不存在时使用环境变量初值
  */
 export const getLLMConfig = (): LLMConfig => {
   if (cachedConfig) {
@@ -117,21 +201,49 @@ export const getLLMConfig = (): LLMConfig => {
       const rawContent = readFileSync(filePath, 'utf-8')
       const parsed = JSON.parse(rawContent) as Partial<LLMConfig>
 
+      const providers = sanitizeProviders(parsed.providers, parsed)
+      const firstEnabled = providers.find((p) => p.enabled) || providers[0]
+
+      const activeProviderId =
+        typeof parsed.activeProviderId === 'string' &&
+        providers.some((p) => p.id === parsed.activeProviderId)
+          ? parsed.activeProviderId
+          : firstEnabled.id
+
+      const currentProvider = providers.find((p) => p.id === activeProviderId) || firstEnabled
+      const activeModelId =
+        typeof parsed.activeModelId === 'string' && parsed.activeModelId
+          ? parsed.activeModelId
+          : currentProvider.defaultModel || currentProvider.models[0]?.id || 'deepseek-chat'
+
       cachedConfig = {
-        provider: parsed.provider === 'openai-compatible' ? 'openai-compatible' : 'mock',
-        baseUrl: typeof parsed.baseUrl === 'string' ? parsed.baseUrl : '',
-        apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
-        model: typeof parsed.model === 'string' && parsed.model ? parsed.model : 'step-3.5-flash',
-        enableThinking: Boolean(parsed.enableThinking),
-        modelOptions: sanitizeModelOptions(parsed.modelOptions)
+        activeProviderId,
+        activeModelId,
+        providers,
+        // 兼容字段
+        provider: 'openai-compatible',
+        baseUrl: currentProvider.baseUrl,
+        apiKey: currentProvider.apiKey,
+        model: activeModelId,
+        enableThinking: Boolean(parsed.enableThinking)
       }
       return cachedConfig
     }
   } catch (error) {
-    console.error('[main] 读取本地配置文件失败，回退到默认环境变量配置', error)
+    console.error('[main] 读取本地配置文件失败，使用默认配置', error)
   }
 
-  cachedConfig = getDefaultConfigFromEnv()
+  const defaultProviders = JSON.parse(JSON.stringify(DEFAULT_PROVIDERS)) as ProviderItem[]
+  cachedConfig = {
+    activeProviderId: 'deepseek',
+    activeModelId: 'deepseek-chat',
+    providers: defaultProviders,
+    provider: 'openai-compatible',
+    baseUrl: defaultProviders[0].baseUrl,
+    apiKey: '',
+    model: 'deepseek-chat',
+    enableThinking: false
+  }
   return cachedConfig
 }
 
@@ -143,25 +255,37 @@ export const saveLLMConfig = async (
 ): Promise<{ ok: boolean; error?: string }> => {
   try {
     const filePath = getConfigFilePath()
+    const sanitizedProviders = sanitizeProviders(newConfig.providers)
+    const activeProviderId =
+      newConfig.activeProviderId || sanitizedProviders.find((p) => p.enabled)?.id || 'deepseek'
+    const activeProvider =
+      sanitizedProviders.find((p) => p.id === activeProviderId) || sanitizedProviders[0]
+
+    const activeModelId =
+      newConfig.activeModelId ||
+      activeProvider.defaultModel ||
+      activeProvider.models[0]?.id ||
+      'deepseek-chat'
+
     const sanitizedConfig: LLMConfig = {
-      provider: newConfig.provider === 'openai-compatible' ? 'openai-compatible' : 'mock',
-      baseUrl: normalizeBaseUrl(newConfig.baseUrl ?? ''),
-      apiKey: (newConfig.apiKey ?? '').trim(),
-      model: (newConfig.model ?? '').trim() || 'step-3.5-flash',
-      enableThinking: Boolean(newConfig.enableThinking),
-      modelOptions: sanitizeModelOptions(newConfig.modelOptions)
+      activeProviderId,
+      activeModelId,
+      providers: sanitizedProviders,
+      // 兼容字段
+      provider: 'openai-compatible',
+      baseUrl: activeProvider.baseUrl,
+      apiKey: activeProvider.apiKey,
+      model: activeModelId,
+      enableThinking: Boolean(newConfig.enableThinking)
     }
 
     writeFileSync(filePath, JSON.stringify(sanitizedConfig, null, 2), 'utf-8')
     cachedConfig = sanitizedConfig
 
-    console.log('[main] 大模型配置保存成功', {
-      provider: sanitizedConfig.provider,
-      baseUrl: sanitizedConfig.baseUrl,
-      hasApiKey: Boolean(sanitizedConfig.apiKey),
-      model: sanitizedConfig.model,
-      enableThinking: sanitizedConfig.enableThinking,
-      modelCount: sanitizedConfig.modelOptions.length
+    console.log('[main] 厂商隔离配置保存成功', {
+      activeProviderId: sanitizedConfig.activeProviderId,
+      activeModelId: sanitizedConfig.activeModelId,
+      providerCount: sanitizedConfig.providers.length
     })
 
     return { ok: true }
@@ -175,57 +299,72 @@ export const saveLLMConfig = async (
 }
 
 /**
- * 测试大模型配置连通性
+ * 测试大模型配置连通性（支持传入单个 ProviderItem 或完整 LLMConfig）
  */
-export const testLLMConnection = async (config: LLMConfig): Promise<TestConnectionResult> => {
+export const testLLMConnection = async (
+  target: LLMConfig | ProviderItem
+): Promise<TestConnectionResult> => {
   const startTime = Date.now()
 
-  // 模拟模式直接返回成功
-  if (config.provider === 'mock') {
-    return {
-      ok: true,
-      message: '模拟模式就绪',
-      latencyMs: 12
+  // 提取待测试的 baseUrl, apiKey 与 model
+  let baseUrl = ''
+  let apiKey = ''
+  let model = ''
+
+  if ('baseUrl' in target && 'apiKey' in target && typeof target.baseUrl === 'string') {
+    baseUrl = normalizeBaseUrl(target.baseUrl)
+    apiKey = target.apiKey.trim()
+    if ('models' in target && Array.isArray(target.models) && target.models.length > 0) {
+      model = target.defaultModel || target.models[0].id
+    } else if ('model' in target && typeof target.model === 'string') {
+      model = target.model.trim()
+    }
+  } else if ('providers' in target && Array.isArray(target.providers)) {
+    const activeP =
+      target.providers.find((p) => p.id === target.activeProviderId) || target.providers[0]
+    if (activeP) {
+      baseUrl = normalizeBaseUrl(activeP.baseUrl)
+      apiKey = activeP.apiKey.trim()
+      model = target.activeModelId || activeP.defaultModel || activeP.models[0]?.id || 'gpt-4o-mini'
     }
   }
 
   // 校验参数完整性
-  if (!config.baseUrl?.trim()) {
+  if (!baseUrl) {
     return {
       ok: false,
       message: '缺少服务地址 (Base URL)'
     }
   }
 
-  if (!config.apiKey?.trim()) {
+  if (!apiKey) {
     return {
       ok: false,
-      message: '缺少密钥 (API Key)'
+      message: '缺少访问密钥 (API Key)'
     }
   }
 
-  const endpoint = `${normalizeBaseUrl(config.baseUrl)}/chat/completions`
+  const endpoint = `${baseUrl}/chat/completions`
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 10000)
 
-  const targetModel = config.model.trim() || 'gpt-4o-mini'
-  console.log('[main] testLLMConnection 发起测试:', {
+  const testModel = model || 'gpt-4o-mini'
+  console.log('[main] testLLMConnection 独立测试厂商:', {
     endpoint,
-    model: targetModel,
-    hasApiKey: Boolean(config.apiKey)
+    testModel,
+    hasApiKey: Boolean(apiKey)
   })
 
   try {
-    // 使用 Electron 的 net.fetch，自动继承系统代理设置；请求体与 Postman 保持纯净一致（不传 max_tokens）
     const response = await net.fetch(endpoint, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${config.apiKey.trim()}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'User-Agent': 'screenshot-translator/1.0'
       },
       body: JSON.stringify({
-        model: targetModel,
+        model: testModel,
         messages: [{ role: 'user', content: 'Hello' }]
       }),
       signal: controller.signal
@@ -244,20 +383,27 @@ export const testLLMConnection = async (config: LLMConfig): Promise<TestConnecti
     }
 
     const rawResponseText = await response.text()
-    console.error('[main] testLLMConnection 请求失败，状态码:', response.status, '返回内容:', rawResponseText)
+    console.error(
+      '[main] testLLMConnection 测试未通过，状态码:',
+      response.status,
+      '内容:',
+      rawResponseText
+    )
 
     let errorDetail = ''
     try {
       const errorJson = JSON.parse(rawResponseText) as {
-        error?: { message?: string }
+        error?: { message?: string } | string
         message?: string
         detail?: string
       }
-      errorDetail =
-        errorJson.error?.message ??
-        errorJson.message ??
-        errorJson.detail ??
-        ''
+      if (typeof errorJson.error === 'string') {
+        errorDetail = errorJson.error
+      } else if (errorJson.error && typeof errorJson.error === 'object') {
+        errorDetail = errorJson.error.message || ''
+      } else {
+        errorDetail = errorJson.message || errorJson.detail || ''
+      }
     } catch {
       errorDetail = rawResponseText.slice(0, 150)
     }
@@ -289,7 +435,7 @@ export const testLLMConnection = async (config: LLMConfig): Promise<TestConnecti
     }
   } catch (error) {
     clearTimeout(timeoutId)
-    console.error('[main] testLLMConnection 捕获底层网络异常:', error)
+    console.error('[main] testLLMConnection 底层网络异常:', error)
 
     if (error instanceof Error && error.name === 'AbortError') {
       return {
@@ -303,7 +449,9 @@ export const testLLMConnection = async (config: LLMConfig): Promise<TestConnecti
 
     return {
       ok: false,
-      message: error instanceof Error ? `连接异常: ${error.message}${causeText}` : '无法连接到模型服务'
+      message:
+        error instanceof Error ? `连接异常: ${error.message}${causeText}` : '无法连接到模型服务'
     }
   }
 }
+

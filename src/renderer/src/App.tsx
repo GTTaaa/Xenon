@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
-import type { LLMConfig, ModelOptionItem } from '../../shared/config'
+import type { LLMConfig, ModelOptionItem, ProviderItem } from '../../shared/config'
 import {
   detectLanguage,
   getLanguageInfo,
@@ -98,21 +98,41 @@ function App(): React.JSX.Element {
     const saved = localStorage.getItem('enableThinking')
     return saved === 'true'
   })
+  const [providers, setProviders] = useState<ProviderItem[]>([])
+  const [selectedProviderId, setSelectedProviderId] = useState<string>(() => {
+    return localStorage.getItem('selectedProviderId') || 'deepseek'
+  })
   const [selectedModel, setSelectedModel] = useState(() => {
     const savedModel = localStorage.getItem('selectedModel')
-    if (!savedModel) return DEFAULT_MODEL
-
-    const isValidModel = INITIAL_MODEL_OPTIONS.some((option) => option.value === savedModel)
-    if (!isValidModel) {
-      localStorage.removeItem('selectedModel')
-      return DEFAULT_MODEL
-    }
-
-    return savedModel
+    if (savedModel) return savedModel
+    return 'deepseek-chat'
   })
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const modelSelectorRef = useRef<HTMLDivElement | null>(null)
   const engineDeckRef = useRef<HTMLDivElement | null>(null)
+
+  // 启用的服务商列表
+  const enabledProviders = useMemo(() => {
+    return providers.filter((p) => p.enabled)
+  }, [providers])
+
+  // 当前生效的服务商对象
+  const activeProvider = useMemo(() => {
+    return (
+      enabledProviders.find((p) => p.id === selectedProviderId) ||
+      providers.find((p) => p.id === selectedProviderId) ||
+      enabledProviders[0] ||
+      providers[0]
+    )
+  }, [enabledProviders, providers, selectedProviderId])
+
+  // 可选模型总单元数
+  const totalEngineUnits = useMemo(() => {
+    if (enabledProviders.length > 0) {
+      return enabledProviders.reduce((acc, p) => acc + p.models.length, 0)
+    }
+    return modelOptions.length
+  }, [enabledProviders, modelOptions])
 
   // 用户指定的源语言（'auto' 表示自动识别）
   const [sourceLanguage, setSourceLanguage] = useState<SupportedLanguage>(() => {
@@ -243,20 +263,36 @@ function App(): React.JSX.Element {
     }
   }, [isSourceLangMenuOpen, isTargetLangMenuOpen, isModelMenuOpen])
 
-  // 初始加载后端持久化的大模型配置与模型列表
+  // 初始加载后端持久化的大模型配置与多服务商列表
   useEffect(() => {
     window.api
       .getConfig()
       .then((cfg) => {
-        if (Array.isArray(cfg.modelOptions) && cfg.modelOptions.length > 0) {
+        if (Array.isArray(cfg.providers) && cfg.providers.length > 0) {
+          setProviders(cfg.providers)
+          const savedProvId = localStorage.getItem('selectedProviderId')
+          const prov =
+            (savedProvId && cfg.providers.find((p) => p.id === savedProvId && p.enabled)) ||
+            (cfg.activeProviderId &&
+              cfg.providers.find((p) => p.id === cfg.activeProviderId && p.enabled)) ||
+            cfg.providers.find((p) => p.enabled) ||
+            cfg.providers[0]
+
+          setSelectedProviderId(prov.id)
+          localStorage.setItem('selectedProviderId', prov.id)
+
+          const savedModel = localStorage.getItem('selectedModel')
+          const hasSavedModel = prov.models.some((m) => m.id === savedModel)
+          const finalModel = hasSavedModel
+            ? (savedModel as string)
+            : cfg.activeModelId || prov.defaultModel || prov.models[0]?.id || 'deepseek-chat'
+
+          setSelectedModel(finalModel)
+          localStorage.setItem('selectedModel', finalModel)
+        } else if (Array.isArray(cfg.modelOptions) && cfg.modelOptions.length > 0) {
           setModelOptions(cfg.modelOptions)
         }
-        const savedModel = localStorage.getItem('selectedModel')
-        if (savedModel && cfg.modelOptions?.some((opt) => opt.value === savedModel)) {
-          setSelectedModel(savedModel)
-        } else if (cfg.model) {
-          setSelectedModel(cfg.model)
-        }
+
         if (
           localStorage.getItem('enableThinking') === null &&
           typeof cfg.enableThinking === 'boolean'
@@ -267,6 +303,27 @@ function App(): React.JSX.Element {
       .catch((err) => {
         console.error('[renderer] 初始化加载配置失败', err)
       })
+  }, [])
+
+  // 监听偏好设置保存更新
+  useEffect(() => {
+    return window.api.onConfigUpdated((newCfg) => {
+      if (Array.isArray(newCfg.providers) && newCfg.providers.length > 0) {
+        setProviders(newCfg.providers)
+        const prov =
+          newCfg.providers.find((p) => p.id === newCfg.activeProviderId && p.enabled) ||
+          newCfg.providers.find((p) => p.enabled) ||
+          newCfg.providers[0]
+
+        setSelectedProviderId(prov.id)
+        localStorage.setItem('selectedProviderId', prov.id)
+
+        const finalModel =
+          newCfg.activeModelId || prov.defaultModel || prov.models[0]?.id || 'deepseek-chat'
+        setSelectedModel(finalModel)
+        localStorage.setItem('selectedModel', finalModel)
+      }
+    })
   }, [])
 
   const resetTranslationState = (): void => {
@@ -424,6 +481,7 @@ function App(): React.JSX.Element {
         sourceLanguage: effectiveSourcePrompt,
         targetLanguage: effectiveTargetPrompt,
         options: {
+          providerId: selectedProviderId,
           model: selectedModel,
           enableThinking
         }
@@ -447,6 +505,7 @@ function App(): React.JSX.Element {
       window.clearTimeout(timer)
     }
   }, [
+    selectedProviderId,
     selectedModel,
     sourceText,
     enableThinking,
@@ -493,9 +552,20 @@ function App(): React.JSX.Element {
     markTranslationPending()
   }
 
-  const handleModelSelect = (nextModel: string): void => {
+  const handleModelSelect = (providerId: string, nextModel: string): void => {
+    setSelectedProviderId(providerId)
     setSelectedModel(nextModel)
+    localStorage.setItem('selectedProviderId', providerId)
+    localStorage.setItem('selectedModel', nextModel)
     setIsModelMenuOpen(false)
+
+    // 若该模型有默认思考配置，自动调整
+    const prov = providers.find((p) => p.id === providerId)
+    const m = prov?.models.find((item) => item.id === nextModel)
+    if (typeof m?.enableThinking === 'boolean') {
+      setEnableThinking(m.enableThinking)
+      localStorage.setItem('enableThinking', String(m.enableThinking))
+    }
 
     if (sourceText.trim()) {
       markTranslationPending()
@@ -870,7 +940,12 @@ function App(): React.JSX.Element {
                     type="button"
                     aria-haspopup="listbox"
                     aria-expanded={isModelMenuOpen}
-                    aria-label={`当前模型: ${selectedModel}，点击在下方屏幕展开选择`}
+                    aria-label={`当前服务商: ${activeProvider?.name || '默认'}，模型: ${selectedModel}，点击在下方屏幕展开选择`}
+                    title={
+                      activeProvider
+                        ? `服务商: ${activeProvider.name}\n模型: ${selectedModel}\n地址: ${activeProvider.baseUrl}`
+                        : selectedModel
+                    }
                     onClick={() => {
                       setIsModelMenuOpen((open) => !open)
                       setIsSourceLangMenuOpen(false)
@@ -946,7 +1021,7 @@ function App(): React.JSX.Element {
                     <span className="terminal-engine-deck-dot" aria-hidden="true" />
                     <span>SELECT ENGINE</span>
                     <span className="terminal-engine-deck-count">
-                      {modelOptions.length.toString().padStart(2, '0')} UNITS
+                      {totalEngineUnits.toString().padStart(2, '0')} UNITS
                     </span>
                   </div>
                   <button
@@ -960,37 +1035,83 @@ function App(): React.JSX.Element {
                   </button>
                 </div>
                 <div className="terminal-engine-deck-list" role="listbox" aria-label="可用引擎列表">
-                  {modelOptions.map((option) => {
-                    const isSelected = option.value === selectedModel
+                  {enabledProviders.length > 0 ? (
+                    enabledProviders.map((prov) => {
+                      const host = prov.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
 
-                    return (
-                      <button
-                        key={option.value}
-                        className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
-                        type="button"
-                        role="option"
-                        aria-selected={isSelected}
-                        onClick={() => handleModelSelect(option.value)}
-                      >
-                        <span className="terminal-engine-code">{option.code}</span>
-                        <span className="terminal-engine-body">
-                          <span className="terminal-engine-name">{option.value}</span>
-                          <span className="terminal-engine-profile">
-                            {option.profile && option.profile !== 'CUSTOM' && option.profile !== 'CUSTOM MODEL'
-                              ? option.profile
-                              : option.baseUrl
-                                ? option.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
-                                : option.profile}
+                      return (
+                        <div key={prov.id} className="terminal-engine-provider-group">
+                          <div className="terminal-engine-group-title">
+                            <span className="terminal-engine-group-badge">{prov.name.toUpperCase()}</span>
+                            <span className="terminal-engine-group-sub">{host}</span>
+                          </div>
+                          {prov.models.map((item, idx) => {
+                            const isSelected =
+                              prov.id === selectedProviderId && item.id === selectedModel
+                            const modelCode = (idx + 1).toString().padStart(2, '0')
+
+                            return (
+                              <button
+                                key={`${prov.id}-${item.id}`}
+                                className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
+                                type="button"
+                                role="option"
+                                aria-selected={isSelected}
+                                onClick={() => handleModelSelect(prov.id, item.id)}
+                              >
+                                <span className="terminal-engine-code">{modelCode}</span>
+                                <span className="terminal-engine-body">
+                                  <span className="terminal-engine-name">{item.id}</span>
+                                  <span className="terminal-engine-profile">
+                                    {item.label || prov.name}
+                                  </span>
+                                </span>
+                                {isSelected ? (
+                                  <span className="terminal-engine-active-tag">ACTIVE</span>
+                                ) : (
+                                  <span className="terminal-engine-dot-standby" aria-hidden="true" />
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )
+                    })
+                  ) : (
+                    modelOptions.map((option) => {
+                      const isSelected = option.value === selectedModel
+
+                      return (
+                        <button
+                          key={option.value}
+                          className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => handleModelSelect('deepseek', option.value)}
+                        >
+                          <span className="terminal-engine-code">{option.code}</span>
+                          <span className="terminal-engine-body">
+                            <span className="terminal-engine-name">{option.value}</span>
+                            <span className="terminal-engine-profile">
+                              {option.profile &&
+                              option.profile !== 'CUSTOM' &&
+                              option.profile !== 'CUSTOM MODEL'
+                                ? option.profile
+                                : option.baseUrl
+                                  ? option.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
+                                  : option.profile}
+                            </span>
                           </span>
-                        </span>
-                        {isSelected ? (
-                          <span className="terminal-engine-active-tag">ACTIVE</span>
-                        ) : (
-                          <span className="terminal-engine-dot-standby" aria-hidden="true" />
-                        )}
-                      </button>
-                    )
-                  })}
+                          {isSelected ? (
+                            <span className="terminal-engine-active-tag">ACTIVE</span>
+                          ) : (
+                            <span className="terminal-engine-dot-standby" aria-hidden="true" />
+                          )}
+                        </button>
+                      )
+                    })
+                  )}
                 </div>
                 <div className="terminal-engine-deck-footer">
                   <button

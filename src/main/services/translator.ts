@@ -186,42 +186,90 @@ const translateWithOpenAICompatible = async (
 export const translateText = async (request: TranslateRequest): Promise<TranslateResponse> => {
   try {
     const config = getLLMConfig()
-    const targetModel = request.options?.model || config.model
+    const targetModel =
+      request.options?.model || config.activeModelId || config.model || 'deepseek-chat'
+    const targetProviderId = request.options?.providerId
 
-    // 从模型池中寻找当前模型是否绑定了专属通道配置
-    const matchedChannel = config.modelOptions?.find((item) => item.value === targetModel)
+    // 智能精确定位对应的独立服务商 Provider
+    let targetProvider = config.providers?.find((p) => p.id === targetProviderId)
 
-    const effectiveProvider = matchedChannel?.provider || config.provider
-    const effectiveBaseUrl = (matchedChannel?.baseUrl || config.baseUrl || '').trim()
-    const effectiveApiKey = (matchedChannel?.apiKey || config.apiKey || '').trim()
+    if (!targetProvider && targetModel) {
+      // 通过模型 ID 反向匹配其所属厂商
+      targetProvider = config.providers?.find((p) => p.models?.some((m) => m.id === targetModel))
+    }
+
+    if (!targetProvider && targetModel) {
+      if (targetModel.startsWith('cline-pass/') || targetModel.includes('cline')) {
+        targetProvider = config.providers?.find((p) => p.id === 'cline')
+      } else if (targetModel.includes('deepseek')) {
+        targetProvider = config.providers?.find((p) => p.id === 'deepseek')
+      }
+    }
+
+    // 兜底使用当前选中的厂商或第一个启用的厂商
+    if (!targetProvider) {
+      targetProvider =
+        config.providers?.find((p) => p.id === config.activeProviderId) ||
+        config.providers?.find((p) => p.enabled) ||
+        config.providers?.[0]
+    }
+
+    const effectiveBaseUrl = (targetProvider?.baseUrl || config.baseUrl || '').trim()
+    const effectiveApiKey = (targetProvider?.apiKey || config.apiKey || '').trim()
+    const effectiveProviderType =
+      targetProvider?.providerType || config.provider || 'openai-compatible'
+
+    // 检查模型本身是否配置了默认思考开关
+    const matchedModelObj = targetProvider?.models?.find((m) => m.id === targetModel)
     const effectiveThinking =
       request.options?.enableThinking ??
-      matchedChannel?.enableThinking ??
+      matchedModelObj?.enableThinking ??
       config.enableThinking ??
       false
 
-    console.log('[main] translateText 路由分发:', {
+    console.log('[main] translateText 厂商隔离路由分发:', {
+      providerName: targetProvider?.name ?? '未知服务商',
+      providerId: targetProvider?.id,
       targetModel,
-      channel: matchedChannel?.profile ?? '默认配置',
-      effectiveBaseUrl,
-      hasCustomKey: Boolean(matchedChannel?.apiKey),
+      endpoint: effectiveBaseUrl,
+      hasApiKey: Boolean(effectiveApiKey),
       enableThinking: effectiveThinking
     })
 
+    if (!effectiveApiKey) {
+      return {
+        ok: false,
+        error: {
+          code: 'CONFIG_MISSING_API_KEY',
+          message: `未配置服务商【${targetProvider?.name || '当前服务商'}】的 API Key，请在偏好设置中填写`
+        }
+      }
+    }
+
+    if (!effectiveBaseUrl) {
+      return {
+        ok: false,
+        error: {
+          code: 'CONFIG_MISSING_BASE_URL',
+          message: `服务商【${targetProvider?.name || '当前服务商'}】缺少 Base URL，请在偏好设置中填写`
+        }
+      }
+    }
+
     const effectiveConfig: LLMConfig = {
       ...config,
-      provider: effectiveProvider,
+      provider: effectiveProviderType,
       baseUrl: effectiveBaseUrl,
       apiKey: effectiveApiKey,
       model: targetModel,
       enableThinking: effectiveThinking
     }
 
-    if (effectiveProvider === 'mock') {
+    if (effectiveProviderType === 'mock') {
       return await mockTranslate(request)
     }
 
-    if (effectiveProvider === 'openai-compatible') {
+    if (effectiveProviderType === 'openai-compatible') {
       return await translateWithOpenAICompatible(request, effectiveConfig)
     }
 

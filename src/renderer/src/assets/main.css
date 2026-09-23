@@ -2526,8 +2526,93 @@ button:focus-visible {
   transition: transform 160ms ease;
 }
 
-.pref-switch-on .pref-switch-thumb {
-  transform: translateX(16px);
+/* 厂商选项卡栏 */
+.pref-provider-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.pref-provider-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555047;
+  background: #dbd3c5;
+  border: 1px solid #bfb6a6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 120ms ease;
+  white-space: nowrap;
+}
+
+.pref-provider-tab:hover {
+  background: #d4caa8;
+  color: #2e3644;
+}
+
+.pref-provider-tab-active {
+  background: #f7f3ec;
+  color: #1f2530;
+  border-color: #e06c3a;
+  box-shadow: 0 1px 3px rgba(224, 108, 58, 0.15);
+}
+
+.pref-provider-tab-disabled {
+  opacity: 0.65;
+}
+
+.pref-provider-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.dot-enabled {
+  background: #27ae60;
+}
+
+.dot-disabled {
+  background: #9aa2ae;
+}
+
+.pref-switch-inline {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* 引擎选择面板分组样式 */
+.terminal-engine-provider-group {
+  margin-bottom: 8px;
+}
+
+.terminal-engine-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: #8c9ba5;
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 2px solid #e06c3a;
+  margin-bottom: 4px;
+}
+
+.terminal-engine-group-badge {
+  font-weight: 700;
+  color: #d1d9e0;
+}
+
+.terminal-engine-group-sub {
+  font-size: 9px;
+  color: #6b7785;
 }
 
 /* 快捷模型库池容器 */
