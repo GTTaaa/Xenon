@@ -2377,29 +2377,30 @@ button:focus-visible {
 .pref-preset-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  padding: 1px 2px;
 }
 
 .pref-preset-tip {
-  font-size: 11px;
+  font-size: 10.5px;
   color: #7b8699;
 }
 
 .pref-preset-chips {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
 .pref-preset-chip {
-  padding: 3px 9px;
-  font-size: 11px;
+  padding: 1px 8px;
+  font-size: 10.5px;
   font-weight: 600;
-  color: #3b4455;
-  background: #e6e0d6;
-  border: 1px solid #c8c0b2;
-  border-radius: 4px;
+  color: #465162;
+  background: #e2dbce;
+  border: 1px solid #bfb7a7;
+  border-radius: 3px;
   cursor: pointer;
   transition: all 120ms ease;
 }
@@ -2538,19 +2539,35 @@ button:focus-visible {
   transition: transform 160ms ease;
 }
 
-/* 厂商选项卡栏 */
+/* 服务商顶部切换工具条（扁平无边框集成，释放纵向空间） */
+.pref-provider-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.pref-provider-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .pref-provider-tabs {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .pref-provider-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 5px 11px;
   font-family: 'Space Mono', monospace;
   font-size: 11px;
   font-weight: 600;
@@ -2569,7 +2586,7 @@ button:focus-visible {
 }
 
 .pref-provider-tab-active {
-  background: #f7f3ec;
+  background: #f4f0ea;
   color: #1f2530;
   border-color: #e06c3a;
   box-shadow: 0 1px 3px rgba(224, 108, 58, 0.15);
@@ -2583,6 +2600,48 @@ button:focus-visible {
   width: 6px;
   height: 6px;
   border-radius: 50%;
+}
+
+/* 新建服务商紧凑按钮 */
+.pref-btn-add-provider {
+  height: 26px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: #434d5c;
+  background: #eae3d5;
+  border: 1px dashed #aba08e;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 120ms ease;
+  flex-shrink: 0;
+}
+
+.pref-btn-add-provider:hover {
+  background: #dfd7c5;
+  border-color: #837662;
+  color: #1a202c;
+}
+
+.pref-btn-add-provider:active {
+  transform: translateY(1px);
+}
+
+/* 激活服务商主配置卡片 */
+.pref-provider-active-card {
+  padding: 12px 14px;
+  gap: 9px;
+}
+
+.pref-provider-active-card .pref-card-header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e3dcce;
+  margin-bottom: 2px;
 }
 
 .dot-enabled {
@@ -2637,61 +2696,109 @@ button:focus-visible {
 .pref-pills-wrap {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  max-height: 84px;
+  gap: 5px;
+  max-height: 104px;
   overflow-y: auto;
+  padding: 1px 0;
 }
 
 .pref-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
+  gap: 5px;
+  height: 23px;
+  padding: 0 5px 0 7px;
   font-family: 'Space Mono', monospace;
   font-size: 11px;
-  font-weight: 600;
-  color: #2e3644;
-  background: #e5ded4;
-  border: 1px solid #c4bcae;
-  border-radius: 4px;
+  font-weight: 500;
+  color: #3b4455;
+  background: #ebe5d9;
+  border: 1px solid #c8c0b1;
+  border-radius: 3px;
+  cursor: pointer;
+  user-select: none;
   transition: all 120ms ease;
+  box-sizing: border-box;
 }
 
 .pref-pill:hover {
-  background: #dbd3c7;
-  border-color: #a89f91;
+  background: #ded7c9;
+  border-color: #aba191;
+  color: #1a202c;
 }
 
 .pref-pill-active {
-  background: #d8cebe;
+  background: #fbf2eb;
   border-color: #e06c3a;
-  box-shadow: 0 0 0 1px #e06c3a;
+  color: #b94b1a;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(224, 108, 58, 0.12);
 }
 
+.pref-pill-active:hover {
+  background: #f7e6db;
+  border-color: #c95927;
+}
+
+/* 默认模型微徽章 (DEF) */
+.pref-pill-default-badge {
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  color: #c44f1c;
+  background: rgba(224, 108, 58, 0.15);
+  border: 1px solid rgba(224, 108, 58, 0.35);
+  padding: 0 3px;
+  height: 13px;
+  line-height: 11px;
+  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.pref-pill-name {
+  line-height: 1;
+}
+
+/* 精致矢量删除按钮 */
 .pref-pill-remove {
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  margin-left: 1px;
   background: none;
   border: none;
-  padding: 0 2px;
-  font-size: 11px;
-  color: #8a96a8;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #8c97a8;
   cursor: pointer;
+  transition: all 120ms ease;
   line-height: 1;
-  transition: color 120ms ease;
 }
 
 .pref-pill-remove:hover {
+  background: rgba(216, 92, 92, 0.15);
   color: #d85c5c;
+}
+
+.pref-pill-remove-icon {
+  display: block;
 }
 
 .pref-add-row {
   display: flex;
   gap: 8px;
   margin-top: 2px;
+  align-items: center;
 }
 
 .pref-add-input {
   flex: 1;
-  height: 30px;
+  height: 28px;
 }
 
 /* 底栏操作工具栏 */
@@ -2797,21 +2904,50 @@ button:focus-visible {
   cursor: not-allowed;
 }
 
+/* 测试按钮中微脉冲动画 */
+.pref-btn-testing-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pref-loading-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e06c3a;
+  box-shadow: 0 0 0 0 rgba(224, 108, 58, 0.7);
+  animation: prefPulse 1.2s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+@keyframes prefPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(224, 108, 58, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(224, 108, 58, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(224, 108, 58, 0);
+  }
+}
+
 /* 测试状态胶囊指示徽标 */
 .pref-test-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  line-height: 1.2;
-  padding: 4px 8px;
-  border-radius: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 3px;
   background: rgba(0, 0, 0, 0.04);
-  max-width: 250px;
+  max-width: 280px;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   flex-shrink: 1;
+  box-sizing: border-box;
 }
 
 .pref-test-status-text {
@@ -2829,8 +2965,8 @@ button:focus-visible {
 
 .pref-test-status-ok {
   color: #1e7e34;
-  border: 1px solid rgba(39, 174, 96, 0.25);
-  background: rgba(39, 174, 96, 0.08);
+  border: 1px solid rgba(39, 174, 96, 0.35);
+  background: rgba(39, 174, 96, 0.1);
 }
 
 .pref-test-status-ok .pref-status-dot {
@@ -2840,8 +2976,8 @@ button:focus-visible {
 
 .pref-test-status-fail {
   color: #a83232;
-  border: 1px solid rgba(216, 92, 92, 0.25);
-  background: rgba(216, 92, 92, 0.08);
+  border: 1px solid rgba(216, 92, 92, 0.35);
+  background: rgba(216, 92, 92, 0.1);
 }
 
 .pref-test-status-fail .pref-status-dot {
@@ -2924,7 +3060,7 @@ button:focus-visible {
   color: #1e2530;
 }
 
-/* 字段右侧操作链接组 */
+/* 字段右侧操作按键组 */
 .pref-field-actions {
   display: inline-flex;
   align-items: center;
@@ -2932,32 +3068,128 @@ button:focus-visible {
 }
 
 .pref-action-divider {
-  font-size: 10px;
-  color: #b5ac9d;
-  user-select: none;
+  display: none;
 }
 
-/* 自动拉取模型按钮 */
-.pref-btn-fetch {
-  background: #3f6aa6;
-  border: 1px solid #2e5285;
-  color: #ffffff;
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
+/* 统一表单字段右侧微型操作按键 */
+.pref-field-btn {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  border-radius: 3px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
   cursor: pointer;
+  user-select: none;
+  background: #f4efe6;
+  border: 1px solid #c9c1b3;
+  color: #4a5463;
+  transition: all 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pref-field-btn:hover:not(:disabled) {
+  background: #e7dfd1;
+  border-color: #aba08e;
+  color: #1e2530;
+}
+
+.pref-field-btn:active:not(:disabled) {
+  background: #ddd4c4;
+  transform: translateY(1px);
+}
+
+.pref-field-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: #d8cfc4;
+  background: #f2ece4;
+  color: #9c958a;
+  transform: none;
+}
+
+/* 激活态（例如显示密码明文时） */
+.pref-field-btn-active {
+  background: #e2dbce;
+  border-color: #9f9482;
+  color: #1a202c;
+  font-weight: 600;
+}
+
+/* 主色强调款：自动获取模型列表等，复古工控暖橙 */
+.pref-field-btn-primary {
+  background: #fdf2eb;
+  border-color: #e06c3a;
+  color: #c44f1c;
+  font-weight: 600;
+}
+
+.pref-field-btn-primary:hover:not(:disabled) {
+  background: #fae4d7;
+  border-color: #c95927;
+  color: #ab3e12;
+}
+
+.pref-field-btn-primary:active:not(:disabled) {
+  background: #f5d5c2;
+  transform: translateY(1px);
+}
+
+/* 危险操作款：删除服务商等 */
+.pref-field-btn-danger {
+  background: #fdf2f1;
+  border-color: rgba(216, 92, 92, 0.5);
+  color: #b93f3f;
+  font-weight: 500;
+}
+
+.pref-field-btn-danger:hover:not(:disabled) {
+  background: #fae3e1;
+  border-color: #c74242;
+  color: #992929;
+}
+
+.pref-field-btn-danger:active:not(:disabled) {
+  background: #f4d0cc;
+  transform: translateY(1px);
+}
+
+/* 兼容保留自动拉取模型旧类名 */
+.pref-btn-fetch {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 3px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  cursor: pointer;
+  background: #fdf2eb;
+  border: 1px solid #e06c3a;
+  color: #c44f1c;
   transition: all 120ms ease;
-  line-height: 1.2;
 }
 
 .pref-btn-fetch:hover:not(:disabled) {
-  background: #4d7bb8;
+  background: #fae4d7;
+  border-color: #c95927;
+  color: #ab3e12;
 }
 
 .pref-btn-fetch:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
+  border-color: #d8cfc4;
+  background: #f2ece4;
+  color: #9c958a;
 }
 
 /* 测试结果组与错误详情入口 */
@@ -2966,24 +3198,39 @@ button:focus-visible {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  max-width: calc(100% - 130px);
+}
+
+.pref-test-detail-btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 .pref-btn-error-detail {
-  background: none;
-  border: 1px solid rgba(216, 92, 92, 0.35);
-  color: #b53838;
+  height: 24px;
+  padding: 0 8px;
   font-size: 10.5px;
   font-weight: 600;
-  padding: 2px 6px;
   border-radius: 3px;
+  background: #fdf2f1;
+  border: 1px solid rgba(216, 92, 92, 0.45);
+  color: #b53838;
   cursor: pointer;
   white-space: nowrap;
   transition: all 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .pref-btn-error-detail:hover {
-  background: rgba(216, 92, 92, 0.1);
-  border-color: #b53838;
+  background: #fae3e1;
+  border-color: #c74242;
+  color: #992929;
 }
 
 /* 通用全屏模态弹窗 */
@@ -3012,19 +3259,16 @@ button:focus-visible {
 
 .pref-modal-card {
   width: 100%;
-  max-width: 520px;
+  max-width: 530px;
   max-height: 85vh;
   background: #ece7df;
   border: 1px solid #c7beaf;
-  border-radius: 8px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  border-top: 3px solid #e06c3a;
+  border-radius: 6px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.pref-modal-card-error {
-  max-width: 560px;
 }
 
 .pref-modal-header {
@@ -3047,6 +3291,14 @@ button:focus-visible {
   color: #222936;
 }
 
+.pref-modal-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e06c3a;
+  box-shadow: 0 0 4px rgba(224, 108, 58, 0.5);
+}
+
 .pref-modal-badge {
   font-family: 'Space Mono', monospace;
   font-size: 9.5px;
@@ -3060,15 +3312,21 @@ button:focus-visible {
 .pref-modal-close {
   background: none;
   border: none;
-  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #7b8595;
   cursor: pointer;
-  padding: 2px 6px;
-  line-height: 1;
+  padding: 0;
+  transition: all 120ms ease;
 }
 
 .pref-modal-close:hover {
-  color: #1e2530;
+  background: rgba(216, 92, 92, 0.15);
+  color: #d85c5c;
 }
 
 .pref-modal-filter-row {
@@ -3096,36 +3354,56 @@ button:focus-visible {
 .pref-modal-model-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 14px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-height: 180px;
   max-height: 340px;
-  background: #ffffff;
+  background: #fbf9f5;
 }
 
 .pref-modal-model-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 6px 10px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 80ms ease;
+  transition: all 100ms ease;
   font-family: 'Space Mono', monospace;
   font-size: 11.5px;
   color: #272f3d;
+  background: #ffffff;
+  border: 1px solid #e4ddd3;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .pref-modal-model-item:hover {
-  background: #f0ebe2;
+  background: #f4efe6;
+  border-color: #d5cbbe;
+}
+
+.pref-modal-checkbox {
+  accent-color: #e06c3a;
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.item-selected {
+  background: #fdf2eb;
+  border-color: #e06c3a;
+  color: #b94b1a;
+  font-weight: 600;
 }
 
 .item-already-added {
-  opacity: 0.6;
+  opacity: 0.65;
   cursor: not-allowed;
-  background: #f8f6f2;
+  background: #f0ebe2;
+  border-color: #ded7cc;
 }
 
 .pref-modal-model-id {
@@ -3135,15 +3413,26 @@ button:focus-visible {
 
 .pref-modal-item-tag {
   font-size: 9.5px;
-  color: #8c97a8;
-  background: #e8e2d7;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 3px;
   flex-shrink: 0;
+  font-weight: 600;
+}
+
+.tag-added {
+  color: #7a8698;
+  background: #e6dfd4;
+  border: 1px solid #d2c9bd;
+}
+
+.tag-new {
+  color: #c44f1c;
+  background: rgba(224, 108, 58, 0.15);
+  border: 1px solid rgba(224, 108, 58, 0.35);
 }
 
 .pref-modal-empty {
-  padding: 30px;
+  padding: 36px 20px;
   text-align: center;
   color: #8c97a8;
   font-size: 12px;
@@ -3160,10 +3449,26 @@ button:focus-visible {
   flex-shrink: 0;
 }
 
-.pref-modal-selected-tip {
+.pref-modal-footer-left {
+  display: flex;
+  align-items: center;
+}
+
+.pref-modal-selected-badge {
   font-size: 11px;
-  color: #556071;
-  font-weight: 600;
+  color: #6a7688;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.04);
+  font-weight: 500;
+  transition: all 120ms ease;
+}
+
+.selected-badge-active {
+  color: #b94b1a;
+  background: rgba(224, 108, 58, 0.12);
+  border: 1px solid rgba(224, 108, 58, 0.3);
+  font-weight: 700;
 }
 
 .pref-modal-footer-btns {
@@ -3172,56 +3477,99 @@ button:focus-visible {
   gap: 8px;
 }
 
+/* 错误诊断报告弹窗强化 */
+.pref-modal-card-error {
+  max-width: 560px;
+  border-top: 3px solid #d85c5c;
+}
+
+.pref-modal-title-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #a83232;
+  font-weight: 700;
+}
+
+.pref-diagnostic-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d85c5c;
+  box-shadow: 0 0 5px rgba(216, 92, 92, 0.5);
+}
+
 /* 错误详情面板内容 */
 .pref-modal-error-content {
-  padding: 14px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   overflow-y: auto;
-  max-height: 400px;
-  background: #f8f6f2;
+  max-height: 420px;
+  background: #f5f2eb;
+}
+
+/* 诊断元数据表格卡片 */
+.pref-error-meta-card {
+  background: #ffffff;
+  border: 1px solid #dcd5c9;
+  border-radius: 4px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .pref-error-meta-row {
   display: flex;
-  font-size: 11.5px;
+  align-items: baseline;
+  font-size: 11px;
   line-height: 1.4;
 }
 
 .pref-error-meta-label {
-  color: #6b7788;
-  width: 80px;
+  color: #636f82;
+  width: 75px;
   flex-shrink: 0;
   font-weight: 600;
 }
 
 .pref-error-meta-val {
-  color: #222936;
+  color: #1e2634;
   word-break: break-all;
   font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  flex: 1;
+}
+
+.pref-error-highlight {
+  color: #b53838;
+  font-weight: 600;
 }
 
 .pref-error-body-title {
   font-size: 11px;
   font-weight: 700;
   color: #4b5565;
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 .pref-error-body-pre {
   margin: 0;
-  padding: 10px;
-  background: #1c222d;
-  color: #e2d9cd;
+  padding: 12px;
+  background: #1e242b;
+  color: #cbd5e1;
+  border: 1px solid #323b47;
   font-family: 'Space Mono', monospace;
   font-size: 10.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   border-radius: 4px;
   max-height: 220px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 /* ==========================================================================
@@ -3257,8 +3605,7 @@ button:focus-visible {
 .pref-nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
@@ -3279,12 +3626,6 @@ button:focus-visible {
   border-color: #c9c1b3;
   color: #1e2530;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.pref-nav-icon {
-  font-size: 15px;
-  line-height: 1;
-  flex-shrink: 0;
 }
 
 .pref-nav-text-group {

@@ -24,14 +24,13 @@ interface NavItem {
   id: PrefNavCategory
   title: string
   subtitle: string
-  icon: string
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'providers', title: 'AI 模型', subtitle: 'PROVIDERS & MODELS', icon: '🤖' },
-  { id: 'shortcuts', title: '快捷键', subtitle: 'GLOBAL SHORTCUTS', icon: '⌨️' },
-  { id: 'translation', title: '翻译偏好', subtitle: 'TRANSLATE BEHAVIOR', icon: '🌐' },
-  { id: 'general', title: '通用设置', subtitle: 'SYSTEM & LAUNCH', icon: '⚙️' }
+  { id: 'providers', title: 'AI 模型', subtitle: 'PROVIDERS & MODELS' },
+  { id: 'shortcuts', title: '快捷键', subtitle: 'GLOBAL SHORTCUTS' },
+  { id: 'translation', title: '翻译偏好', subtitle: 'TRANSLATE BEHAVIOR' },
+  { id: 'general', title: '通用设置', subtitle: 'SYSTEM & LAUNCH' }
 ]
 
 /**
@@ -146,8 +145,9 @@ export const ConfigPage = (): React.JSX.Element => {
   const [selectedModelsToAdd, setSelectedModelsToAdd] = useState<Record<string, boolean>>({})
   const [modelSearchQuery, setModelSearchQuery] = useState('')
 
-  // 错误详情弹窗
+  // 错误详情弹窗与复制反馈
   const [showErrorModal, setShowErrorModal] = useState(false)
+  const [copiedErrorLog, setCopiedErrorLog] = useState(false)
 
   // 初始化加载全局配置
   useEffect(() => {
@@ -230,7 +230,7 @@ export const ConfigPage = (): React.JSX.Element => {
   }
 
   /**
-   * 显式将当前查看的厂商设为全局主用服务商
+   * 显式将当前查看的厂商设为全局默认服务商
    */
   const handleSetAsPrimary = (): void => {
     if (!activeProvider) return
@@ -238,7 +238,7 @@ export const ConfigPage = (): React.JSX.Element => {
     if (!activeProvider.enabled) {
       updateActiveProvider({ enabled: true })
     }
-    setFeedbackMessage(`已将【${activeProvider.name}】设为全局主用服务商`)
+    setFeedbackMessage(`已将【${activeProvider.name}】设为默认服务商`)
   }
 
   /**
@@ -571,7 +571,6 @@ export const ConfigPage = (): React.JSX.Element => {
                   className={`pref-nav-item ${isActive ? 'pref-nav-item-active' : ''}`}
                   onClick={() => setActiveCategory(item.id)}
                 >
-                  <span className="pref-nav-icon">{item.icon}</span>
                   <div className="pref-nav-text-group">
                     <span className="pref-nav-title">{item.title}</span>
                     <span className="pref-nav-subtitle">{item.subtitle}</span>
@@ -587,103 +586,84 @@ export const ConfigPage = (): React.JSX.Element => {
           {/* ===================== 分类 1: AI 模型 (Providers) ===================== */}
           {activeCategory === 'providers' && (
             <div className="pref-panel-fade">
-              {/* 顶部：服务商选项卡管理栏 */}
-              <section className="pref-card" style={{ padding: '10px 14px 12px 14px' }}>
-                <div className="pref-card-header" style={{ marginBottom: '8px' }}>
-                  <div className="pref-header-with-badge">
-                    <h2 className="pref-card-title">独立服务商管理 (PROVIDERS)</h2>
-                    <span className="pref-provider-count-tip">
-                      已配置 {providers.length} 个渠道
-                    </span>
+              {/* 顶部：服务商切换与管理栏（扁平化无框集成，释放纵向空间） */}
+              <div className="pref-provider-bar">
+                <div className="pref-provider-tabs-row">
+                  <div className="pref-provider-tabs">
+                    {providers.map((p) => {
+                      const isSelected = p.id === selectedTabId
+                      const isPrimary = p.id === activeProviderId
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className={`pref-provider-tab ${isSelected ? 'pref-provider-tab-active' : ''} ${
+                            !p.enabled ? 'pref-provider-tab-disabled' : ''
+                          }`}
+                          onClick={() => {
+                            setSelectedTabId(p.id)
+                            setTestResult(null)
+                          }}
+                          title={isPrimary ? '当前全局生效的默认服务商' : '点击查看与编辑此服务商'}
+                        >
+                          <span
+                            className={`pref-provider-tab-dot ${p.enabled ? 'dot-enabled' : 'dot-disabled'}`}
+                          />
+                          <span className="pref-provider-tab-name">{p.name}</span>
+                          {isPrimary ? <span className="pref-primary-indicator">默认</span> : null}
+                        </button>
+                      )
+                    })}
                   </div>
                   <button
                     type="button"
-                    className="pref-btn pref-btn-secondary"
-                    style={{ fontSize: '11px', padding: '3px 9px' }}
+                    className="pref-btn-add-provider"
                     onClick={handleAddCustomProvider}
+                    title="添加新的服务商渠道"
                   >
                     + 新建服务商
                   </button>
                 </div>
 
-                {/* 选项卡列表 */}
-                <div className="pref-provider-tabs">
-                  {providers.map((p) => {
-                    const isSelected = p.id === selectedTabId
-                    const isPrimary = p.id === activeProviderId
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className={`pref-provider-tab ${isSelected ? 'pref-provider-tab-active' : ''} ${
-                          !p.enabled ? 'pref-provider-tab-disabled' : ''
-                        }`}
-                        onClick={() => {
-                          setSelectedTabId(p.id)
-                          setTestResult(null)
-                        }}
-                        title={isPrimary ? '当前全局生效的主用服务商' : '点击查看与编辑此服务商'}
-                      >
-                        <span
-                          className={`pref-provider-tab-dot ${p.enabled ? 'dot-enabled' : 'dot-disabled'}`}
-                        />
-                        <span className="pref-provider-tab-name">{p.name}</span>
-                        {isPrimary ? <span className="pref-primary-indicator">主用</span> : null}
-                      </button>
-                    )
-                  })}
-                </div>
+                {/* 快捷添加预置模板（轻量芯片行，仅在有未添加模板时展示） */}
+                {unaddedTemplates.length > 0 ? (
+                  <div className="pref-preset-row">
+                    <span className="pref-preset-tip">快捷预置：</span>
+                    <div className="pref-preset-chips">
+                      {unaddedTemplates.map((tmpl) => (
+                        <button
+                          key={tmpl.id}
+                          type="button"
+                          className="pref-preset-chip"
+                          onClick={() => handleAddFromTemplate(tmpl)}
+                          title={`快捷配置【${tmpl.name}】`}
+                        >
+                          + {tmpl.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
 
-                {/* 快捷添加预置模板（仅在有未添加模板时展示） */}
-                <div className="pref-preset-row">
-                  {unaddedTemplates.length > 0 ? (
-                    <>
-                      <span className="pref-preset-tip">快捷添加预置：</span>
-                      <div className="pref-preset-chips">
-                        {unaddedTemplates.map((tmpl) => (
-                          <button
-                            key={tmpl.id}
-                            type="button"
-                            className="pref-preset-chip"
-                            onClick={() => handleAddFromTemplate(tmpl)}
-                            title={`快捷配置【${tmpl.name}】`}
-                          >
-                            + {tmpl.name}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <span className="pref-preset-tip-dim">
-                      ✓ 官方预设服务商模板已全部加入列表，可通过上方【+ 新建服务商】增加自定义渠道
-                    </span>
-                  )}
-                </div>
-              </section>
-
-              {/* 当前选中厂商的专属配置面板 */}
+              {/* 当前选中厂商的核心连接配置面板 */}
               {activeProvider ? (
-                <section className="pref-card" style={{ marginTop: '12px' }}>
+                <section className="pref-card pref-provider-active-card">
                   <div className="pref-card-header">
-                    <div className="pref-card-title-group">
-                      <div className="pref-title-with-actions">
-                        <h2 className="pref-card-title">【{activeProvider.name}】专属连接配置</h2>
-                        {activeProvider.id === activeProviderId ? (
-                          <span className="pref-badge-primary">★ 全局主用服务商</span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="pref-btn-set-primary"
-                            onClick={handleSetAsPrimary}
-                            title="点击设为主界面默认使用的大模型渠道"
-                          >
-                            设为主用
-                          </button>
-                        )}
-                      </div>
-                      <span className="pref-card-subtitle">
-                        与其它厂商完全隔离，独立管理其专属地址、密钥与模型库
-                      </span>
+                    <div className="pref-title-with-actions">
+                      <h2 className="pref-card-title">{activeProvider.name}</h2>
+                      {activeProvider.id === activeProviderId ? (
+                        <span className="pref-badge-primary">默认服务商</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="pref-field-btn pref-field-btn-primary"
+                          onClick={handleSetAsPrimary}
+                          title="点击设为主界面默认使用的大模型渠道"
+                        >
+                          设为默认服务商
+                        </button>
+                      )}
                     </div>
 
                     {/* 启用/停用开关 */}
@@ -711,14 +691,15 @@ export const ConfigPage = (): React.JSX.Element => {
                           服务商显示名称
                         </label>
                         {providers.length > 1 ? (
-                          <button
-                            type="button"
-                            className="pref-text-btn"
-                            style={{ color: '#d85c5c' }}
-                            onClick={() => handleDeleteProvider(activeProvider.id)}
-                          >
-                            删除该服务商
-                          </button>
+                          <div className="pref-field-actions">
+                            <button
+                              type="button"
+                              className="pref-field-btn pref-field-btn-danger"
+                              onClick={() => handleDeleteProvider(activeProvider.id)}
+                            >
+                              删除该服务商
+                            </button>
+                          </div>
                         ) : null}
                       </div>
                       <input
@@ -766,28 +747,27 @@ export const ConfigPage = (): React.JSX.Element => {
                             <>
                               <button
                                 type="button"
-                                className="pref-text-btn"
+                                className="pref-field-btn"
                                 onClick={() => void handleCopyApiKey()}
                                 title="复制 API Key 到剪贴板"
                               >
                                 复制
                               </button>
-                              <span className="pref-action-divider">|</span>
                               <button
                                 type="button"
-                                className="pref-text-btn"
+                                className="pref-field-btn"
                                 onClick={() => updateActiveProvider({ apiKey: '' })}
                                 title="清空当前输入的密钥"
                               >
                                 清空
                               </button>
-                              <span className="pref-action-divider">|</span>
                             </>
                           ) : null}
                           <button
                             type="button"
-                            className="pref-text-btn"
+                            className={`pref-field-btn ${showApiKey ? 'pref-field-btn-active' : ''}`}
                             onClick={() => setShowApiKey((prev) => !prev)}
+                            title={showApiKey ? '点击以掩码形式隐藏密钥' : '点击查看明文密钥'}
                           >
                             {showApiKey ? '隐藏' : '显示'}
                           </button>
@@ -817,15 +797,17 @@ export const ConfigPage = (): React.JSX.Element => {
                         <label className="pref-label">
                           可用模型列表 (MODELS FOR {activeProvider.name.toUpperCase()})
                         </label>
-                        <button
-                          type="button"
-                          className="pref-btn-fetch"
-                          onClick={() => void handleFetchModels()}
-                          disabled={isFetchingModels || !activeProvider.baseUrl}
-                          title="从接口端点自动获取该服务商支持的全部模型"
-                        >
-                          {isFetchingModels ? '正在拉取...' : '⚡ 自动获取模型列表'}
-                        </button>
+                        <div className="pref-field-actions">
+                          <button
+                            type="button"
+                            className="pref-field-btn pref-field-btn-primary"
+                            onClick={() => void handleFetchModels()}
+                            disabled={isFetchingModels || !activeProvider.baseUrl}
+                            title="从接口端点自动获取该服务商支持的全部模型"
+                          >
+                            {isFetchingModels ? '正在拉取...' : '自动获取模型列表'}
+                          </button>
+                        </div>
                       </div>
 
                       <div className="pref-pills-wrap">
@@ -836,15 +818,12 @@ export const ConfigPage = (): React.JSX.Element => {
                             <span
                               key={m.id}
                               className={`pref-pill ${isDefault ? 'pref-pill-active' : ''}`}
-                              title={isDefault ? '当前默认模型' : '点击设为默认模型'}
+                              title={isDefault ? '当前渠道的默认模型' : '点击将此模型设为默认'}
                               onClick={() => updateActiveProvider({ defaultModel: m.id })}
-                              style={{ cursor: 'pointer' }}
                             >
                               {isDefault ? (
-                                <span
-                                  style={{ fontSize: '9px', color: '#e06c3a', marginRight: '2px' }}
-                                >
-                                  ★
+                                <span className="pref-pill-default-badge" title="默认模型">
+                                  DEF
                                 </span>
                               ) : null}
                               <span className="pref-pill-name">{m.id}</span>
@@ -856,9 +835,24 @@ export const ConfigPage = (): React.JSX.Element => {
                                     e.stopPropagation()
                                     handleRemoveModelFromActive(m.id)
                                   }}
-                                  title={`移除 ${m.id}`}
+                                  title={`从列表中移除 ${m.id}`}
+                                  aria-label={`移除 ${m.id}`}
                                 >
-                                  ×
+                                  <svg
+                                    width="8"
+                                    height="8"
+                                    viewBox="0 0 8 8"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="pref-pill-remove-icon"
+                                  >
+                                    <path
+                                      d="M1 1L7 7M7 1L1 7"
+                                      stroke="currentColor"
+                                      strokeWidth="1.3"
+                                      strokeLinecap="round"
+                                    />
+                                  </svg>
                                 </button>
                               ) : null}
                             </span>
@@ -927,7 +921,7 @@ export const ConfigPage = (): React.JSX.Element => {
                   <div className="pref-field">
                     <div className="pref-label-row">
                       <label className="pref-label" htmlFor="sc-screenshot">
-                        📸 截屏识别翻译
+                        截屏识别翻译
                       </label>
                       <span className="pref-shortcut-tip">推荐: Alt+S 或 Option+S</span>
                     </div>
@@ -964,7 +958,7 @@ export const ConfigPage = (): React.JSX.Element => {
                   <div className="pref-field">
                     <div className="pref-label-row">
                       <label className="pref-label" htmlFor="sc-input">
-                        💬 呼出输入翻译窗口
+                        呼出输入翻译窗口
                       </label>
                       <span className="pref-shortcut-tip">推荐: Alt+A 或 Option+A</span>
                     </div>
@@ -1004,7 +998,7 @@ export const ConfigPage = (): React.JSX.Element => {
                   <div className="pref-field">
                     <div className="pref-label-row">
                       <label className="pref-label" htmlFor="sc-pref">
-                        ⚙️ 打开偏好设置
+                        打开偏好设置
                       </label>
                       <span className="pref-shortcut-tip">通用规范: CommandOrControl+,</span>
                     </div>
@@ -1117,15 +1111,17 @@ export const ConfigPage = (): React.JSX.Element => {
                         自定义系统提示词 (SYSTEM PROMPT)
                       </label>
                       {translation.customSystemPrompt ? (
-                        <button
-                          type="button"
-                          className="pref-text-btn"
-                          onClick={() =>
-                            setTranslation((prev) => ({ ...prev, customSystemPrompt: '' }))
-                          }
-                        >
-                          恢复内置提示词
-                        </button>
+                        <div className="pref-field-actions">
+                          <button
+                            type="button"
+                            className="pref-field-btn"
+                            onClick={() =>
+                              setTranslation((prev) => ({ ...prev, customSystemPrompt: '' }))
+                            }
+                          >
+                            恢复内置提示词
+                          </button>
+                        </div>
                       ) : null}
                     </div>
                     <textarea
@@ -1238,7 +1234,14 @@ export const ConfigPage = (): React.JSX.Element => {
               disabled={isTesting || !activeProvider.baseUrl}
               title={`测试【${activeProvider.name}】的连通性 (${activeProvider.baseUrl})`}
             >
-              {isTesting ? '正在测试...' : '测试当前连接'}
+              {isTesting ? (
+                <span className="pref-btn-testing-wrap">
+                  <span className="pref-loading-pulse" />
+                  <span>正在检测...</span>
+                </span>
+              ) : (
+                '测试当前连接'
+              )}
             </button>
           ) : null}
 
@@ -1262,11 +1265,14 @@ export const ConfigPage = (): React.JSX.Element => {
               {!testResult.ok && testResult.errorDetail ? (
                 <button
                   type="button"
-                  className="pref-btn-error-detail"
-                  onClick={() => setShowErrorModal(true)}
+                  className="pref-field-btn pref-field-btn-danger pref-test-detail-btn"
+                  onClick={() => {
+                    setCopiedErrorLog(false)
+                    setShowErrorModal(true)
+                  }}
                   title="查看详细错误信息与原始响应"
                 >
-                  查看详情
+                  诊断报告
                 </button>
               ) : null}
             </div>
@@ -1304,15 +1310,31 @@ export const ConfigPage = (): React.JSX.Element => {
           <div className="pref-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="pref-modal-header">
               <div className="pref-modal-title">
+                <span className="pref-modal-status-dot" />
                 <span>从【{activeProvider?.name}】获取模型</span>
-                <span className="pref-modal-badge">{fetchedModels.length} 个模型</span>
+                <span className="pref-modal-badge">{fetchedModels.length} 个可用模型</span>
               </div>
               <button
                 type="button"
                 className="pref-modal-close"
                 onClick={() => setShowFetchModal(false)}
+                title="关闭窗口"
+                aria-label="关闭"
               >
-                ×
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </button>
             </div>
 
@@ -1320,31 +1342,32 @@ export const ConfigPage = (): React.JSX.Element => {
               <input
                 type="text"
                 className="pref-input pref-modal-search"
-                placeholder="搜索模型名称过滤..."
+                placeholder="搜索模型名称实时过滤..."
                 value={modelSearchQuery}
                 onChange={(e) => setModelSearchQuery(e.target.value)}
                 autoFocus
               />
-              <div className="pref-modal-quick-select">
+              <div className="pref-modal-quick-select pref-field-actions">
                 <button
                   type="button"
-                  className="pref-text-btn"
+                  className="pref-field-btn"
                   onClick={() => {
-                    const next: Record<string, boolean> = {}
+                    const next: Record<string, boolean> = { ...selectedModelsToAdd }
                     const existing = new Set(activeProvider?.models.map((m) => m.id))
                     filteredFetchedModels.forEach((id) => {
                       if (!existing.has(id)) next[id] = true
                     })
                     setSelectedModelsToAdd(next)
                   }}
+                  title="全选当前过滤列表中尚未添加的模型"
                 >
                   全选未添加
                 </button>
-                <span className="pref-action-divider">|</span>
                 <button
                   type="button"
-                  className="pref-text-btn"
+                  className="pref-field-btn"
                   onClick={() => setSelectedModelsToAdd({})}
+                  title="清空所有勾选项"
                 >
                   取消全选
                 </button>
@@ -1361,10 +1384,13 @@ export const ConfigPage = (): React.JSX.Element => {
                   return (
                     <label
                       key={mId}
-                      className={`pref-modal-model-item ${alreadyInList ? 'item-already-added' : ''}`}
+                      className={`pref-modal-model-item ${
+                        alreadyInList ? 'item-already-added' : isChecked ? 'item-selected' : ''
+                      }`}
                     >
                       <input
                         type="checkbox"
+                        className="pref-modal-checkbox"
                         checked={alreadyInList || isChecked}
                         disabled={alreadyInList}
                         onChange={(e) => {
@@ -1375,7 +1401,11 @@ export const ConfigPage = (): React.JSX.Element => {
                         }}
                       />
                       <span className="pref-modal-model-id">{mId}</span>
-                      {alreadyInList ? <span className="pref-modal-item-tag">已在列表</span> : null}
+                      {alreadyInList ? (
+                        <span className="pref-modal-item-tag tag-added">已在列表</span>
+                      ) : isChecked ? (
+                        <span className="pref-modal-item-tag tag-new">待导入</span>
+                      ) : null}
                     </label>
                   )
                 })
@@ -1383,11 +1413,22 @@ export const ConfigPage = (): React.JSX.Element => {
             </div>
 
             <div className="pref-modal-footer">
-              <span className="pref-modal-selected-tip">
-                已选中{' '}
-                {Object.keys(selectedModelsToAdd).filter((k) => selectedModelsToAdd[k]).length}{' '}
-                个新模型
-              </span>
+              <div className="pref-modal-footer-left">
+                {(() => {
+                  const count = Object.keys(selectedModelsToAdd).filter(
+                    (k) => selectedModelsToAdd[k]
+                  ).length
+                  return (
+                    <span
+                      className={`pref-modal-selected-badge ${
+                        count > 0 ? 'selected-badge-active' : ''
+                      }`}
+                    >
+                      已选中 {count} 个新模型
+                    </span>
+                  )
+                })()}
+              </div>
               <div className="pref-modal-footer-btns">
                 <button
                   type="button"
@@ -1400,6 +1441,10 @@ export const ConfigPage = (): React.JSX.Element => {
                   type="button"
                   className="pref-btn pref-btn-save"
                   onClick={handleConfirmAddFetchedModels}
+                  disabled={
+                    Object.keys(selectedModelsToAdd).filter((k) => selectedModelsToAdd[k])
+                      .length === 0
+                  }
                 >
                   确认导入勾选模型
                 </button>
@@ -1417,32 +1462,50 @@ export const ConfigPage = (): React.JSX.Element => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="pref-modal-header">
-              <div className="pref-modal-title" style={{ color: '#d85c5c' }}>
+              <div className="pref-modal-title pref-modal-title-error">
+                <span className="pref-diagnostic-indicator" />
                 <span>连通性诊断报告</span>
               </div>
               <button
                 type="button"
                 className="pref-modal-close"
                 onClick={() => setShowErrorModal(false)}
+                title="关闭诊断报告"
+                aria-label="关闭"
               >
-                ×
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </button>
             </div>
 
             <div className="pref-modal-error-content">
-              <div className="pref-error-meta-row">
-                <span className="pref-error-meta-label">测试服务商：</span>
-                <span className="pref-error-meta-val">{activeProvider?.name}</span>
-              </div>
-              <div className="pref-error-meta-row">
-                <span className="pref-error-meta-label">接口地址：</span>
-                <span className="pref-error-meta-val">{activeProvider?.baseUrl}</span>
-              </div>
-              <div className="pref-error-meta-row">
-                <span className="pref-error-meta-label">错误概要：</span>
-                <span className="pref-error-meta-val" style={{ color: '#d85c5c' }}>
-                  {testResult.message}
-                </span>
+              <div className="pref-error-meta-card">
+                <div className="pref-error-meta-row">
+                  <span className="pref-error-meta-label">测试服务商</span>
+                  <span className="pref-error-meta-val">{activeProvider?.name}</span>
+                </div>
+                <div className="pref-error-meta-row">
+                  <span className="pref-error-meta-label">接口端点</span>
+                  <span className="pref-error-meta-val">{activeProvider?.baseUrl}</span>
+                </div>
+                <div className="pref-error-meta-row">
+                  <span className="pref-error-meta-label">状态概要</span>
+                  <span className="pref-error-meta-val pref-error-highlight">
+                    {testResult.message}
+                  </span>
+                </div>
               </div>
 
               <div className="pref-error-body-title">服务端原始响应体 / 异常堆栈：</div>
@@ -1455,10 +1518,11 @@ export const ConfigPage = (): React.JSX.Element => {
                 className="pref-btn pref-btn-secondary"
                 onClick={() => {
                   void navigator.clipboard.writeText(testResult.errorDetail || '')
-                  setFeedbackMessage('错误日志已复制')
+                  setCopiedErrorLog(true)
+                  setTimeout(() => setCopiedErrorLog(false), 2000)
                 }}
               >
-                复制错误日志
+                {copiedErrorLog ? '已复制到剪贴板' : '复制诊断日志'}
               </button>
               <button
                 type="button"
