@@ -18,34 +18,40 @@ interface ProviderPreset {
 
 const PRESETS: ProviderPreset[] = [
   {
-    name: 'DeepSeek',
+    name: 'DeepSeek 官方',
     baseUrl: 'https://api.deepseek.com/v1',
     defaultModel: 'deepseek-chat',
-    profile: 'FAST & ACCURATE'
+    profile: 'DEEPSEEK'
+  },
+  {
+    name: 'ClinePass',
+    baseUrl: 'https://api.cline.bot/api/v1',
+    defaultModel: 'cline-pass/deepseek-v4.1-flash',
+    profile: 'CLINEPASS'
   },
   {
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     defaultModel: 'gpt-4o-mini',
-    profile: 'STANDARD BALANCED'
+    profile: 'OPENAI'
   },
   {
     name: '通义千问',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     defaultModel: 'qwen-plus',
-    profile: 'ALIBABA CLOUD'
+    profile: 'ALIBABA'
   },
   {
     name: 'Ollama 本地',
     baseUrl: 'http://localhost:11434/v1',
     defaultModel: 'llama3:latest',
-    profile: 'LOCAL OFFLINE'
+    profile: 'OLLAMA'
   },
   {
     name: '阶跃星辰',
     baseUrl: 'https://api.stepfun.com/v1',
     defaultModel: 'step-1-8k',
-    profile: 'HIGH PERFORMANCE'
+    profile: 'STEPFUN'
   }
 ]
 
@@ -126,13 +132,72 @@ export const ConfigPage = (): React.JSX.Element => {
         {
           value: preset.defaultModel,
           code: generatedCode,
-          profile: preset.profile
+          profile: preset.profile,
+          baseUrl: preset.baseUrl,
+          provider: 'openai-compatible'
         }
       ])
     }
 
     setTestResult(null)
-    setFeedbackMessage(`已填入 ${preset.name} 预设参数`)
+    setFeedbackMessage(`已填入 ${preset.name} 预设参数，请确认 API Key 后保存`)
+  }
+
+  /**
+   * 将当前表单的配置作为专属通道绑定保存至模型池
+   */
+  const handleBindCurrentToPool = (): void => {
+    const trimmedModel = model.trim()
+    if (!trimmedModel) {
+      setFeedbackMessage('请先在上方输入模型名称')
+      return
+    }
+
+    const existingIndex = modelOptions.findIndex((item) => item.value === trimmedModel)
+    const code = existingIndex >= 0 ? modelOptions[existingIndex].code : `U${modelOptions.length + 1}`
+
+    let inferredProfile = 'CUSTOM'
+    if (baseUrl.includes('deepseek.com')) inferredProfile = 'DEEPSEEK'
+    else if (baseUrl.includes('cline.bot')) inferredProfile = 'CLINEPASS'
+    else if (baseUrl.includes('openai.com')) inferredProfile = 'OPENAI'
+    else if (baseUrl.includes('dashscope')) inferredProfile = 'ALIBABA'
+    else if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) inferredProfile = 'LOCAL'
+    else if (existingIndex >= 0 && modelOptions[existingIndex].profile) {
+      inferredProfile = modelOptions[existingIndex].profile
+    }
+
+    const updatedItem: ModelOptionItem = {
+      value: trimmedModel,
+      code,
+      profile: inferredProfile,
+      baseUrl: baseUrl.trim(),
+      apiKey: apiKey.trim(),
+      provider,
+      enableThinking
+    }
+
+    if (existingIndex >= 0) {
+      const nextList = [...modelOptions]
+      nextList[existingIndex] = updatedItem
+      setModelOptions(nextList)
+      setFeedbackMessage(`已更新 [${trimmedModel}] 的专属渠道配置`)
+    } else {
+      setModelOptions((prev) => [...prev, updatedItem])
+      setFeedbackMessage(`已将 [${trimmedModel}] 作为独立通道添加至模型池`)
+    }
+  }
+
+  /**
+   * 点击模型池项，载入其专属连接配置
+   */
+  const handleSelectModelOption = (option: ModelOptionItem): void => {
+    setModel(option.value)
+    if (option.baseUrl) setBaseUrl(option.baseUrl)
+    if (option.apiKey) setApiKey(option.apiKey)
+    if (option.provider) setProvider(option.provider)
+    if (typeof option.enableThinking === 'boolean') setEnableThinking(option.enableThinking)
+    setTestResult(null)
+    setFeedbackMessage(`已载入模型 [${option.value}] 的连接配置，可直接点击测试或编辑`)
   }
 
   /**
@@ -172,15 +237,33 @@ export const ConfigPage = (): React.JSX.Element => {
     setIsSaving(true)
     setFeedbackMessage('')
 
-    // 确保当前选中的主模型在模型库中有对应项
+    // 确保当前选中的主模型在模型库中有对应项并同步其当前连接配置
     const currentOptions = [...modelOptions]
     const trimmedModel = model.trim()
-    if (trimmedModel && !currentOptions.some((item) => item.value === trimmedModel)) {
-      currentOptions.unshift({
+    if (trimmedModel) {
+      const existingIdx = currentOptions.findIndex((item) => item.value === trimmedModel)
+      const currentItem: ModelOptionItem = {
         value: trimmedModel,
-        code: 'A0',
-        profile: 'PRIMARY MODEL'
-      })
+        code: existingIdx >= 0 ? currentOptions[existingIdx].code : 'A0',
+        profile:
+          existingIdx >= 0 && currentOptions[existingIdx].profile
+            ? currentOptions[existingIdx].profile
+            : baseUrl.includes('cline.bot')
+              ? 'CLINEPASS'
+              : baseUrl.includes('deepseek.com')
+                ? 'DEEPSEEK'
+                : 'PRIMARY',
+        baseUrl: baseUrl.trim(),
+        apiKey: apiKey.trim(),
+        provider,
+        enableThinking
+      }
+
+      if (existingIdx >= 0) {
+        currentOptions[existingIdx] = currentItem
+      } else {
+        currentOptions.unshift(currentItem)
+      }
     }
 
     const payload: LLMConfig = {
@@ -397,29 +480,70 @@ export const ConfigPage = (): React.JSX.Element => {
                 <div className="pref-card-title-group">
                   <h2 className="pref-card-title">快捷切换模型池</h2>
                   <span className="pref-card-subtitle">
-                    主翻译界面右上角可直接快速下拉切换以下模型
+                    点击下方卡片可快速载入该模型专属配置；主翻译界面可下拉无缝切换
                   </span>
                 </div>
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-secondary"
+                  style={{ fontSize: '11px', padding: '4px 10px' }}
+                  onClick={handleBindCurrentToPool}
+                  title="将上方填写的服务地址、密钥及模型名称作为独立通道保存/更新到模型池"
+                >
+                  ⚡ 保存当前配置为模型通道
+                </button>
               </div>
 
               <div className="pref-pool-container">
                 {/* 标签胶囊池 */}
                 <div className="pref-pills-wrap">
-                  {modelOptions.map((opt) => (
-                    <span key={opt.value} className="pref-pill">
-                      <span className="pref-pill-name">{opt.value}</span>
-                      {modelOptions.length > 1 ? (
-                        <button
-                          type="button"
-                          className="pref-pill-remove"
-                          onClick={() => handleRemoveModelOption(opt.value)}
-                          title={`移除 ${opt.value}`}
+                  {modelOptions.map((opt) => {
+                    const isEditing = model === opt.value
+                    const channelTag =
+                      opt.profile && opt.profile !== 'CUSTOM' && opt.profile !== 'CUSTOM MODEL'
+                        ? opt.profile
+                        : opt.baseUrl
+                          ? opt.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
+                          : '全局'
+
+                    return (
+                      <span
+                        key={opt.value}
+                        className={`pref-pill ${isEditing ? 'pref-pill-active' : ''}`}
+                        onClick={() => handleSelectModelOption(opt)}
+                        style={{ cursor: 'pointer' }}
+                        title={`点击载入此模型通道\n服务地址: ${opt.baseUrl || '继承全局'}\n密钥: ${opt.apiKey ? '已配置独立密钥' : '继承全局'}`}
+                      >
+                        <span
+                          style={{
+                            fontSize: '9px',
+                            padding: '1px 4px',
+                            borderRadius: '3px',
+                            background: '#d4ccbf',
+                            color: '#5a5247',
+                            marginRight: '2px',
+                            fontWeight: 'normal'
+                          }}
                         >
-                          ×
-                        </button>
-                      ) : null}
-                    </span>
-                  ))}
+                          {channelTag}
+                        </span>
+                        <span className="pref-pill-name">{opt.value}</span>
+                        {modelOptions.length > 1 ? (
+                          <button
+                            type="button"
+                            className="pref-pill-remove"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleRemoveModelOption(opt.value)
+                            }}
+                            title={`移除 ${opt.value}`}
+                          >
+                            ×
+                          </button>
+                        ) : null}
+                      </span>
+                    )
+                  })}
                 </div>
 
                 {/* 紧凑添加行 */}
@@ -435,7 +559,7 @@ export const ConfigPage = (): React.JSX.Element => {
                         handleAddModelOption()
                       }
                     }}
-                    placeholder="添加新模型，如 qwen-max..."
+                    placeholder="添加新模型名称，如 deepseek-chat..."
                     spellCheck={false}
                   />
                   <button

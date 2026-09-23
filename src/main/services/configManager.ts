@@ -1,7 +1,14 @@
-import { app } from 'electron'
+import { app, net } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type { LLMConfig, ModelOptionItem, TestConnectionResult } from '../../shared/config'
+
+/**
+ * 规整 Base URL，自动去除末尾的 /chat/completions 与多余斜杠
+ */
+const normalizeBaseUrl = (url: string): string => {
+  return url.trim().replace(/\/chat\/completions\/?$/, '').replace(/\/$/, '')
+}
 
 /**
  * 默认预设模型列表
@@ -58,6 +65,43 @@ const getDefaultConfigFromEnv = (): LLMConfig => {
 }
 
 /**
+ * 清洗并规整模型通道列表数据
+ */
+const sanitizeModelOptions = (rawList: unknown): ModelOptionItem[] => {
+  if (!Array.isArray(rawList) || rawList.length === 0) return DEFAULT_MODEL_OPTIONS
+  const sanitized = rawList
+    .map((item, idx) => {
+      if (!item || typeof item !== 'object') return null
+      const value = typeof item.value === 'string' ? item.value.trim() : ''
+      if (!value) return null
+      const code = typeof item.code === 'string' && item.code ? item.code.trim() : `U${idx + 1}`
+      const profile = typeof item.profile === 'string' && item.profile ? item.profile.trim() : 'CUSTOM'
+      const baseUrl =
+        typeof item.baseUrl === 'string' && item.baseUrl.trim()
+          ? normalizeBaseUrl(item.baseUrl)
+          : undefined
+      const apiKey = typeof item.apiKey === 'string' && item.apiKey.trim() ? item.apiKey.trim() : undefined
+      const provider =
+        item.provider === 'openai-compatible' || item.provider === 'mock' ? item.provider : undefined
+      const enableThinking = typeof item.enableThinking === 'boolean' ? item.enableThinking : undefined
+
+      const option: ModelOptionItem = {
+        value,
+        code,
+        profile,
+        ...(baseUrl ? { baseUrl } : {}),
+        ...(apiKey ? { apiKey } : {}),
+        ...(provider ? { provider } : {}),
+        ...(typeof enableThinking === 'boolean' ? { enableThinking } : {})
+      }
+      return option
+    })
+    .filter((item): item is ModelOptionItem => item !== null)
+
+  return sanitized.length > 0 ? sanitized : DEFAULT_MODEL_OPTIONS
+}
+
+/**
  * 读取当前大模型配置
  * 优先读取本地持久化文件，不存在时使用环境变量初值
  */
@@ -79,10 +123,7 @@ export const getLLMConfig = (): LLMConfig => {
         apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
         model: typeof parsed.model === 'string' && parsed.model ? parsed.model : 'step-3.5-flash',
         enableThinking: Boolean(parsed.enableThinking),
-        modelOptions:
-          Array.isArray(parsed.modelOptions) && parsed.modelOptions.length > 0
-            ? parsed.modelOptions
-            : DEFAULT_MODEL_OPTIONS
+        modelOptions: sanitizeModelOptions(parsed.modelOptions)
       }
       return cachedConfig
     }
@@ -104,14 +145,11 @@ export const saveLLMConfig = async (
     const filePath = getConfigFilePath()
     const sanitizedConfig: LLMConfig = {
       provider: newConfig.provider === 'openai-compatible' ? 'openai-compatible' : 'mock',
-      baseUrl: (newConfig.baseUrl ?? '').trim(),
+      baseUrl: normalizeBaseUrl(newConfig.baseUrl ?? ''),
       apiKey: (newConfig.apiKey ?? '').trim(),
       model: (newConfig.model ?? '').trim() || 'step-3.5-flash',
       enableThinking: Boolean(newConfig.enableThinking),
-      modelOptions:
-        Array.isArray(newConfig.modelOptions) && newConfig.modelOptions.length > 0
-          ? newConfig.modelOptions
-          : DEFAULT_MODEL_OPTIONS
+      modelOptions: sanitizeModelOptions(newConfig.modelOptions)
     }
 
     writeFileSync(filePath, JSON.stringify(sanitizedConfig, null, 2), 'utf-8')
@@ -122,7 +160,8 @@ export const saveLLMConfig = async (
       baseUrl: sanitizedConfig.baseUrl,
       hasApiKey: Boolean(sanitizedConfig.apiKey),
       model: sanitizedConfig.model,
-      enableThinking: sanitizedConfig.enableThinking
+      enableThinking: sanitizedConfig.enableThinking,
+      modelCount: sanitizedConfig.modelOptions.length
     })
 
     return { ok: true }
@@ -165,21 +204,29 @@ export const testLLMConnection = async (config: LLMConfig): Promise<TestConnecti
     }
   }
 
-  const endpoint = `${config.baseUrl.trim().replace(/\/$/, '')}/chat/completions`
+  const endpoint = `${normalizeBaseUrl(config.baseUrl)}/chat/completions`
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 10000)
 
+  const targetModel = config.model.trim() || 'gpt-4o-mini'
+  console.log('[main] testLLMConnection 发起测试:', {
+    endpoint,
+    model: targetModel,
+    hasApiKey: Boolean(config.apiKey)
+  })
+
   try {
-    const response = await fetch(endpoint, {
+    // 使用 Electron 的 net.fetch，自动继承系统代理设置；请求体与 Postman 保持纯净一致（不传 max_tokens）
+    const response = await net.fetch(endpoint, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${config.apiKey.trim()}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'User-Agent': 'screenshot-translator/1.0'
       },
       body: JSON.stringify({
-        model: config.model.trim() || 'gpt-4o-mini',
-        messages: [{ role: 'user', content: 'Ping' }],
-        max_tokens: 5
+        model: targetModel,
+        messages: [{ role: 'user', content: 'Hello' }]
       }),
       signal: controller.signal
     })
@@ -188,6 +235,7 @@ export const testLLMConnection = async (config: LLMConfig): Promise<TestConnecti
     const latencyMs = Date.now() - startTime
 
     if (response.ok) {
+      console.log('[main] testLLMConnection 测试成功，耗时:', latencyMs, 'ms')
       return {
         ok: true,
         message: '连接成功，服务响应正常',
@@ -195,12 +243,23 @@ export const testLLMConnection = async (config: LLMConfig): Promise<TestConnecti
       }
     }
 
+    const rawResponseText = await response.text()
+    console.error('[main] testLLMConnection 请求失败，状态码:', response.status, '返回内容:', rawResponseText)
+
     let errorDetail = ''
     try {
-      const errorJson = (await response.json()) as { error?: { message?: string } }
-      errorDetail = errorJson.error?.message ?? ''
+      const errorJson = JSON.parse(rawResponseText) as {
+        error?: { message?: string }
+        message?: string
+        detail?: string
+      }
+      errorDetail =
+        errorJson.error?.message ??
+        errorJson.message ??
+        errorJson.detail ??
+        ''
     } catch {
-      // 忽略响应文本解析错误
+      errorDetail = rawResponseText.slice(0, 150)
     }
 
     if (response.status === 401) {
@@ -230,17 +289,21 @@ export const testLLMConnection = async (config: LLMConfig): Promise<TestConnecti
     }
   } catch (error) {
     clearTimeout(timeoutId)
+    console.error('[main] testLLMConnection 捕获底层网络异常:', error)
 
     if (error instanceof Error && error.name === 'AbortError') {
       return {
         ok: false,
-        message: '连接超时（10秒内未收到响应）'
+        message: '连接超时（10秒内未收到响应，请检查网络或代理）'
       }
     }
 
+    const cause = (error as { cause?: unknown })?.cause
+    const causeText = cause ? ` [原因: ${String(cause)}]` : ''
+
     return {
       ok: false,
-      message: error instanceof Error ? `连接异常: ${error.message}` : '无法连接到模型服务'
+      message: error instanceof Error ? `连接异常: ${error.message}${causeText}` : '无法连接到模型服务'
     }
   }
 }

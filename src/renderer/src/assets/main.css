@@ -2557,6 +2557,18 @@ button:focus-visible {
   background: #e5ded4;
   border: 1px solid #c4bcae;
   border-radius: 4px;
+  transition: all 120ms ease;
+}
+
+.pref-pill:hover {
+  background: #dbd3c7;
+  border-color: #a89f91;
+}
+
+.pref-pill-active {
+  background: #d8cebe;
+  border-color: #e06c3a;
+  box-shadow: 0 0 0 1px #e06c3a;
 }
 
 .pref-pill-remove {

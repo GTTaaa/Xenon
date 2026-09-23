@@ -975,7 +975,13 @@ function App(): React.JSX.Element {
                         <span className="terminal-engine-code">{option.code}</span>
                         <span className="terminal-engine-body">
                           <span className="terminal-engine-name">{option.value}</span>
-                          <span className="terminal-engine-profile">{option.profile}</span>
+                          <span className="terminal-engine-profile">
+                            {option.profile && option.profile !== 'CUSTOM' && option.profile !== 'CUSTOM MODEL'
+                              ? option.profile
+                              : option.baseUrl
+                                ? option.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
+                                : option.profile}
+                          </span>
                         </span>
                         {isSelected ? (
                           <span className="terminal-engine-active-tag">ACTIVE</span>

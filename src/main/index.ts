@@ -7,7 +7,8 @@ import {
   Tray,
   Menu,
   nativeImage,
-  globalShortcut
+  globalShortcut,
+  session
 } from 'electron'
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -19,7 +20,8 @@ import { translateText } from './services/translator'
 import { getLLMConfig, saveLLMConfig, testLLMConnection } from './services/configManager'
 import { triggerScreenshotTranslation } from './services/screenCapture'
 
-loadEnv({ path: resolve(process.cwd(), '.env.local') })
+loadEnv({ path: resolve(process.cwd(), '.env') })
+loadEnv({ path: resolve(process.cwd(), '.env.local'), override: true })
 
 let tray: Tray | null = null
 let mainWindow: BrowserWindow | null = null
@@ -217,13 +219,30 @@ function createTray(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // 设置应用模型 ID（用于 Windows 任务栏识别）
   electronApp.setAppUserModelId('com.electron')
 
   // 在 macOS 环境下设置 Dock 栏应用图标（开发环境与运行时即时生效）
   if (process.platform === 'darwin' && app.dock) {
     app.dock.setIcon(icon)
+  }
+
+  // 自动同步环境中的代理配置给 Electron 网络会话
+  const proxy =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    process.env.ALL_PROXY ||
+    process.env.all_proxy
+  if (proxy) {
+    console.log('[main] 检测到网络代理配置，为 Electron 设置代理:', proxy)
+    try {
+      await session.defaultSession.setProxy({ proxyRules: proxy })
+    } catch (proxyErr) {
+      console.error('[main] 设置代理规则失败:', proxyErr)
+    }
   }
 
   // Default open or close DevTools by F12 in development

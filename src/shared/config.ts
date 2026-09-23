@@ -9,12 +9,20 @@ export type LLMProviderType = 'openai-compatible' | 'mock'
  * 模型选项单项配置
  */
 export interface ModelOptionItem {
-  /** 模型调用标识符，如 gpt-4o-mini、deepseek-chat */
+  /** 模型调用标识符，如 gpt-4o-mini、deepseek-chat、cline-pass/deepseek-v4.1-flash */
   value: string
   /** 快捷编号代码，如 A1, B2 */
   code: string
-  /** 模式或特性描述，如 FAST RESPONSE, BALANCED */
+  /** 模式或特性描述/厂商标签，如 FAST RESPONSE, BALANCED, DEEPSEEK 官方, CLINEPASS */
   profile: string
+  /** 服务提供商类型（可选，默认继承全局） */
+  provider?: LLMProviderType
+  /** 该模型专属的接口地址（可选，未设置时继承全局 baseUrl） */
+  baseUrl?: string
+  /** 该模型专属的访问密钥（可选，未设置时继承全局 apiKey） */
+  apiKey?: string
+  /** 该模型是否默认启用深度思考（可选） */
+  enableThinking?: boolean
 }
 
 /**

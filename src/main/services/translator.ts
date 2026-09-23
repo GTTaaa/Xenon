@@ -1,3 +1,4 @@
+import { net } from 'electron'
 import type { TranslateRequest, TranslateResponse } from '../../shared/translate'
 import { getLLMConfig } from './configManager'
 import type { LLMConfig } from '../../shared/config'
@@ -43,7 +44,8 @@ const translateWithOpenAICompatible = async (
   if (!config.baseUrl) {
     throw new TranslateServiceError('CONFIG_MISSING_BASE_URL', '缺少 Base URL，请在设置中配置')
   }
-  const endpoint = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`
+  const cleanBaseUrl = config.baseUrl.trim().replace(/\/chat\/completions\/?$/, '').replace(/\/$/, '')
+  const endpoint = `${cleanBaseUrl}/chat/completions`
   const model = request.options?.model || config.model || 'gpt-4o-mini'
   const enableThinking = request.options?.enableThinking ?? config.enableThinking ?? false
 
@@ -71,91 +73,156 @@ const translateWithOpenAICompatible = async (
       ].join('\n')
 
   try {
-    const response = await fetch(endpoint, {
+    const requestBody: Record<string, unknown> = {
+      model,
+      messages: [
+        {
+          role: 'system',
+          content: systemContent
+        },
+        {
+          role: 'user',
+          content: `Source language: ${request.sourceLanguage}\nTarget language: ${request.targetLanguage}\nText:${request.text}`
+        }
+      ]
+    }
+
+    // 仅当用户明确开启深度思考时传递 thinking 扩展参数，避免标准 OpenAI 兼容代理网关报 400 校验错误
+    if (enableThinking) {
+      requestBody.thinking = {
+        type: 'enabled'
+      }
+    }
+
+    console.log('[main] translateWithOpenAICompatible 发起请求 ->', endpoint, '模型:', model)
+
+    // 使用 Electron 的 net.fetch，自动继承 macOS 操作系统代理配置（支持 VPN、Clash 等网络环境）
+    const response = await net.fetch(endpoint, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${config.apiKey.trim()}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'screenshot-translator/1.0'
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: systemContent
-          },
-          {
-            role: 'user',
-            content: `Source language: ${request.sourceLanguage}\nTarget language: ${request.targetLanguage}\nText:${request.text}`
-          }
-        ],
-        // DeepSeek 官方标准思考开关参数：{"thinking": {"type": "enabled/disabled"}}
-        thinking: {
-          type: enableThinking ? 'enabled' : 'disabled'
-        }
-      })
+      body: JSON.stringify(requestBody)
     })
-    const data = (await response.json()) as {
+
+    const rawResponseText = await response.text()
+    console.log('[main] 模型响应状态码:', response.status, '原始返回:', rawResponseText)
+
+    let data: {
       choices?: Array<{
         message?: {
-          content?: string
+          content?: string | Array<{ text?: string; content?: string }>
+          reasoning_content?: string
         }
+        text?: string
       }>
       error?: {
         message?: string
       }
+    } = {}
+
+    try {
+      data = JSON.parse(rawResponseText)
+    } catch {
+      console.error('[main] 模型返回非 JSON 格式响应:', rawResponseText)
+      throw new TranslateServiceError(`HTTP_${response.status}`, `模型响应非 JSON: ${rawResponseText.slice(0, 100)}`)
     }
 
     if (!response.ok) {
-      throw new TranslateServiceError(
-        `HTTP_${response.status}`,
-        data.error?.message ?? `模型请求失败：${response.status}`
-      )
+      const errorMsg = data.error?.message ?? `模型请求失败：${response.status} (${rawResponseText.slice(0, 150)})`
+      console.error('[main] 模型返回错误状态码:', response.status, errorMsg)
+      throw new TranslateServiceError(`HTTP_${response.status}`, errorMsg)
     }
 
-    let text = data.choices?.[0]?.message?.content?.trim()
+    let text = ''
+    // 兼容标准 OpenAI 格式 choices 以及 Cline API 等网关外层包裹的 data.choices 格式
+    const rawChoices =
+      (data as { data?: { choices?: typeof data.choices } }).data?.choices ?? data.choices
+    const firstChoice = rawChoices?.[0]
+
+    const messageContent = firstChoice?.message?.content
+    if (typeof messageContent === 'string') {
+      text = messageContent.trim()
+    } else if (Array.isArray(messageContent)) {
+      text = messageContent.map((item) => (typeof item === 'object' ? item.text || item.content || '' : String(item))).join('').trim()
+    } else if (firstChoice?.message?.reasoning_content) {
+      text = firstChoice.message.reasoning_content.trim()
+    } else if (typeof firstChoice?.text === 'string') {
+      text = firstChoice.text.trim()
+    }
 
     if (!text) {
+      console.error('[main] 模型返回成功但未提取到有效内容:', data)
       throw new TranslateServiceError('EMPTY_RESPONSE', '模型返回内容为空')
     }
 
     // 关闭思考模式时，若模型仍然返回了 <think> 标签内容，自动将其剥离保持译文纯净
     if (!enableThinking) {
-      text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+      const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+      // 若模型将所有内容均包裹在 think 标签内，剥离后为空时兜底使用原始内容，防止抛出空响应异常
+      text = stripped || text
     }
+
+    console.log('[main] 翻译提取成功，结果长度:', text.length, '内容预览:', text.slice(0, 80))
 
     return {
       ok: true,
       text
     }
   } catch (error: unknown) {
+    console.error('[main] translateWithOpenAICompatible 捕获到异常:', error)
     if (error instanceof TranslateServiceError) {
       throw error
     }
 
-    throw new TranslateServiceError('NETWORK_ERROR', '无法连接到模型服务')
+    const cause = (error as { cause?: unknown })?.cause
+    const causeText = cause ? ` (${String(cause)})` : ''
+    throw new TranslateServiceError('NETWORK_ERROR', error instanceof Error ? `${error.message}${causeText}` : '无法连接到模型服务')
   }
 }
 
 export const translateText = async (request: TranslateRequest): Promise<TranslateResponse> => {
   try {
     const config = getLLMConfig()
+    const targetModel = request.options?.model || config.model
 
-    console.log(
-      '[main] translateText 执行，当前模式 =',
-      config.provider,
-      '模型 =',
-      request.options?.model || config.model,
-      '思考开关 =',
-      (request.options?.enableThinking ?? config.enableThinking ?? false) ? '开启' : '关闭'
-    )
+    // 从模型池中寻找当前模型是否绑定了专属通道配置
+    const matchedChannel = config.modelOptions?.find((item) => item.value === targetModel)
 
-    if (config.provider === 'mock') {
+    const effectiveProvider = matchedChannel?.provider || config.provider
+    const effectiveBaseUrl = (matchedChannel?.baseUrl || config.baseUrl || '').trim()
+    const effectiveApiKey = (matchedChannel?.apiKey || config.apiKey || '').trim()
+    const effectiveThinking =
+      request.options?.enableThinking ??
+      matchedChannel?.enableThinking ??
+      config.enableThinking ??
+      false
+
+    console.log('[main] translateText 路由分发:', {
+      targetModel,
+      channel: matchedChannel?.profile ?? '默认配置',
+      effectiveBaseUrl,
+      hasCustomKey: Boolean(matchedChannel?.apiKey),
+      enableThinking: effectiveThinking
+    })
+
+    const effectiveConfig: LLMConfig = {
+      ...config,
+      provider: effectiveProvider,
+      baseUrl: effectiveBaseUrl,
+      apiKey: effectiveApiKey,
+      model: targetModel,
+      enableThinking: effectiveThinking
+    }
+
+    if (effectiveProvider === 'mock') {
       return await mockTranslate(request)
     }
 
-    if (config.provider === 'openai-compatible') {
-      return await translateWithOpenAICompatible(request, config)
+    if (effectiveProvider === 'openai-compatible') {
+      return await translateWithOpenAICompatible(request, effectiveConfig)
     }
 
     return {
@@ -166,6 +233,7 @@ export const translateText = async (request: TranslateRequest): Promise<Translat
       }
     }
   } catch (error) {
+    console.error('[main] translateText 顶层捕获到失败:', error)
     if (error instanceof TranslateServiceError) {
       return {
         ok: false,
@@ -180,7 +248,7 @@ export const translateText = async (request: TranslateRequest): Promise<Translat
       ok: false,
       error: {
         code: 'UNKNOWN_ERROR',
-        message: '翻译服务发生未知错误'
+        message: error instanceof Error ? error.message : '翻译服务发生未知错误'
       }
     }
   }
