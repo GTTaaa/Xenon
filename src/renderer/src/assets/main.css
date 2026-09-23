@@ -172,6 +172,9 @@ body {
   z-index: 6;
 }
 
+/* ==========================================================================
+   腰线模型选择器触发按钮 (Waistline Model Switcher Trigger)
+   ========================================================================== */
 .model-switcher-trigger {
   display: inline-flex;
   align-items: center;
@@ -211,58 +214,215 @@ button:focus-visible {
 
 .model-switcher-trigger-open .section-header-value {
   color: #1e2532;
+  font-weight: 700;
 }
 
-.model-switcher-panel {
+/* ==========================================================================
+   深色掌机终端引擎面板 (Terminal Engine Deck - In-Screen Overlay)
+   ========================================================================== */
+.terminal-engine-deck {
   position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 12;
-  width: min(248px, 100vw - 40px);
-  padding: 10px;
-  border: 1px solid rgba(98, 108, 125, 0.14);
-  border-radius: 12px;
-  background: rgba(242, 238, 232, 0.96);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 12px 28px rgba(92, 96, 107, 0.12);
+  inset: 0;
+  z-index: 10;
+  background: rgba(10, 13, 19, 0.96);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 240, 90, 0.22);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  animation: terminalDeckFadeIn 140ms ease-out;
 }
 
-.model-switcher-panel-header {
+@keyframes terminalDeckFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.terminal-engine-deck-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-  color: #818899;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(0, 240, 90, 0.12);
+}
+
+.terminal-engine-deck-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #8fa3b7;
   font-size: 8px;
-  line-height: 1;
   font-family: 'Space Mono', monospace;
+  font-weight: 700;
   letter-spacing: 1px;
 }
 
-.model-switcher-list {
+.terminal-engine-deck-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #00f05a;
+  box-shadow: 0 0 5px rgba(0, 240, 90, 0.9);
+}
+
+.terminal-engine-deck-count {
+  color: rgba(0, 240, 90, 0.7);
+  font-size: 7.5px;
+  margin-left: 4px;
+}
+
+.terminal-engine-deck-close {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  color: #7b8898;
+  font-size: 9px;
+  cursor: pointer;
+  transition: all 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.terminal-engine-deck-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e5ece6;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.terminal-engine-deck-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 2px;
+  min-height: 0;
+}
+
+.terminal-engine-option {
+  width: 100%;
   display: grid;
-  gap: 6px;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  color: #9aa7b8;
+  text-align: left;
+  cursor: pointer;
+  transition: all 120ms ease;
+  -webkit-app-region: no-drag;
 }
 
-.model-switcher-panel-footer {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(98, 108, 125, 0.22);
+.terminal-engine-option:hover {
+  background: rgba(0, 240, 90, 0.06);
+  border-color: rgba(0, 240, 90, 0.25);
+  color: #dce5ef;
 }
 
-.model-switcher-config-btn {
+.terminal-engine-option-selected {
+  background: rgba(0, 240, 90, 0.12) !important;
+  border-color: rgba(0, 240, 90, 0.5) !important;
+  box-shadow: 0 0 8px rgba(0, 240, 90, 0.08);
+}
+
+.terminal-engine-code {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  color: #637283;
+  letter-spacing: 0.5px;
+}
+
+.terminal-engine-option-selected .terminal-engine-code {
+  color: #00f05a;
+  font-weight: 700;
+}
+
+.terminal-engine-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.terminal-engine-name {
+  font-family: 'Space Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #c9d5e3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-engine-option-selected .terminal-engine-name {
+  color: #ffffff;
+}
+
+.terminal-engine-profile {
+  font-family: 'Space Mono', monospace;
+  font-size: 7px;
+  color: #5d6d7e;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-engine-active-tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #00f05a;
+  background: rgba(0, 240, 90, 0.15);
+  border: 1px solid rgba(0, 240, 90, 0.4);
+  border-radius: 2px;
+  padding: 1px 4px;
+  line-height: 1;
+}
+
+.terminal-engine-dot-standby {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.terminal-engine-deck-footer {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.terminal-engine-config-btn {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 8px;
-  border: 1px dashed rgba(91, 101, 119, 0.32);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.5);
-  color: #4a5567;
+  padding: 4px 6px;
+  background: rgba(0, 240, 90, 0.04);
+  border: 1px dashed rgba(0, 240, 90, 0.28);
+  border-radius: 3px;
+  color: rgba(0, 240, 90, 0.85);
   font-family: 'Space Mono', monospace;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 700;
   letter-spacing: 0.8px;
   cursor: pointer;
@@ -270,92 +430,10 @@ button:focus-visible {
   -webkit-app-region: no-drag;
 }
 
-.model-switcher-config-btn:hover {
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(52, 64, 82, 0.45);
-  color: #2f3848;
-  transform: translateY(-1px);
-}
-
-.model-option {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 10px;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid rgba(91, 101, 119, 0.12);
-  border-radius: 9px;
-  padding: 8px 9px;
-  background: rgba(255, 255, 255, 0.48);
-  color: #4a5567;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 120ms ease,
-    background-color 120ms ease,
-    border-color 120ms ease;
-  -webkit-app-region: no-drag;
-}
-
-.model-option:hover {
-  transform: translateY(-1px);
-  border-color: rgba(79, 89, 107, 0.18);
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.model-option-selected {
-  border-color: rgba(52, 64, 82, 0.22);
-  background: rgba(255, 255, 255, 0.86);
-}
-
-.model-option-code {
-  color: #8f97a7;
-  font-size: 9px;
-  line-height: 1;
-  font-family: 'Space Mono', monospace;
-  letter-spacing: 0.8px;
-}
-
-.model-option-body {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.model-option-name,
-.model-option-profile {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: 'Space Mono', monospace;
-}
-
-.model-option-name {
-  color: #445062;
-  font-size: 11px;
-  line-height: 1.05;
-  font-weight: 600;
-  letter-spacing: 0.15px;
-}
-
-.model-option-profile {
-  color: #9098a7;
-  font-size: 8px;
-  line-height: 1;
-  letter-spacing: 0.85px;
-}
-
-.model-option-indicator {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(91, 101, 119, 0.16);
-}
-
-.model-option-selected .model-option-indicator {
-  background: #2ac458;
-  box-shadow: 0 0 0 3px rgba(42, 196, 88, 0.08);
+.terminal-engine-config-btn:hover {
+  background: rgba(0, 240, 90, 0.12);
+  border-color: rgba(0, 240, 90, 0.55);
+  color: #00f05a;
 }
 
 .status-value {
@@ -444,6 +522,11 @@ button:focus-visible {
   min-height: 84px;
   max-height: 280px;
   height: auto;
+  transition: min-height 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.display-screen-target.display-screen-target-deck-open {
+  min-height: 185px;
 }
 
 .display-screen::before {
@@ -981,39 +1064,8 @@ button:focus-visible {
     letter-spacing: 0.2px;
   }
 
-  .model-switcher-panel {
-    top: calc(100% + 8px);
-    width: min(214px, 100vw - 36px);
-    padding: 8px;
-  }
-
-  .model-switcher-panel-header {
-    margin-bottom: 8px;
-    font-size: 7px;
-    letter-spacing: 0.9px;
-  }
-
-  .model-switcher-list {
-    gap: 6px;
-  }
-
-  .model-option {
-    grid-template-columns: 20px minmax(0, 1fr) 8px;
-    gap: 6px;
-    padding: 7px 8px;
-  }
-
-  .model-option-code {
-    font-size: 8px;
-  }
-
-  .model-option-name {
-    font-size: 9px;
-  }
-
-  .model-option-profile {
-    font-size: 7px;
-    letter-spacing: 0.8px;
+  .terminal-engine-deck {
+    padding: 6px 8px;
   }
 
   .status-value {

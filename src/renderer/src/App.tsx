@@ -112,6 +112,7 @@ function App(): React.JSX.Element {
   })
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const modelSelectorRef = useRef<HTMLDivElement | null>(null)
+  const engineDeckRef = useRef<HTMLDivElement | null>(null)
 
   // 用户指定的源语言（'auto' 表示自动识别）
   const [sourceLanguage, setSourceLanguage] = useState<SupportedLanguage>(() => {
@@ -360,7 +361,11 @@ function App(): React.JSX.Element {
 
     const handlePointerDown = (event: MouseEvent): void => {
       const target = event.target as Node
-      if (isModelMenuOpen && !modelSelectorRef.current?.contains(target)) {
+      if (
+        isModelMenuOpen &&
+        !modelSelectorRef.current?.contains(target) &&
+        !engineDeckRef.current?.contains(target)
+      ) {
         setIsModelMenuOpen(false)
       }
       if (isSourceLangMenuOpen && !sourceLangSelectorRef.current?.contains(target)) {
@@ -844,7 +849,7 @@ function App(): React.JSX.Element {
                     type="button"
                     aria-haspopup="listbox"
                     aria-expanded={isTargetLangMenuOpen}
-                    aria-label={`当前目标语言: ${getLanguageInfo(effectiveTargetLang).label}，点击切换`}
+                    aria-label={`当前目标语言: ${getLanguageInfo(effectiveTargetLang).label}，点击展开语言滑轨`}
                     onClick={() => {
                       setIsTargetLangMenuOpen((open) => !open)
                       setIsSourceLangMenuOpen(false)
@@ -858,14 +863,14 @@ function App(): React.JSX.Element {
                   </button>
                 </div>
 
-                {/* 模型选择器（单行平齐排版） */}
+                {/* 模型选择器（保留在腰线右侧入口） */}
                 <div className="model-selector" ref={modelSelectorRef}>
                   <button
                     className={`model-switcher-trigger ${isModelMenuOpen ? 'model-switcher-trigger-open' : ''}`}
                     type="button"
                     aria-haspopup="listbox"
                     aria-expanded={isModelMenuOpen}
-                    aria-label={`当前模型: ${selectedModel}，点击展开模型切换菜单`}
+                    aria-label={`当前模型: ${selectedModel}，点击在下方屏幕展开选择`}
                     onClick={() => {
                       setIsModelMenuOpen((open) => !open)
                       setIsSourceLangMenuOpen(false)
@@ -875,70 +880,15 @@ function App(): React.JSX.Element {
                     <span className="section-header-label">MODEL:</span>
                     <span className="section-header-value">{selectedModel}</span>
                   </button>
-
-                  {isModelMenuOpen ? (
-                    <div className="model-switcher-panel" role="dialog" aria-label="模型切换面板">
-                      <div className="model-switcher-panel-header">
-                        <span>SELECT ENGINE</span>
-                        <span>{modelOptions.length.toString().padStart(2, '0')} UNITS</span>
-                      </div>
-                      <div className="model-switcher-list" role="listbox" aria-label="可用模型列表">
-                        {modelOptions.map((option) => {
-                          const isSelected = option.value === selectedModel
-
-                          return (
-                            <button
-                              key={option.value}
-                              className={`model-option ${isSelected ? 'model-option-selected' : ''}`}
-                              type="button"
-                              role="option"
-                              aria-selected={isSelected}
-                              onClick={() => handleModelSelect(option.value)}
-                            >
-                              <span className="model-option-code">{option.code}</span>
-                              <span className="model-option-body">
-                                <span className="model-option-name">{option.value}</span>
-                                <span className="model-option-profile">{option.profile}</span>
-                              </span>
-                              <span className="model-option-indicator" aria-hidden="true" />
-                            </button>
-                          )
-                        })}
-                      </div>
-                      <div className="model-switcher-panel-footer">
-                        <button
-                          type="button"
-                          className="model-switcher-config-btn"
-                          onClick={() => {
-                            setIsModelMenuOpen(false)
-                            void window.api.openConfigWindow()
-                          }}
-                        >
-                          <svg
-                            width="11"
-                            height="11"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{ marginRight: '5px', verticalAlign: 'middle' }}
-                            aria-hidden="true"
-                          >
-                            <circle cx="12" cy="12" r="3" />
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                          </svg>
-                          <span>CONFIGURE ENGINES</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </>
             )}
           </div>
-          <div className="display-screen display-screen-target">
+          <div
+            className={`display-screen display-screen-target ${
+              isModelMenuOpen ? 'display-screen-target-deck-open' : ''
+            }`}
+          >
             <div className="display-screen-body">
               <div className="display-scroll">
                 {status === 'translating' ? (
@@ -982,6 +932,89 @@ function App(): React.JSX.Element {
                 </div>
               </div>
             </div>
+
+            {/* 深色掌机终端引擎面板 (Dark Terminal Engine Deck) */}
+            {isModelMenuOpen ? (
+              <div
+                className="terminal-engine-deck"
+                ref={engineDeckRef}
+                role="dialog"
+                aria-label="翻译引擎选择面板"
+              >
+                <div className="terminal-engine-deck-header">
+                  <div className="terminal-engine-deck-title">
+                    <span className="terminal-engine-deck-dot" aria-hidden="true" />
+                    <span>SELECT ENGINE</span>
+                    <span className="terminal-engine-deck-count">
+                      {modelOptions.length.toString().padStart(2, '0')} UNITS
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="terminal-engine-deck-close"
+                    onClick={() => setIsModelMenuOpen(false)}
+                    aria-label="关闭引擎面板"
+                    title="关闭面板"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="terminal-engine-deck-list" role="listbox" aria-label="可用引擎列表">
+                  {modelOptions.map((option) => {
+                    const isSelected = option.value === selectedModel
+
+                    return (
+                      <button
+                        key={option.value}
+                        className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => handleModelSelect(option.value)}
+                      >
+                        <span className="terminal-engine-code">{option.code}</span>
+                        <span className="terminal-engine-body">
+                          <span className="terminal-engine-name">{option.value}</span>
+                          <span className="terminal-engine-profile">{option.profile}</span>
+                        </span>
+                        {isSelected ? (
+                          <span className="terminal-engine-active-tag">ACTIVE</span>
+                        ) : (
+                          <span className="terminal-engine-dot-standby" aria-hidden="true" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="terminal-engine-deck-footer">
+                  <button
+                    type="button"
+                    className="terminal-engine-config-btn"
+                    onClick={() => {
+                      setIsModelMenuOpen(false)
+                      void window.api.openConfigWindow()
+                    }}
+                  >
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ marginRight: '5px', verticalAlign: 'middle' }}
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    <span>CONFIGURE ENGINES</span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {errorMessage ? (
