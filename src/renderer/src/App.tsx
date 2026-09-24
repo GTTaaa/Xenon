@@ -317,7 +317,7 @@ function App(): React.JSX.Element {
       // 基础内容高度加上上下安全裕量，紧凑自然贴合，杜绝死板大面积空白
       let targetHeight = Math.max(280, Math.ceil(rect.height + 24))
 
-      // 如果有语言选择器弹出菜单处于展开状态，确保窗口高度能容纳（模型面板为全景内屏覆盖，不拉伸外部窗口）
+      // 如果有语言选择器弹出菜单处于展开状态，确保窗口高度能容纳（模型选择面板内嵌在结果输出屏中，通过屏幕 min-height 自适应驱动）
       const activePopups = deviceRef.current.querySelectorAll<HTMLElement>('.lang-switcher-panel')
       activePopups.forEach((popup) => {
         const popupRect = popup.getBoundingClientRect()
@@ -347,7 +347,7 @@ function App(): React.JSX.Element {
       window.cancelAnimationFrame(frameId)
       observer.disconnect()
     }
-  }, [isSourceLangMenuOpen, isTargetLangMenuOpen])
+  }, [isSourceLangMenuOpen, isTargetLangMenuOpen, isModelMenuOpen])
 
   // 初始加载后端持久化的大模型配置与多服务商列表
   useEffect(() => {
@@ -1081,7 +1081,12 @@ function App(): React.JSX.Element {
               </>
             )}
           </div>
-          <div ref={targetScreenRef} className="display-screen display-screen-target">
+          <div
+            ref={targetScreenRef}
+            className={`display-screen display-screen-target ${
+              isModelMenuOpen ? 'display-screen-target-deck-open' : ''
+            }`}
+          >
             <div className="display-screen-body">
               <div className="display-scroll">
                 {status === 'translating' ? (
@@ -1125,6 +1130,216 @@ function App(): React.JSX.Element {
                 </div>
               </div>
             </div>
+
+            {/* 深色掌机终端引擎面板 (Terminal Engine Deck - 嵌在结果输出屏内部) */}
+            {isDeckMounted ? (
+              <div
+                className={`terminal-engine-deck ${isDeckClosing ? 'terminal-engine-deck-closing' : ''}`}
+                ref={engineDeckRef}
+                role="dialog"
+                aria-label="翻译引擎选择面板"
+              >
+                <div className="terminal-engine-deck-header">
+                  <div className="terminal-engine-deck-title">
+                    <span className="terminal-engine-deck-dot" aria-hidden="true" />
+                    <span>SELECT ENGINE</span>
+                    <span className="terminal-engine-deck-count">
+                      {totalEngineUnits.toString().padStart(2, '0')} UNITS
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="terminal-engine-deck-close"
+                    onClick={() => closeModelMenu()}
+                    aria-label="关闭引擎面板"
+                    title="关闭面板"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {/* 左右分栏引擎选择容器 */}
+                <div
+                  className="terminal-engine-deck-split"
+                  role="region"
+                  aria-label="服务商与模型分栏"
+                >
+                  {enabledProviders.length > 0 ? (
+                    <>
+                      {/* 左侧：服务商切换栏 (Provider Sidebar) */}
+                      <div
+                        className="terminal-engine-sidebar"
+                        role="tablist"
+                        aria-label="服务商列表"
+                      >
+                        {enabledProviders.map((prov) => {
+                          const isFocused = prov.id === focusedDeckProvider?.id
+                          const isCurrentActive = prov.id === selectedProviderId
+                          return (
+                            <button
+                              key={prov.id}
+                              type="button"
+                              role="tab"
+                              aria-selected={isFocused}
+                              className={`terminal-engine-provider-item ${
+                                isFocused ? 'terminal-engine-provider-item-active' : ''
+                              }`}
+                              onClick={() => setDeckFocusedProviderId(prov.id)}
+                              title={`查看 ${prov.name} 的模型列表`}
+                            >
+                              <span
+                                className={`terminal-engine-provider-dot ${
+                                  isCurrentActive ? 'dot-active' : 'dot-idle'
+                                }`}
+                                aria-hidden="true"
+                              />
+                              <span className="terminal-engine-provider-name">{prov.name}</span>
+                              <span className="terminal-engine-provider-count">
+                                {prov.models.length}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {/* 右侧：所选服务商下的模型列表 (Models Pane) */}
+                      <div
+                        className="terminal-engine-models-pane"
+                        role="tabpanel"
+                        aria-label="模型列表"
+                      >
+                        {focusedDeckProvider ? (
+                          <div className="terminal-engine-pane-header">
+                            <span className="terminal-engine-pane-badge">
+                              {focusedDeckProvider.name.toUpperCase()}
+                            </span>
+                            <span
+                              className="terminal-engine-pane-endpoint"
+                              title={focusedDeckProvider.baseUrl}
+                            >
+                              {
+                                focusedDeckProvider.baseUrl
+                                  .replace(/^https?:\/\//, '')
+                                  .split('/')[0]
+                              }
+                            </span>
+                          </div>
+                        ) : null}
+
+                        <div className="terminal-engine-models-list" role="listbox">
+                          {focusedDeckProvider && focusedDeckProvider.models.length > 0 ? (
+                            focusedDeckProvider.models.map((item, idx) => {
+                              const isSelected =
+                                focusedDeckProvider.id === selectedProviderId &&
+                                item.id === selectedModel
+                              const modelCode = (idx + 1).toString().padStart(2, '0')
+
+                              return (
+                                <button
+                                  key={`${focusedDeckProvider.id}-${item.id}`}
+                                  className={`terminal-engine-option ${
+                                    isSelected ? 'terminal-engine-option-selected' : ''
+                                  }`}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={isSelected}
+                                  onClick={() => handleModelSelect(focusedDeckProvider.id, item.id)}
+                                >
+                                  <span className="terminal-engine-code">{modelCode}</span>
+                                  <span className="terminal-engine-body">
+                                    <span className="terminal-engine-name">{item.id}</span>
+                                    <span className="terminal-engine-profile">
+                                      {item.label || focusedDeckProvider.name}
+                                    </span>
+                                  </span>
+                                  {isSelected ? (
+                                    <span className="terminal-engine-active-tag">ACTIVE</span>
+                                  ) : (
+                                    <span
+                                      className="terminal-engine-dot-standby"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                </button>
+                              )
+                            })
+                          ) : (
+                            <div className="terminal-engine-empty-hint">该服务商暂未配置模型</div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    /* 兜底单列列表 (Fallback) */
+                    <div
+                      className="terminal-engine-models-list"
+                      role="listbox"
+                      aria-label="可用引擎列表"
+                    >
+                      {modelOptions.map((option) => {
+                        const isSelected = option.value === selectedModel
+
+                        return (
+                          <button
+                            key={option.value}
+                            className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => handleModelSelect('deepseek', option.value)}
+                          >
+                            <span className="terminal-engine-code">{option.code}</span>
+                            <span className="terminal-engine-body">
+                              <span className="terminal-engine-name">{option.value}</span>
+                              <span className="terminal-engine-profile">
+                                {option.profile &&
+                                option.profile !== 'CUSTOM' &&
+                                option.profile !== 'CUSTOM MODEL'
+                                  ? option.profile
+                                  : option.baseUrl
+                                    ? option.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
+                                    : option.profile}
+                              </span>
+                            </span>
+                            {isSelected ? (
+                              <span className="terminal-engine-active-tag">ACTIVE</span>
+                            ) : (
+                              <span className="terminal-engine-dot-standby" aria-hidden="true" />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="terminal-engine-deck-footer">
+                  <button
+                    type="button"
+                    className="terminal-engine-config-btn"
+                    onClick={() => {
+                      closeModelMenu()
+                      void window.api.openConfigWindow()
+                    }}
+                  >
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ marginRight: '5px', verticalAlign: 'middle' }}
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    <span>CONFIGURE ENGINES</span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {errorMessage ? (
@@ -1134,201 +1349,6 @@ function App(): React.JSX.Element {
             </p>
           ) : null}
         </section>
-
-        {/* 深色掌机终端引擎面板 (Terminal Engine Deck - 全景卡带覆盖层) */}
-        {isDeckMounted ? (
-          <div
-            className={`terminal-engine-deck ${isDeckClosing ? 'terminal-engine-deck-closing' : ''}`}
-            ref={engineDeckRef}
-            role="dialog"
-            aria-label="翻译引擎选择面板"
-          >
-            <div className="terminal-engine-deck-header">
-              <div className="terminal-engine-deck-title">
-                <span className="terminal-engine-deck-dot" aria-hidden="true" />
-                <span>SELECT ENGINE</span>
-                <span className="terminal-engine-deck-count">
-                  {totalEngineUnits.toString().padStart(2, '0')} UNITS
-                </span>
-              </div>
-              <button
-                type="button"
-                className="terminal-engine-deck-close"
-                onClick={() => closeModelMenu()}
-                aria-label="关闭引擎面板"
-                title="关闭面板"
-              >
-                ✕
-              </button>
-            </div>
-            {/* 左右分栏引擎选择容器 */}
-            <div className="terminal-engine-deck-split" role="region" aria-label="服务商与模型分栏">
-              {enabledProviders.length > 0 ? (
-                <>
-                  {/* 左侧：服务商切换栏 (Provider Sidebar) */}
-                  <div className="terminal-engine-sidebar" role="tablist" aria-label="服务商列表">
-                    {enabledProviders.map((prov) => {
-                      const isFocused = prov.id === focusedDeckProvider?.id
-                      const isCurrentActive = prov.id === selectedProviderId
-                      return (
-                        <button
-                          key={prov.id}
-                          type="button"
-                          role="tab"
-                          aria-selected={isFocused}
-                          className={`terminal-engine-provider-item ${
-                            isFocused ? 'terminal-engine-provider-item-active' : ''
-                          }`}
-                          onClick={() => setDeckFocusedProviderId(prov.id)}
-                          title={`查看 ${prov.name} 的模型列表`}
-                        >
-                          <span
-                            className={`terminal-engine-provider-dot ${
-                              isCurrentActive ? 'dot-active' : 'dot-idle'
-                            }`}
-                            aria-hidden="true"
-                          />
-                          <span className="terminal-engine-provider-name">{prov.name}</span>
-                          <span className="terminal-engine-provider-count">
-                            {prov.models.length}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  {/* 右侧：所选服务商下的模型列表 (Models Pane) */}
-                  <div
-                    className="terminal-engine-models-pane"
-                    role="tabpanel"
-                    aria-label="模型列表"
-                  >
-                    {focusedDeckProvider ? (
-                      <div className="terminal-engine-pane-header">
-                        <span className="terminal-engine-pane-badge">
-                          {focusedDeckProvider.name.toUpperCase()}
-                        </span>
-                        <span
-                          className="terminal-engine-pane-endpoint"
-                          title={focusedDeckProvider.baseUrl}
-                        >
-                          {focusedDeckProvider.baseUrl.replace(/^https?:\/\//, '').split('/')[0]}
-                        </span>
-                      </div>
-                    ) : null}
-
-                    <div className="terminal-engine-models-list" role="listbox">
-                      {focusedDeckProvider && focusedDeckProvider.models.length > 0 ? (
-                        focusedDeckProvider.models.map((item, idx) => {
-                          const isSelected =
-                            focusedDeckProvider.id === selectedProviderId &&
-                            item.id === selectedModel
-                          const modelCode = (idx + 1).toString().padStart(2, '0')
-
-                          return (
-                            <button
-                              key={`${focusedDeckProvider.id}-${item.id}`}
-                              className={`terminal-engine-option ${
-                                isSelected ? 'terminal-engine-option-selected' : ''
-                              }`}
-                              type="button"
-                              role="option"
-                              aria-selected={isSelected}
-                              onClick={() => handleModelSelect(focusedDeckProvider.id, item.id)}
-                            >
-                              <span className="terminal-engine-code">{modelCode}</span>
-                              <span className="terminal-engine-body">
-                                <span className="terminal-engine-name">{item.id}</span>
-                                <span className="terminal-engine-profile">
-                                  {item.label || focusedDeckProvider.name}
-                                </span>
-                              </span>
-                              {isSelected ? (
-                                <span className="terminal-engine-active-tag">ACTIVE</span>
-                              ) : (
-                                <span className="terminal-engine-dot-standby" aria-hidden="true" />
-                              )}
-                            </button>
-                          )
-                        })
-                      ) : (
-                        <div className="terminal-engine-empty-hint">该服务商暂未配置模型</div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                /* 兜底单列列表 (Fallback) */
-                <div
-                  className="terminal-engine-models-list"
-                  role="listbox"
-                  aria-label="可用引擎列表"
-                >
-                  {modelOptions.map((option) => {
-                    const isSelected = option.value === selectedModel
-
-                    return (
-                      <button
-                        key={option.value}
-                        className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
-                        type="button"
-                        role="option"
-                        aria-selected={isSelected}
-                        onClick={() => handleModelSelect('deepseek', option.value)}
-                      >
-                        <span className="terminal-engine-code">{option.code}</span>
-                        <span className="terminal-engine-body">
-                          <span className="terminal-engine-name">{option.value}</span>
-                          <span className="terminal-engine-profile">
-                            {option.profile &&
-                            option.profile !== 'CUSTOM' &&
-                            option.profile !== 'CUSTOM MODEL'
-                              ? option.profile
-                              : option.baseUrl
-                                ? option.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
-                                : option.profile}
-                          </span>
-                        </span>
-                        {isSelected ? (
-                          <span className="terminal-engine-active-tag">ACTIVE</span>
-                        ) : (
-                          <span className="terminal-engine-dot-standby" aria-hidden="true" />
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-            <div className="terminal-engine-deck-footer">
-              <button
-                type="button"
-                className="terminal-engine-config-btn"
-                onClick={() => {
-                  closeModelMenu()
-                  void window.api.openConfigWindow()
-                }}
-              >
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ marginRight: '5px', verticalAlign: 'middle' }}
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
-                <span>CONFIGURE ENGINES</span>
-              </button>
-            </div>
-          </div>
-        ) : null}
       </section>
     </main>
   )
