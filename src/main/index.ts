@@ -8,7 +8,8 @@ import {
   Menu,
   nativeImage,
   globalShortcut,
-  session
+  session,
+  screen
 } from 'electron'
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -99,10 +100,24 @@ function closeConfigWindow(): void {
 
 function createWindow(): void {
   const cfg = getLLMConfig()
+
+  // 获取主显示器可用工作区（排除 macOS 顶部菜单栏/Dock 栏或 Windows 任务栏）
+  const primaryDisplay = screen.getPrimaryDisplay()
+  const { workArea } = primaryDisplay
+
+  const windowWidth = 358
+  const windowHeight = 340
+
+  // 计算屏幕右上角坐标（完全贴合在屏幕工作区右上角，无缝紧贴右侧与顶部）
+  const x = Math.max(workArea.x, Math.round(workArea.x + workArea.width - windowWidth))
+  const y = Math.max(workArea.y, Math.round(workArea.y))
+
   mainWindow = new BrowserWindow({
+    x,
+    y,
     useContentSize: true,
-    width: 358,
-    height: 340,
+    width: windowWidth,
+    height: windowHeight,
     minWidth: 358,
     maxWidth: 358,
     minHeight: 280,
