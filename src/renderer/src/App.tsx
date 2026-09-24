@@ -133,6 +133,22 @@ function App(): React.JSX.Element {
     return modelOptions.length
   }, [enabledProviders, modelOptions])
 
+  // 引擎面板当前局部聚焦的服务商 ID（为 null 时自动联动当前全局生效的服务商）
+  const [deckFocusedProviderId, setDeckFocusedProviderId] = useState<string | null>(null)
+
+  // 引擎面板当前聚焦展示的服务商对象（计算派生，无需 useEffect 避免瀑布式重渲染）
+  const focusedDeckProvider = useMemo(() => {
+    if (deckFocusedProviderId) {
+      const found = enabledProviders.find((p) => p.id === deckFocusedProviderId)
+      if (found) return found
+    }
+    return (
+      enabledProviders.find((p) => p.id === selectedProviderId) ||
+      enabledProviders[0] ||
+      activeProvider
+    )
+  }, [enabledProviders, deckFocusedProviderId, selectedProviderId, activeProvider])
+
   // 用户指定的源语言（'auto' 表示自动识别）
   const [sourceLanguage, setSourceLanguage] = useState<SupportedLanguage>(() => {
     const saved = localStorage.getItem('sourceLanguage') as SupportedLanguage | null
@@ -604,6 +620,7 @@ function App(): React.JSX.Element {
     localStorage.setItem('selectedProviderId', providerId)
     localStorage.setItem('selectedModel', nextModel)
     setIsModelMenuOpen(false)
+    setDeckFocusedProviderId(null)
 
     // 若该模型有默认思考配置，自动调整
     const prov = providers.find((p) => p.id === providerId)
@@ -1086,38 +1103,98 @@ function App(): React.JSX.Element {
                     ✕
                   </button>
                 </div>
-                <div className="terminal-engine-deck-list" role="listbox" aria-label="可用引擎列表">
-                  {enabledProviders.length > 0
-                    ? enabledProviders.map((prov) => {
-                        const host = prov.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
-
-                        return (
-                          <div key={prov.id} className="terminal-engine-provider-group">
-                            <div className="terminal-engine-group-title">
-                              <span className="terminal-engine-group-badge">
-                                {prov.name.toUpperCase()}
+                {/* 左右分栏引擎选择容器 */}
+                <div
+                  className="terminal-engine-deck-split"
+                  role="region"
+                  aria-label="服务商与模型分栏"
+                >
+                  {enabledProviders.length > 0 ? (
+                    <>
+                      {/* 左侧：服务商切换栏 (Provider Sidebar) */}
+                      <div
+                        className="terminal-engine-sidebar"
+                        role="tablist"
+                        aria-label="服务商列表"
+                      >
+                        {enabledProviders.map((prov) => {
+                          const isFocused = prov.id === focusedDeckProvider?.id
+                          const isCurrentActive = prov.id === selectedProviderId
+                          return (
+                            <button
+                              key={prov.id}
+                              type="button"
+                              role="tab"
+                              aria-selected={isFocused}
+                              className={`terminal-engine-provider-item ${
+                                isFocused ? 'terminal-engine-provider-item-active' : ''
+                              }`}
+                              onClick={() => setDeckFocusedProviderId(prov.id)}
+                              title={`查看 ${prov.name} 的模型列表`}
+                            >
+                              <span
+                                className={`terminal-engine-provider-dot ${
+                                  isCurrentActive ? 'dot-active' : 'dot-idle'
+                                }`}
+                                aria-hidden="true"
+                              />
+                              <span className="terminal-engine-provider-name">{prov.name}</span>
+                              <span className="terminal-engine-provider-count">
+                                {prov.models.length}
                               </span>
-                              <span className="terminal-engine-group-sub">{host}</span>
-                            </div>
-                            {prov.models.map((item, idx) => {
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {/* 右侧：所选服务商下的模型列表 (Models Pane) */}
+                      <div
+                        className="terminal-engine-models-pane"
+                        role="tabpanel"
+                        aria-label="模型列表"
+                      >
+                        {focusedDeckProvider ? (
+                          <div className="terminal-engine-pane-header">
+                            <span className="terminal-engine-pane-badge">
+                              {focusedDeckProvider.name.toUpperCase()}
+                            </span>
+                            <span
+                              className="terminal-engine-pane-endpoint"
+                              title={focusedDeckProvider.baseUrl}
+                            >
+                              {
+                                focusedDeckProvider.baseUrl
+                                  .replace(/^https?:\/\//, '')
+                                  .split('/')[0]
+                              }
+                            </span>
+                          </div>
+                        ) : null}
+
+                        <div className="terminal-engine-models-list" role="listbox">
+                          {focusedDeckProvider && focusedDeckProvider.models.length > 0 ? (
+                            focusedDeckProvider.models.map((item, idx) => {
                               const isSelected =
-                                prov.id === selectedProviderId && item.id === selectedModel
+                                focusedDeckProvider.id === selectedProviderId &&
+                                item.id === selectedModel
                               const modelCode = (idx + 1).toString().padStart(2, '0')
 
                               return (
                                 <button
-                                  key={`${prov.id}-${item.id}`}
-                                  className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
+                                  key={`${focusedDeckProvider.id}-${item.id}`}
+                                  className={`terminal-engine-option ${
+                                    isSelected ? 'terminal-engine-option-selected' : ''
+                                  }`}
                                   type="button"
                                   role="option"
                                   aria-selected={isSelected}
-                                  onClick={() => handleModelSelect(prov.id, item.id)}
+                                  onClick={() => handleModelSelect(focusedDeckProvider.id, item.id)}
                                 >
                                   <span className="terminal-engine-code">{modelCode}</span>
                                   <span className="terminal-engine-body">
                                     <span className="terminal-engine-name">{item.id}</span>
                                     <span className="terminal-engine-profile">
-                                      {item.label || prov.name}
+                                      {item.label || focusedDeckProvider.name}
                                     </span>
                                   </span>
                                   {isSelected ? (
@@ -1130,11 +1207,21 @@ function App(): React.JSX.Element {
                                   )}
                                 </button>
                               )
-                            })}
-                          </div>
-                        )
-                      })
-                    : modelOptions.map((option) => {
+                            })
+                          ) : (
+                            <div className="terminal-engine-empty-hint">该服务商暂未配置模型</div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    /* 兜底单列列表 (Fallback) */
+                    <div
+                      className="terminal-engine-models-list"
+                      role="listbox"
+                      aria-label="可用引擎列表"
+                    >
+                      {modelOptions.map((option) => {
                         const isSelected = option.value === selectedModel
 
                         return (
@@ -1167,6 +1254,8 @@ function App(): React.JSX.Element {
                           </button>
                         )
                       })}
+                    </div>
+                  )}
                 </div>
                 <div className="terminal-engine-deck-footer">
                   <button

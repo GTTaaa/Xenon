@@ -223,16 +223,22 @@ button:focus-visible {
 .terminal-engine-deck {
   position: absolute;
   inset: 0;
-  z-index: 10;
-  background: rgba(10, 13, 19, 0.96);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(0, 240, 90, 0.22);
+  z-index: 20;
+  background: rgba(8, 12, 16, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 240, 90, 0.25);
   border-radius: 6px;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(0, 240, 90, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   padding: 8px 10px;
   box-sizing: border-box;
   animation: terminalDeckFadeIn 140ms ease-out;
+  color-scheme: dark;
 }
 
 @keyframes terminalDeckFadeIn {
@@ -252,19 +258,20 @@ button:focus-visible {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(0, 240, 90, 0.12);
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(0, 240, 90, 0.14);
+  flex-shrink: 0;
 }
 
 .terminal-engine-deck-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #8fa3b7;
-  font-size: 8px;
+  color: #9cb1c6;
+  font-size: 8.5px;
   font-family: 'Space Mono', monospace;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
 }
 
 .terminal-engine-deck-dot {
@@ -272,13 +279,36 @@ button:focus-visible {
   height: 5px;
   border-radius: 50%;
   background: #00f05a;
-  box-shadow: 0 0 5px rgba(0, 240, 90, 0.9);
+  box-shadow: 0 0 6px rgba(0, 240, 90, 0.95);
+  animation: terminalPulse 2s infinite ease-in-out;
+}
+
+@keyframes terminalPulse {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+    box-shadow: 0 0 8px rgba(0, 240, 90, 1);
+  }
 }
 
 .terminal-engine-deck-count {
-  color: rgba(0, 240, 90, 0.7);
+  display: inline-flex;
+  align-items: center;
   font-size: 7.5px;
+  font-weight: 700;
+  font-family: 'Space Mono', monospace;
+  color: #00f05a;
+  background: rgba(0, 240, 90, 0.1);
+  border: 1px solid rgba(0, 240, 90, 0.24);
+  border-radius: 999px;
+  padding: 1px 6px;
   margin-left: 4px;
+  letter-spacing: 0.5px;
 }
 
 .terminal-engine-deck-close {
@@ -298,25 +328,212 @@ button:focus-visible {
 }
 
 .terminal-engine-deck-close:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #e5ece6;
-  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 60, 60, 0.15);
+  border-color: rgba(255, 60, 60, 0.4);
+  color: #ff6b6b;
 }
 
-.terminal-engine-deck-list {
+/* 引擎选择面板左右分栏容器 */
+.terminal-engine-deck-split {
   flex: 1 1 auto;
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+/* 左侧服务商切换边栏 */
+.terminal-engine-sidebar {
+  flex: 0 0 120px;
+  width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  min-height: 0;
+  border-right: 1px solid rgba(0, 240, 90, 0.12);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 240, 90, 0.3) transparent;
+}
+
+.terminal-engine-sidebar::-webkit-scrollbar {
+  width: 3px;
+}
+
+.terminal-engine-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-engine-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(0, 240, 90, 0.2);
+  border-radius: 3px;
+}
+
+.terminal-engine-sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 240, 90, 0.5);
+}
+
+.terminal-engine-provider-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 7px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #8fa3b7;
+  font-family: 'Space Mono', monospace;
+  font-size: 8.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 120ms ease;
+  text-align: left;
+  -webkit-app-region: no-drag;
+  box-sizing: border-box;
+}
+
+.terminal-engine-provider-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #dce5ef;
+}
+
+.terminal-engine-provider-item-active {
+  background: rgba(0, 240, 90, 0.12) !important;
+  border-color: rgba(0, 240, 90, 0.4) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(0, 240, 90, 0.08);
+}
+
+.terminal-engine-provider-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.terminal-engine-provider-dot.dot-active {
+  background: #00f05a;
+  box-shadow: 0 0 5px rgba(0, 240, 90, 0.9);
+}
+
+.terminal-engine-provider-dot.dot-idle {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.terminal-engine-provider-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-engine-provider-count {
+  font-size: 7px;
+  color: #5d6d7e;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.terminal-engine-provider-item-active .terminal-engine-provider-count {
+  color: #00f05a;
+  background: rgba(0, 240, 90, 0.18);
+}
+
+/* 右侧模型列表面板 */
+.terminal-engine-models-pane {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-right: 2px;
   min-height: 0;
 }
 
+.terminal-engine-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid #00f05a;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.terminal-engine-pane-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  color: #c4d1de;
+  letter-spacing: 0.6px;
+}
+
+.terminal-engine-pane-endpoint {
+  font-family: 'Space Mono', monospace;
+  font-size: 7.5px;
+  color: #556270;
+  letter-spacing: 0.4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.terminal-engine-models-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 4px;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 240, 90, 0.3) transparent;
+}
+
+.terminal-engine-models-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.terminal-engine-models-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.terminal-engine-models-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 240, 90, 0.25);
+  border-radius: 4px;
+  transition: background 150ms ease;
+}
+
+.terminal-engine-models-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 240, 90, 0.6);
+  box-shadow: 0 0 6px rgba(0, 240, 90, 0.4);
+}
+
+.terminal-engine-empty-hint {
+  padding: 16px;
+  text-align: center;
+  font-size: 8.5px;
+  color: #64748b;
+  font-family: 'Space Mono', monospace;
+}
+
+/* 单个引擎模型选项按钮 */
 .terminal-engine-option {
   width: 100%;
   display: grid;
-  grid-template-columns: 22px 1fr auto;
+  grid-template-columns: 20px 1fr auto;
   align-items: center;
   gap: 8px;
   padding: 5px 8px;
@@ -328,25 +545,34 @@ button:focus-visible {
   cursor: pointer;
   transition: all 120ms ease;
   -webkit-app-region: no-drag;
+  box-sizing: border-box;
 }
 
 .terminal-engine-option:hover {
   background: rgba(0, 240, 90, 0.06);
-  border-color: rgba(0, 240, 90, 0.25);
+  border-color: rgba(0, 240, 90, 0.3);
   color: #dce5ef;
+  transform: translateX(1px);
 }
 
 .terminal-engine-option-selected {
-  background: rgba(0, 240, 90, 0.12) !important;
-  border-color: rgba(0, 240, 90, 0.5) !important;
-  box-shadow: 0 0 8px rgba(0, 240, 90, 0.08);
+  background: linear-gradient(
+    90deg,
+    rgba(0, 240, 90, 0.12) 0%,
+    rgba(0, 240, 90, 0.04) 100%
+  ) !important;
+  border-color: rgba(0, 240, 90, 0.55) !important;
+  box-shadow:
+    0 0 10px rgba(0, 240, 90, 0.1),
+    inset 0 0 6px rgba(0, 240, 90, 0.04);
 }
 
 .terminal-engine-code {
   font-family: 'Space Mono', monospace;
   font-size: 8px;
-  color: #637283;
+  color: #5d6d7e;
   letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 .terminal-engine-option-selected .terminal-engine-code {
@@ -391,24 +617,33 @@ button:focus-visible {
   font-weight: 700;
   letter-spacing: 0.8px;
   color: #00f05a;
-  background: rgba(0, 240, 90, 0.15);
-  border: 1px solid rgba(0, 240, 90, 0.4);
+  background: rgba(0, 240, 90, 0.16);
+  border: 1px solid rgba(0, 240, 90, 0.45);
   border-radius: 2px;
-  padding: 1px 4px;
+  padding: 1px 5px;
   line-height: 1;
+  box-shadow: 0 0 6px rgba(0, 240, 90, 0.2);
 }
 
 .terminal-engine-dot-standby {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 120ms ease;
 }
 
+.terminal-engine-option:hover .terminal-engine-dot-standby {
+  background: rgba(0, 240, 90, 0.6);
+  box-shadow: 0 0 4px rgba(0, 240, 90, 0.6);
+}
+
+/* 底部配置按钮栏 */
 .terminal-engine-deck-footer {
   margin-top: 5px;
   padding-top: 5px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(0, 240, 90, 0.12);
+  flex-shrink: 0;
 }
 
 .terminal-engine-config-btn {
@@ -416,24 +651,27 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 6px;
-  background: rgba(0, 240, 90, 0.04);
-  border: 1px dashed rgba(0, 240, 90, 0.28);
+  height: 24px;
+  padding: 0 8px;
+  background: rgba(0, 240, 90, 0.05);
+  border: 1px solid rgba(0, 240, 90, 0.24);
   border-radius: 3px;
-  color: rgba(0, 240, 90, 0.85);
+  color: rgba(0, 240, 90, 0.9);
   font-family: 'Space Mono', monospace;
-  font-size: 7.5px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.8px;
   cursor: pointer;
   transition: all 120ms ease;
   -webkit-app-region: no-drag;
+  box-sizing: border-box;
 }
 
 .terminal-engine-config-btn:hover {
-  background: rgba(0, 240, 90, 0.12);
-  border-color: rgba(0, 240, 90, 0.55);
+  background: rgba(0, 240, 90, 0.14);
+  border-color: rgba(0, 240, 90, 0.6);
   color: #00f05a;
+  box-shadow: 0 0 8px rgba(0, 240, 90, 0.15);
 }
 
 .status-value {
@@ -526,7 +764,7 @@ button:focus-visible {
 }
 
 .display-screen-target.display-screen-target-deck-open {
-  min-height: 185px;
+  min-height: 200px;
 }
 
 .display-screen::before {
@@ -3161,34 +3399,6 @@ button:focus-visible {
   display: flex;
   align-items: center;
   cursor: pointer;
-}
-
-/* 引擎选择面板分组样式 */
-.terminal-engine-provider-group {
-  margin-bottom: 8px;
-}
-
-.terminal-engine-group-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 10px;
-  font-family: 'Space Mono', monospace;
-  font-size: 10px;
-  color: #8c9ba5;
-  background: rgba(255, 255, 255, 0.04);
-  border-left: 2px solid var(--pref-accent);
-  margin-bottom: 4px;
-}
-
-.terminal-engine-group-badge {
-  font-weight: 700;
-  color: #d1d9e0;
-}
-
-.terminal-engine-group-sub {
-  font-size: 9px;
-  color: #6b7785;
 }
 
 /* 快捷模型库池容器 */
