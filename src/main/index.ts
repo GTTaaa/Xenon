@@ -102,10 +102,10 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     useContentSize: true,
     width: 358,
-    height: 520,
+    height: 340,
     minWidth: 358,
     maxWidth: 358,
-    minHeight: 320,
+    minHeight: 280,
     maxHeight: 880,
     resizable: false,
     frame: false,
@@ -323,12 +323,13 @@ app.whenReady().then(async () => {
     return mainWindow.isAlwaysOnTop()
   })
 
+  // 窗口高度实时同步设置（保持不低于 280px 紧凑高度，超长文本自适应延展）
   ipcMain.handle('window:set-height', (_, targetHeight: number) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     const [width, currentHeight] = mainWindow.getContentSize()
-    const clampedHeight = Math.max(320, Math.min(Math.round(targetHeight), 880))
-    if (Math.abs(currentHeight - clampedHeight) >= 2) {
-      mainWindow.setContentSize(width, clampedHeight, true)
+    const clampedTargetHeight = Math.max(280, Math.min(Math.round(targetHeight), 880))
+    if (Math.abs(currentHeight - clampedTargetHeight) >= 2) {
+      mainWindow.setContentSize(width, clampedTargetHeight, false)
     }
   })
 
