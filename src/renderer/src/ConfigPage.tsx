@@ -14,6 +14,7 @@ import {
   DEFAULT_TRANSLATION_SETTINGS
 } from '../../shared/config'
 import { SUPPORTED_LANGUAGES } from '../../shared/languageDetector'
+import { useSmoothHorizontalScroll } from './utils/useSmoothHorizontalScroll'
 
 /**
  * 偏好设置一级分类菜单定义
@@ -31,6 +32,21 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'shortcuts', title: '快捷键', subtitle: 'GLOBAL SHORTCUTS' },
   { id: 'translation', title: '翻译偏好', subtitle: 'TRANSLATE BEHAVIOR' },
   { id: 'general', title: '通用设置', subtitle: 'SYSTEM & LAUNCH' }
+]
+
+/**
+ * 偏好设置外观主题风格类型
+ */
+type PrefTheme = 'wise' | 'classic'
+
+interface ThemeOption {
+  id: PrefTheme
+  label: string
+}
+
+const PREF_THEMES: ThemeOption[] = [
+  { id: 'wise', label: 'Wise 先锋绿' },
+  { id: 'classic', label: '经典原版' }
 ]
 
 /**
@@ -106,6 +122,29 @@ export const ConfigPage = (): React.JSX.Element => {
   // 当前处于的左侧分类
   const [activeCategory, setActiveCategory] = useState<PrefNavCategory>('providers')
 
+  // 偏好设置外观风格，默认采用 Wise 先锋绿，支持本地持久化
+  const [prefTheme, setPrefTheme] = useState<PrefTheme>(() => {
+    try {
+      const saved = localStorage.getItem('xenon_pref_theme')
+      if (saved === 'classic') {
+        return 'classic'
+      }
+    } catch {
+      // 忽略存储读取异常
+    }
+    return 'wise'
+  })
+
+  // 风格切换处理函数
+  const handleSelectTheme = (theme: PrefTheme): void => {
+    setPrefTheme(theme)
+    try {
+      localStorage.setItem('xenon_pref_theme', theme)
+    } catch {
+      // 忽略存储写入异常
+    }
+  }
+
   // 服务商列表
   const [providers, setProviders] = useState<ProviderItem[]>([])
   // 当前正在查看/编辑的 Tab ID
@@ -155,6 +194,13 @@ export const ConfigPage = (): React.JSX.Element => {
 
   // 手动录入单模型展开状态（默认收起以释放纵向空间）
   const [showManualAdd, setShowManualAdd] = useState(false)
+
+  // 渠道横向滑轨丝滑手势交互管理器（触控板原生高帧率放行、鼠标滚轮阻尼平滑、按住抓取拖拽）
+  const { containerRef: providerTabsRef } = useSmoothHorizontalScroll<HTMLDivElement>({
+    activeItemId: selectedTabId,
+    lerpFactor: 0.22,
+    enableDrag: true
+  })
 
   // 点击外部自动收起添加服务商下拉菜单
   useEffect(() => {
@@ -572,22 +618,43 @@ export const ConfigPage = (): React.JSX.Element => {
   }, [fetchedModels, modelSearchQuery])
 
   return (
-    <div className="pref-root">
+    <div className="pref-root" data-pref-theme={prefTheme}>
       {/* 顶部标题栏 */}
       <header className="pref-header">
         <div className="pref-header-title">
           <span className="pref-title-main">偏好设置</span>
           <span className="pref-title-sub">SYSTEM PREFERENCES // XENON WORKBENCH</span>
         </div>
-        <button
-          type="button"
-          className="pref-close-btn"
-          aria-label="关闭设置窗口"
-          title="关闭设置 (ESC)"
-          onClick={() => void window.api.closeConfigWindow()}
-        >
-          ×
-        </button>
+
+        {/* 顶部右侧：主题风格实时切换器与关闭按钮 */}
+        <div className="pref-header-actions">
+          <div className="pref-theme-switcher" role="group" aria-label="主题风格实时切换">
+            {PREF_THEMES.map((theme) => {
+              const isActive = prefTheme === theme.id
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  className={`pref-theme-btn ${isActive ? 'pref-theme-btn-active' : ''}`}
+                  onClick={() => handleSelectTheme(theme.id)}
+                  title={`切换为 ${theme.label} 视觉风格`}
+                >
+                  {theme.label}
+                </button>
+              )
+            })}
+          </div>
+
+          <button
+            type="button"
+            className="pref-close-btn"
+            aria-label="关闭设置窗口"
+            title="关闭设置 (ESC)"
+            onClick={() => void window.api.closeConfigWindow()}
+          >
+            ×
+          </button>
+        </div>
       </header>
 
       {/* 左右双栏主体布局 */}
@@ -622,7 +689,7 @@ export const ConfigPage = (): React.JSX.Element => {
               {/* 顶部：服务商切换与管理栏（扁平化无框集成，释放纵向空间） */}
               <div className="pref-provider-bar">
                 <div className="pref-provider-tabs-row">
-                  <div className="pref-provider-tabs">
+                  <div className="pref-provider-tabs" ref={providerTabsRef}>
                     {providers.map((p) => {
                       const isSelected = p.id === selectedTabId
                       const isPrimary = p.id === activeProviderId
@@ -630,6 +697,7 @@ export const ConfigPage = (): React.JSX.Element => {
                         <button
                           key={p.id}
                           type="button"
+                          data-item-id={p.id}
                           className={`pref-provider-tab ${isSelected ? 'pref-provider-tab-active' : ''} ${
                             !p.enabled ? 'pref-provider-tab-disabled' : ''
                           }`}

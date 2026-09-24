@@ -194,8 +194,12 @@ function App(): React.JSX.Element {
     localStorage.setItem('targetChipStyle', chipStyle)
   }, [chipStyle])
 
-  // 横向滑轨鼠标滚轮自适应水平滚动
+  // 横向滑轨鼠标滚轮自适应水平滚动（触控板横滑原生放行，纵向滚轮驱动横移）
   const handleRibbonWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
+    // 若横向位移占主导（触控板双指横滑），完全交由系统原生 120Hz 硬件加速物理管线处理
+    if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) {
+      return
+    }
     if (event.deltaY !== 0) {
       event.currentTarget.scrollLeft += event.deltaY
     }
