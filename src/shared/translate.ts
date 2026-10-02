@@ -19,5 +19,10 @@ export interface TranslateErrorResponse {
 export type TranslateResponse = TranslateSuccessResponse | TranslateErrorResponse
 
 export interface TranslateOptions {
+  /** 指定服务提供商 ID，如 'deepseek' 或 'cline' */
+  providerId?: string
+  /** 指定模型 ID，如 'deepseek-chat' 或 'cline-pass/deepseek-v4.1-flash' */
   model?: string
+  /** 是否开启大模型深度思考/推理模式 */
+  enableThinking?: boolean
 }

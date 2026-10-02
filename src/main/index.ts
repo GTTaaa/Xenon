@@ -1,26 +1,133 @@
 import { config as loadEnv } from 'dotenv'
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  Tray,
+  Menu,
+  nativeImage,
+  globalShortcut,
+  session,
+  screen
+} from 'electron'
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import trayIcon2x from '../../resources/trayTemplate@2x.png?asset'
 import type { TranslateRequest } from '../shared/translate'
+import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
+import { DEFAULT_SHORTCUTS } from '../shared/config'
 import { translateText } from './services/translator'
+import {
+  fetchProviderModels,
+  getLLMConfig,
+  saveLLMConfig,
+  testLLMConnection
+} from './services/configManager'
+import { triggerScreenshotTranslation } from './services/screenCapture'
 
-loadEnv({ path: resolve(process.cwd(), '.env.local') })
+loadEnv({ path: resolve(process.cwd(), '.env') })
+loadEnv({ path: resolve(process.cwd(), '.env.local'), override: true })
+
+let tray: Tray | null = null
+let mainWindow: BrowserWindow | null = null
+let configWindow: BrowserWindow | null = null
 
 console.log('[main] process booted')
 
-function createWindow(): void {
-  const mainWindow = new BrowserWindow({
-    useContentSize: true,
-    width: 358,
-    // height: 820,
-    minWidth: 358,
-    // minHeight: 820,
+/**
+ * 创建或激活独立的系统偏好设置窗口
+ */
+function openConfigWindow(): void {
+  if (configWindow && !configWindow.isDestroyed()) {
+    if (configWindow.isMinimized()) {
+      configWindow.restore()
+    }
+    configWindow.show()
+    configWindow.focus()
+    return
+  }
+
+  configWindow = new BrowserWindow({
+    width: 720,
+    height: 600,
+    minWidth: 640,
+    minHeight: 480,
+    resizable: true,
     frame: false,
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+
+  configWindow.on('ready-to-show', () => {
+    configWindow?.show()
+    configWindow?.focus()
+  })
+
+  configWindow.on('closed', () => {
+    configWindow = null
+  })
+
+  configWindow.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url)
+    return { action: 'deny' }
+  })
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    configWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?window=config`)
+  } else {
+    configWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: { window: 'config' }
+    })
+  }
+}
+
+/**
+ * 关闭独立的系统偏好设置窗口
+ */
+function closeConfigWindow(): void {
+  if (configWindow && !configWindow.isDestroyed()) {
+    configWindow.close()
+    configWindow = null
+  }
+}
+
+function createWindow(): void {
+  const cfg = getLLMConfig()
+
+  // 获取主显示器可用工作区（排除 macOS 顶部菜单栏/Dock 栏或 Windows 任务栏）
+  const primaryDisplay = screen.getPrimaryDisplay()
+  const { workArea } = primaryDisplay
+
+  const windowWidth = 358
+  const windowHeight = 340
+
+  // 计算屏幕右上角坐标（完全贴合在屏幕工作区右上角，无缝紧贴右侧与顶部）
+  const x = Math.max(workArea.x, Math.round(workArea.x + workArea.width - windowWidth))
+  const y = Math.max(workArea.y, Math.round(workArea.y))
+
+  mainWindow = new BrowserWindow({
+    x,
+    y,
+    useContentSize: true,
+    width: windowWidth,
+    height: windowHeight,
+    minWidth: 358,
+    maxWidth: 358,
+    minHeight: 280,
+    maxHeight: 880,
+    resizable: false,
+    frame: false,
+    show: false,
+    alwaysOnTop: Boolean(cfg.general?.alwaysOnTop),
+    autoHideMenuBar: true,
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -28,7 +135,19 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow?.show()
+  })
+
+  mainWindow.on('close', (event) => {
+    const currentConfig = getLLMConfig()
+    if (currentConfig.general?.closeAction === 'tray') {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
+  })
+
+  mainWindow.on('closed', () => {
+    mainWindow = null
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -45,12 +164,117 @@ function createWindow(): void {
   }
 }
 
+function showMainWindow(): void {
+  if (!mainWindow) {
+    createWindow()
+    return
+  }
+
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function showInputTranslateWindow(): void {
+  showMainWindow()
+  mainWindow?.webContents.send('translate:focus-input')
+}
+
+function createTray(): void {
+  if (process.platform !== 'darwin') return
+
+  const image = nativeImage.createFromPath(trayIcon2x)
+  image.setTemplateImage(true)
+
+  tray = new Tray(image)
+  tray.setToolTip('Xenon')
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '输入翻译',
+      accelerator: 'Alt+A',
+      click: () => {
+        showInputTranslateWindow()
+      }
+    },
+    {
+      label: '截图翻译',
+      accelerator: 'Alt+S',
+      click: () => {
+        void triggerScreenshotTranslation(() => mainWindow)
+      }
+    },
+    {
+      label: '模型配置',
+      accelerator: 'CommandOrControl+,',
+      click: () => {
+        openConfigWindow()
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '显示窗口',
+      click: () => {
+        if (!mainWindow) {
+          createWindow()
+          return
+        }
+
+        mainWindow.show()
+        mainWindow.focus()
+      }
+    },
+    {
+      label: '隐藏窗口',
+      click: () => {
+        mainWindow?.hide()
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        app.quit()
+      }
+    }
+  ])
+
+  tray.on('right-click', () => {
+    tray?.popUpContextMenu(contextMenu)
+  })
+
+  tray.on('click', () => {
+    tray?.popUpContextMenu(contextMenu)
+  })
+}
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  // Set app user model id for windows
+app.whenReady().then(async () => {
+  // 设置应用模型 ID（用于 Windows 任务栏识别）
   electronApp.setAppUserModelId('com.electron')
+
+  // 在 macOS 环境下设置 Dock 栏应用图标（开发环境与运行时即时生效）
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(icon)
+  }
+
+  // 自动同步环境中的代理配置给 Electron 网络会话
+  const proxy =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    process.env.ALL_PROXY ||
+    process.env.all_proxy
+  if (proxy) {
+    console.log('[main] 检测到网络代理配置，为 Electron 设置代理:', proxy)
+    try {
+      await session.defaultSession.setProxy({ proxyRules: proxy })
+    } catch (proxyErr) {
+      console.error('[main] 设置代理规则失败:', proxyErr)
+    }
+  }
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -66,12 +290,156 @@ app.whenReady().then(() => {
     console.log('[main] ipcMain.handle translate:text', request)
     return await translateText(request)
   })
+
+  ipcMain.handle('config:get', async () => {
+    return getLLMConfig()
+  })
+
+  ipcMain.handle('config:save', async (_, config: AppSettings) => {
+    const result = await saveLLMConfig(config)
+    if (result.ok) {
+      const latestConfig = getLLMConfig()
+      applyShortcuts(latestConfig.shortcuts)
+      applyGeneralSettings(latestConfig.general)
+      mainWindow?.webContents.send('config:updated', latestConfig)
+    }
+    return result
+  })
+
+  ipcMain.handle('app:open-config', () => {
+    openConfigWindow()
+  })
+
+  ipcMain.handle('window:close-config', () => {
+    closeConfigWindow()
+  })
+
+  ipcMain.handle('config:test', async (_, config: AppSettings) => {
+    return await testLLMConnection(config)
+  })
+
+  ipcMain.handle('config:fetch-models', async (_, params: { baseUrl: string; apiKey: string }) => {
+    return await fetchProviderModels(params)
+  })
+
+  ipcMain.handle('capture:screen', async () => {
+    return await triggerScreenshotTranslation(() => mainWindow)
+  })
+
+  ipcMain.handle('window:toggle-always-on-top', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false
+    const nextState = !mainWindow.isAlwaysOnTop()
+    mainWindow.setAlwaysOnTop(nextState, 'floating')
+    return nextState
+  })
+
+  ipcMain.handle('window:get-always-on-top', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false
+    return mainWindow.isAlwaysOnTop()
+  })
+
+  // 窗口高度实时同步设置（保持不低于 280px 紧凑高度，超长文本自适应延展）
+  ipcMain.handle('window:set-height', (_, targetHeight: number) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    const [width, currentHeight] = mainWindow.getContentSize()
+    const clampedTargetHeight = Math.max(280, Math.min(Math.round(targetHeight), 880))
+    if (Math.abs(currentHeight - clampedTargetHeight) >= 2) {
+      mainWindow.setContentSize(width, clampedTargetHeight, false)
+    }
+  })
+
   createWindow()
+  createTray()
+
+  // 动态注册与管理全局快捷键
+  let currentRegisteredShortcuts: ShortcutSettings | null = null
+
+  function applyShortcuts(shortcuts?: ShortcutSettings): void {
+    const nextShortcuts = shortcuts || DEFAULT_SHORTCUTS
+
+    if (currentRegisteredShortcuts) {
+      try {
+        if (currentRegisteredShortcuts.inputTranslate) {
+          globalShortcut.unregister(currentRegisteredShortcuts.inputTranslate)
+        }
+        if (currentRegisteredShortcuts.screenshot) {
+          globalShortcut.unregister(currentRegisteredShortcuts.screenshot)
+        }
+        if (currentRegisteredShortcuts.openPreferences) {
+          globalShortcut.unregister(currentRegisteredShortcuts.openPreferences)
+        }
+      } catch (err) {
+        console.warn('[main] 注销旧快捷键失败:', err)
+      }
+    }
+
+    if (nextShortcuts.inputTranslate) {
+      try {
+        const ok = globalShortcut.register(nextShortcuts.inputTranslate, () => {
+          showInputTranslateWindow()
+        })
+        if (!ok) console.warn(`[main] 注册输入快捷键失败: ${nextShortcuts.inputTranslate}`)
+        else console.log(`[main] 注册输入快捷键成功: ${nextShortcuts.inputTranslate}`)
+      } catch (e) {
+        console.warn(`[main] 快捷键格式错误: ${nextShortcuts.inputTranslate}`, e)
+      }
+    }
+
+    if (nextShortcuts.screenshot) {
+      try {
+        const ok = globalShortcut.register(nextShortcuts.screenshot, () => {
+          void triggerScreenshotTranslation(() => mainWindow)
+        })
+        if (!ok) console.warn(`[main] 注册截屏快捷键失败: ${nextShortcuts.screenshot}`)
+        else console.log(`[main] 注册截屏快捷键成功: ${nextShortcuts.screenshot}`)
+      } catch (e) {
+        console.warn(`[main] 快捷键格式错误: ${nextShortcuts.screenshot}`, e)
+      }
+    }
+
+    if (nextShortcuts.openPreferences) {
+      try {
+        const ok = globalShortcut.register(nextShortcuts.openPreferences, () => {
+          openConfigWindow()
+        })
+        if (!ok) console.warn(`[main] 注册偏好设置快捷键失败: ${nextShortcuts.openPreferences}`)
+        else console.log(`[main] 注册偏好设置快捷键成功: ${nextShortcuts.openPreferences}`)
+      } catch (e) {
+        console.warn(`[main] 快捷键格式错误: ${nextShortcuts.openPreferences}`, e)
+      }
+    }
+
+    currentRegisteredShortcuts = { ...nextShortcuts }
+  }
+
+  function applyGeneralSettings(general?: GeneralSettings): void {
+    if (!general) return
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: Boolean(general.launchAtLogin)
+      })
+    } catch (err) {
+      console.warn('[main] 设置开机自启失败:', err)
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setAlwaysOnTop(Boolean(general.alwaysOnTop), 'floating')
+    }
+  }
+
+  // 初始化应用快捷键与通用系统设置
+  const initialConfig = getLLMConfig()
+  applyShortcuts(initialConfig.shortcuts)
+  applyGeneralSettings(initialConfig.general)
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll()
   })
 })
 

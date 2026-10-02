@@ -6,6 +6,9 @@
     "src/preload/**/*",
     "src/shared/**/*"
   ],
+  "exclude": [
+    "src/**/__tests__/*"
+  ],
   "compilerOptions": {
     "composite": true,
     "types": [
