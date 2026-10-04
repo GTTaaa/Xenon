@@ -4,6 +4,9 @@ import { existsSync, statSync } from 'fs'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
 
+// 防止并发触发多次截屏（快捷键连按时窗口状态与截图选区会相互干扰）
+let isCapturing = false
+
 /**
  * 容错定位 Vision OCR 可执行工具或源码脚本
  */
@@ -190,24 +193,124 @@ export const promptScreenRecordingPermission = async (): Promise<void> => {
 }
 
 /**
+ * 等待窗口列表全部从屏幕上消失（带超时兜底）
+ * 返回实际等待时长与是否超时，便于诊断偶发遮挡问题
+ */
+const waitForWindowsHidden = async (
+  windows: BrowserWindow[],
+  timeoutMs = 800
+): Promise<{ elapsedMs: number; timedOut: boolean }> => {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const anyVisible = windows.some((win) => !win.isDestroyed() && win.isVisible())
+    if (!anyVisible) return { elapsedMs: Date.now() - start, timedOut: false }
+    await new Promise((resolve) => setTimeout(resolve, 40))
+  }
+
+  return { elapsedMs: Date.now() - start, timedOut: true }
+}
+
+/**
+ * 描述当前所有窗口的可见状态，用于截图前后诊断日志
+ */
+const describeWindowStates = (): string => {
+  const wins = BrowserWindow.getAllWindows()
+  if (wins.length === 0) return '(无窗口)'
+  return wins
+    .map((win, index) => {
+      const flags = [
+        `visible=${win.isDestroyed() ? 'destroyed' : win.isVisible()}`,
+        `minimized=${win.isDestroyed() ? 'destroyed' : win.isMinimized()}`,
+        `onTop=${win.isDestroyed() ? 'destroyed' : win.isAlwaysOnTop()}`
+      ]
+      return `#${index}{${flags.join(',')}}`
+    })
+    .join(' ')
+}
+
+/**
  * 触发截图翻译完整流程：截屏 -> OCR -> 唤起主窗口 -> 传递识别文本
+ *
+ * 为避免应用窗口浮在最上层遮挡待截取区域，截图前会隐藏所有应用窗口，
+ * 截图结束后再按需恢复（用户按 ESC 取消时恢复原可见状态）。
  */
 export const triggerScreenshotTranslation = async (
   getMainWindow: () => BrowserWindow | null
 ): Promise<{ ok: boolean; message?: string }> => {
   console.log('[main] 触发截图翻译...')
 
-  try {
-    const recognizedText = await captureAndRecognize()
+  // 防止连按快捷键并发触发多次截屏
+  if (isCapturing) {
+    console.log('[main] 已有截屏流程进行中，忽略本次触发')
+    return { ok: false, message: '截屏进行中' }
+  }
+  isCapturing = true
 
-    // 用户主动取消了截图，静默返回
+  const mainWindow = getMainWindow()
+
+  // 记录截图前所有可见窗口，截图完成后据此恢复
+  const windowsBeforeCapture = BrowserWindow.getAllWindows().filter(
+    (win) => !win.isDestroyed() && win.isVisible() && !win.isMinimized()
+  )
+
+  console.log('[main][截图诊断] 触发时窗口状态:', describeWindowStates())
+  console.log(
+    `[main][截图诊断] 需隐藏窗口 ${windowsBeforeCapture.length} 个，` +
+      `主窗口可见=${Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible())}`
+  )
+
+  try {
+    // 隐藏所有应用窗口（含主窗口、配置窗口等），避免遮挡待截取区域
+    if (windowsBeforeCapture.length > 0) {
+      const hideStart = Date.now()
+      for (const win of windowsBeforeCapture) {
+        win.hide()
+      }
+
+      const { elapsedMs, timedOut } = await waitForWindowsHidden(windowsBeforeCapture)
+      // 额外等待一小段时间，确保 macOS 窗口淡出动画彻底结束
+      await new Promise((resolve) => setTimeout(resolve, 120))
+
+      const totalElapsedMs = Date.now() - hideStart
+      console.log(
+        `[main][截图诊断] 隐藏窗口耗时 ${totalElapsedMs}ms` +
+          `（轮询确认 ${elapsedMs}ms${timedOut ? '，⚠️ 轮询超时仍有窗口可见' : ''} + 淡出余量 120ms）`
+      )
+      console.log('[main][截图诊断] 隐藏后窗口状态:', describeWindowStates())
+
+      if (timedOut) {
+        console.warn(
+          '[main][截图诊断] ⚠️ 等待窗口隐藏超时，截图中可能残留应用窗口遮挡，请上报此日志'
+        )
+      }
+    } else {
+      console.log('[main][截图诊断] 触发时无可见窗口，无需隐藏，直接截屏')
+    }
+
+    const captureStart = Date.now()
+    const recognizedText = await captureAndRecognize()
+    console.log(`[main][截图诊断] 截屏+OCR 耗时 ${Date.now() - captureStart}ms`)
+
+    // 用户主动取消了截图，恢复截图前可见的所有窗口
     if (recognizedText === null) {
+      for (const win of windowsBeforeCapture) {
+        if (!win.isDestroyed()) {
+          win.show()
+        }
+      }
+      console.log('[main][截图诊断] 用户取消截图，已恢复窗口:', describeWindowStates())
       return { ok: false, message: '用户取消截图' }
     }
 
-    const mainWindow = getMainWindow()
-    if (!mainWindow) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
       return { ok: false, message: '主窗口未初始化' }
+    }
+
+    // 恢复截图前可见的附属窗口（如配置窗口）
+    for (const win of windowsBeforeCapture) {
+      if (!win.isDestroyed() && win !== mainWindow) {
+        win.show()
+      }
     }
 
     // 唤起并置顶主窗口
@@ -223,6 +326,7 @@ export const triggerScreenshotTranslation = async (
     // 向渲染进程发送提取到的文本
     mainWindow.webContents.send('translate:apply-source-text', recognizedText)
 
+    console.log('[main][截图诊断] 截图成功，恢复后窗口状态:', describeWindowStates())
     return { ok: true }
   } catch (error) {
     console.error('[main] 截图翻译流程异常', error)
@@ -235,8 +339,10 @@ export const triggerScreenshotTranslation = async (
       void promptScreenRecordingPermission()
     }
 
-    const mainWindow = getMainWindow()
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore()
+      }
       mainWindow.show()
       mainWindow.focus()
       const userMessage = isPermissionError
@@ -250,5 +356,8 @@ export const triggerScreenshotTranslation = async (
       ok: false,
       message: rawErrorMsg
     }
+  } finally {
+    isCapturing = false
+    console.log('[main][截图诊断] 截图流程结束，释放并发布锁')
   }
 }
