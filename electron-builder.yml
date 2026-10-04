@@ -19,6 +19,8 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+# 指向 Icon Composer 制作的 .icon 文件（需要 macOS 26 + Xcode 26 打包）
+  icon: build/AppIcon.icon
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
