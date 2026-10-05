@@ -2157,135 +2157,11 @@ button:focus-visible {
   box-shadow: 0 0 4px rgba(0, 240, 90, 0.6);
 }
 
-/* 语言下拉悬浮面板 */
-.lang-switcher-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 15;
-  width: min(220px, 100vw - 40px);
-  max-height: 250px;
-  padding: 8px;
-  border: 1px solid rgba(98, 108, 125, 0.16);
-  border-radius: 10px;
-  background: rgba(242, 238, 232, 0.97);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 12px 28px rgba(92, 96, 107, 0.14);
-  display: flex;
-  flex-direction: column;
-}
-
-.lang-switcher-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
-  color: #818899;
-  font-size: 8px;
-  line-height: 1;
-  font-family: 'Space Mono', monospace;
-  letter-spacing: 1px;
-}
-
-.lang-switcher-list {
-  display: grid;
-  gap: 4px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.lang-switcher-list::-webkit-scrollbar {
-  width: 3px;
-}
-
-.lang-switcher-list::-webkit-scrollbar-thumb {
-  background: rgba(101, 112, 134, 0.3);
-  border-radius: 2px;
-}
-
-.lang-option {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 10px;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid rgba(91, 101, 119, 0.12);
-  border-radius: 6px;
-  padding: 6px 8px;
-  background: rgba(255, 255, 255, 0.48);
-  color: #4a5567;
-  text-align: left;
-  cursor: pointer;
-  transition: all 120ms ease;
-  -webkit-app-region: no-drag;
-}
-
-.lang-option:hover {
-  transform: translateY(-1px);
-  border-color: rgba(79, 89, 107, 0.22);
-  background: rgba(255, 255, 255, 0.75);
-}
-
-.lang-option-selected {
-  border-color: rgba(52, 64, 82, 0.25);
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.lang-option-code {
-  color: #8f97a7;
-  font-size: 9px;
-  line-height: 1;
-  font-family: 'Space Mono', monospace;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-}
-
-.lang-option-selected .lang-option-code {
-  color: #2f3848;
-}
-
-.lang-option-body {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.lang-option-name {
-  color: #384255;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lang-option-sub {
-  color: #008f35;
-  font-size: 8px;
-  line-height: 1;
-  font-family: 'Space Mono', monospace;
-}
-
-.lang-option-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  border: 1px solid rgba(101, 112, 134, 0.3);
-}
-
-.lang-option-selected .lang-option-indicator {
-  background: #2ac458;
-  border-color: #2ac458;
-  box-shadow: 0 0 5px rgba(42, 196, 88, 0.5);
-}
-
 /* ==========================================================================
-   方案 1：腰线极简磁带滑轨 (Tape Ribbon Selector)
+   腰线极简磁带滑轨 (Tape Ribbon Selector — SOURCE / TARGET 共用)
    ========================================================================== */
 
-.target-tape-ribbon {
+.tape-ribbon {
   display: flex;
   align-items: center;
   width: 100%;
@@ -2446,16 +2322,6 @@ button:focus-visible {
   height: 20px;
   margin-bottom: 8px;
   box-sizing: border-box;
-}
-
-.lang-switcher-panel-left {
-  left: 0;
-  right: auto;
-}
-
-.lang-switcher-panel-right {
-  right: 0;
-  left: auto;
 }
 
 /* ==========================================================================

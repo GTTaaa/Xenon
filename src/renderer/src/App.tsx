@@ -189,7 +189,8 @@ function App(): React.JSX.Element {
   const [isTargetLangMenuOpen, setIsTargetLangMenuOpen] = useState(false)
   const sourceLangSelectorRef = useRef<HTMLDivElement | null>(null)
   const targetLangSelectorRef = useRef<HTMLDivElement | null>(null)
-  const ribbonTrackRef = useRef<HTMLDivElement | null>(null)
+  const sourceRibbonTrackRef = useRef<HTMLDivElement | null>(null)
+  const targetRibbonTrackRef = useRef<HTMLDivElement | null>(null)
 
   // 记录深色面板退出动画定时器
   const deckClosingTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -223,17 +224,16 @@ function App(): React.JSX.Element {
 
   // 磁带滑轨展开时，自动平滑滚动使当前选中语言进入视窗中心
   useEffect(() => {
-    if (isTargetLangMenuOpen) {
-      const timer = window.setTimeout(() => {
-        const selectedEl = ribbonTrackRef.current?.querySelector('.tape-chip-selected')
-        if (selectedEl) {
-          selectedEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-        }
-      }, 50)
-      return () => window.clearTimeout(timer)
-    }
-    return undefined
-  }, [isTargetLangMenuOpen])
+    if (!isSourceLangMenuOpen && !isTargetLangMenuOpen) return undefined
+    const track = isSourceLangMenuOpen ? sourceRibbonTrackRef.current : targetRibbonTrackRef.current
+    const timer = window.setTimeout(() => {
+      const selectedEl = track?.querySelector('.tape-chip-selected')
+      if (selectedEl) {
+        selectedEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+      }
+    }, 50)
+    return () => window.clearTimeout(timer)
+  }, [isSourceLangMenuOpen, isTargetLangMenuOpen])
 
   // 目标语言 Chip 选中视觉样式方案：'vernier'（方案 B 极简游标线）| 'inset'（方案 A 机械物理凹陷）
   const [chipStyle, setChipStyle] = useState<'vernier' | 'inset'>(() => {
@@ -315,17 +315,7 @@ function App(): React.JSX.Element {
       if (!deviceRef.current) return
       const rect = deviceRef.current.getBoundingClientRect()
       // 基础内容高度加上上下安全裕量，紧凑自然贴合，杜绝死板大面积空白
-      let targetHeight = Math.max(280, Math.ceil(rect.height + 24))
-
-      // 如果有语言选择器弹出菜单处于展开状态，确保窗口高度能容纳（模型选择面板内嵌在结果输出屏中，通过屏幕 min-height 自适应驱动）
-      const activePopups = deviceRef.current.querySelectorAll<HTMLElement>('.lang-switcher-panel')
-      activePopups.forEach((popup) => {
-        const popupRect = popup.getBoundingClientRect()
-        const popupNeededHeight = Math.ceil(popupRect.bottom - rect.top + 24)
-        if (popupNeededHeight > targetHeight) {
-          targetHeight = popupNeededHeight
-        }
-      })
+      const targetHeight = Math.max(280, Math.ceil(rect.height + 24))
 
       // 仅当高度发生有效变化（>= 2px）时才派发 IPC，杜绝微小晃动与性能浪费
       if (Math.abs(lastSentHeightRef.current - targetHeight) >= 2) {
@@ -748,79 +738,108 @@ function App(): React.JSX.Element {
         </header>
 
         <section className="display-section">
-          <div className="display-section-header">
-            {/* 源语言选择器 */}
-            <div className="lang-header-item" ref={sourceLangSelectorRef}>
-              <button
-                className={`lang-badge-button ${isSourceLangMenuOpen ? 'lang-badge-button-open' : ''}`}
-                type="button"
-                aria-haspopup="listbox"
-                aria-expanded={isSourceLangMenuOpen}
-                aria-label={`当前源语言: ${sourceLanguage === 'auto' ? `自动检测 (当前识别: ${detectedInfo.languageInfo.label})` : getLanguageInfo(sourceLanguage).label}，点击切换`}
-                onClick={() => {
-                  setIsSourceLangMenuOpen((open) => !open)
-                  setIsTargetLangMenuOpen(false)
-                  closeModelMenu()
-                }}
+          <div className="display-section-header display-section-header-target">
+            {isSourceLangMenuOpen ? (
+              <div
+                className="tape-ribbon"
+                ref={sourceLangSelectorRef}
+                role="region"
+                aria-label="源语言磁带滑轨"
               >
-                <span className="section-header-label">SOURCE:</span>
-                <span className="section-header-value">{sourceDisplayPrompt}</span>
-                {sourceLanguage === 'auto' && sourceText.trim() ? (
-                  <span
-                    className="lang-pill"
-                    title={`已自动识别: ${detectedInfo.languageInfo.label} (置信度: ${Math.round(detectedInfo.confidence * 100)}%)`}
-                  >
-                    AUTO
-                  </span>
-                ) : null}
-              </button>
-
-              {isSourceLangMenuOpen ? (
+                <div className="tape-ribbon-label">
+                  <span className="section-header-label">SOURCE:</span>
+                </div>
                 <div
-                  className="lang-switcher-panel lang-switcher-panel-left"
-                  role="dialog"
-                  aria-label="源语言选择面板"
+                  className="tape-ribbon-track"
+                  ref={sourceRibbonTrackRef}
+                  onWheel={handleRibbonWheel}
+                  role="listbox"
+                  aria-label="源语言选择"
                 >
-                  <div className="lang-switcher-panel-header">
-                    <span>SELECT SOURCE</span>
-                    <span>{SUPPORTED_LANGUAGES.length.toString().padStart(2, '0')} UNITS</span>
-                  </div>
-                  <div className="lang-switcher-list" role="listbox" aria-label="源语言列表">
-                    {SUPPORTED_LANGUAGES.map((lang) => {
-                      const isSelected = lang.code === sourceLanguage
+                  {SUPPORTED_LANGUAGES.map((lang) => {
+                    const isSelected = lang.code === sourceLanguage
 
-                      return (
-                        <button
-                          key={lang.code}
-                          className={`lang-option ${isSelected ? 'lang-option-selected' : ''}`}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          onClick={() => {
+                    return (
+                      <button
+                        key={lang.code}
+                        className={`tape-chip ${
+                          isSelected
+                            ? chipStyle === 'vernier'
+                              ? 'tape-chip-selected tape-chip-selected-vernier'
+                              : 'tape-chip-selected tape-chip-selected-inset'
+                            : ''
+                        }`}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        title={
+                          lang.code === 'auto'
+                            ? `自动检测${sourceText.trim() ? ` (当前识别: ${detectedInfo.languageInfo.label})` : ''}`
+                            : lang.label
+                        }
+                        onClick={() => {
+                          setIsSourceLangMenuOpen(false)
+                          if (sourceLanguage !== lang.code) {
                             setSourceLanguage(lang.code)
-                            setIsSourceLangMenuOpen(false)
                             if (sourceText.trim()) {
                               markTranslationPending()
                             }
-                          }}
-                        >
-                          <span className="lang-option-code">{lang.shortLabel}</span>
-                          <span className="lang-option-body">
-                            <span className="lang-option-name">{lang.label}</span>
-                            {lang.code === 'auto' && sourceText.trim() ? (
-                              <span className="lang-option-sub">
-                                识别: {detectedInfo.languageInfo.label}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="lang-option-indicator" aria-hidden="true" />
-                        </button>
-                      )
-                    })}
-                  </div>
+                          }
+                        }}
+                      >
+                        {lang.shortLabel}
+                      </button>
+                    )
+                  })}
                 </div>
-              ) : null}
-            </div>
+                <div className="tape-ribbon-controls">
+                  <button
+                    type="button"
+                    className="tape-style-chip-btn"
+                    onClick={() => setChipStyle((s) => (s === 'vernier' ? 'inset' : 'vernier'))}
+                    title="切换方案 B(极简游标) 与方案 A(机械按键)"
+                    aria-label="切换选中样式风格"
+                  >
+                    {chipStyle === 'vernier' ? 'B: 游标' : 'A: 按键'}
+                  </button>
+                  <button
+                    type="button"
+                    className="tape-close-btn"
+                    onClick={() => setIsSourceLangMenuOpen(false)}
+                    title="收起滑轨"
+                    aria-label="收起滑轨"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="lang-header-item" ref={sourceLangSelectorRef}>
+                <button
+                  className="lang-badge-button"
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded={false}
+                  aria-label={`当前源语言: ${sourceLanguage === 'auto' ? `自动检测 (当前识别: ${detectedInfo.languageInfo.label})` : getLanguageInfo(sourceLanguage).label}，点击展开语言滑轨`}
+                  onClick={() => {
+                    setIsSourceLangMenuOpen((open) => !open)
+                    setIsTargetLangMenuOpen(false)
+                    closeModelMenu()
+                  }}
+                >
+                  <span className="section-header-label">SOURCE:</span>
+                  <span className="section-header-value">{sourceDisplayPrompt}</span>
+                  {sourceLanguage === 'auto' && sourceText.trim() ? (
+                    <span
+                      className="lang-pill"
+                      title={`已自动识别: ${detectedInfo.languageInfo.label} (置信度: ${Math.round(detectedInfo.confidence * 100)}%)`}
+                    >
+                      AUTO
+                    </span>
+                  ) : null}
+                </button>
+              </div>
+            )}
           </div>
           <div className="display-screen display-screen-source">
             <div className="display-screen-body">
@@ -935,7 +954,7 @@ function App(): React.JSX.Element {
           <div className="display-section-header display-section-header-target">
             {isTargetLangMenuOpen ? (
               <div
-                className="target-tape-ribbon"
+                className="tape-ribbon"
                 ref={targetLangSelectorRef}
                 role="region"
                 aria-label="目标语言磁带滑轨"
@@ -945,7 +964,7 @@ function App(): React.JSX.Element {
                 </div>
                 <div
                   className="tape-ribbon-track"
-                  ref={ribbonTrackRef}
+                  ref={targetRibbonTrackRef}
                   onWheel={handleRibbonWheel}
                   role="listbox"
                   aria-label="目标语言选择"
