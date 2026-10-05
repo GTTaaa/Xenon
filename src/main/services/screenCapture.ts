@@ -1,11 +1,19 @@
 import { app, BrowserWindow, dialog, shell } from 'electron'
 import { execFile } from 'child_process'
 import { existsSync, statSync } from 'fs'
-import { unlink } from 'fs/promises'
+import { unlink, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
 import { join } from 'path'
 
 // 防止并发触发多次截屏（快捷键连按时窗口状态与截图选区会相互干扰）
 let isCapturing = false
+
+// OCR 子进程最长容忍时长：超时后强制杀掉，避免用户侧无限挂起
+const OCR_TIMEOUT_MS = 15000
+
+// 预热用极小 PNG（160x48 白底黑条），仅用于让 Vision 框架完成冷加载，不入库为资源文件
+const OCR_PREWARM_IMAGE_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAKAAAAAwCAIAAAAZy+Y5AAAAkklEQVR4nO3XwQmAQBAEwc0/aQ3BxyG6TVUEA/2auUibrwfwLoHjBI4TOE7gOIHjBI4TOE7gOIHjngMP/yZwnMBxAscJHCdwnMBxAscJHHcamNUEjhM4TuA4geMEjhM4zg9eT+A4geMEjhM4TuA4geMEjhM47jQwqwkcJ3CcwHECxwkcJ3CcwHECxwkcJ3CcwHE3WX5019R2b9UAAAAASUVORK5CYII='
 
 /**
  * 容错定位 Vision OCR 可执行工具或源码脚本
@@ -103,31 +111,121 @@ const takeInteractiveScreenshot = async (tempImagePath: string): Promise<boolean
 }
 
 /**
+ * 解析出可直接交给 execFile 的 OCR 执行命令与参数
+ */
+const resolveOcrExecCommand = (imagePath: string): { command: string; args: string[] } => {
+  const { binPath, isScript } = resolveOcrExecutionCommand()
+  return {
+    command: isScript ? 'swift' : binPath,
+    args: isScript ? [binPath, imagePath] : [imagePath]
+  }
+}
+
+/**
  * 调用 Vision OCR 工具提取图片中的文本
+ * 带超时兑底，避免子进程卡死导致 await 永久挂起
  */
 const recognizeImageText = async (tempImagePath: string): Promise<string> => {
-  const { binPath, isScript } = resolveOcrExecutionCommand()
-  const command = isScript ? 'swift' : binPath
-  const args = isScript ? [binPath, tempImagePath] : [tempImagePath]
+  const { command, args } = resolveOcrExecCommand(tempImagePath)
 
   console.log('[main] 开始调用 Vision OCR 工具识别图片...', { command, args })
 
   return new Promise<string>((resolve, reject) => {
-    execFile(command, args, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        console.error('[main] OCR 识别工具执行失败:', {
-          code: error.code,
-          message: error.message,
-          stderr: stderr || stdout
-        })
-        reject(new Error(`OCR 识别异常: ${stderr || error.message}`))
-      } else {
-        const text = stdout.trim()
-        console.log('[main] OCR 识别成功，输出字符数:', text.length)
-        resolve(text)
+    const invokeStart = Date.now()
+    let spawnElapsedMs: number | null = null
+
+    const child = execFile(
+      command,
+      args,
+      { maxBuffer: 10 * 1024 * 1024, timeout: OCR_TIMEOUT_MS, killSignal: 'SIGKILL' },
+      (error, stdout, stderr) => {
+        const totalElapsedMs = Date.now() - invokeStart
+        const recognitionElapsedMs =
+          spawnElapsedMs === null ? null : totalElapsedMs - spawnElapsedMs
+        console.log(
+          `[main][OCR 诊断] 子进程总耗时 ${totalElapsedMs}ms` +
+            `（spawn ${spawnElapsedMs ?? '未捕获'}ms，识别 ${recognitionElapsedMs ?? '未捕获'}ms）`
+        )
+
+        if (error) {
+          const timedOut = (error as { killed?: boolean }).killed === true
+          console.error('[main] OCR 识别工具执行失败:', {
+            code: error.code,
+            message: error.message,
+            killed: (error as { killed?: boolean }).killed,
+            signal: (error as { signal?: string }).signal,
+            timedOut,
+            totalElapsedMs,
+            stderr: stderr || stdout
+          })
+          reject(
+            new Error(
+              timedOut
+                ? `OCR 识别超时（超过 ${OCR_TIMEOUT_MS}ms），已终止子进程`
+                : `OCR 识别异常: ${stderr || error.message}`
+            )
+          )
+        } else {
+          const text = stdout.trim()
+          console.log('[main] OCR 识别成功，输出字符数:', text.length)
+          resolve(text)
+        }
       }
+    )
+
+    // 记录真实 spawn 完成时刻，便于区分「进程启动慢」与「识别计算慢」
+    child.on('spawn', () => {
+      spawnElapsedMs = Date.now() - invokeStart
+      console.log(`[main][OCR 诊断] 子进程 spawn 完成耗时 ${spawnElapsedMs}ms`)
     })
   })
+}
+
+/**
+ * 后台预热 OCR 子进程：用一张极小图片跑一次识别，
+ * 把 dyld / Vision / Swift 运行时的首次冷加载开销提前到启动阶段。
+ * 失败静默，不影响主流程。
+ */
+export const prewarmOcrTool = async (): Promise<void> => {
+  if (process.platform !== 'darwin') return
+
+  const prewarmImagePath = join(tmpdir(), `snip_prewarm_${Date.now()}.png`)
+
+  try {
+    let execTarget: { command: string; args: string[] }
+    try {
+      execTarget = resolveOcrExecCommand(prewarmImagePath)
+    } catch (error) {
+      console.warn(
+        '[main][OCR 预热] 未找到 OCR 工具，跳过预热:',
+        error instanceof Error ? error.message : error
+      )
+      return
+    }
+
+    await writeFile(prewarmImagePath, Buffer.from(OCR_PREWARM_IMAGE_BASE64, 'base64'))
+
+    const start = Date.now()
+    await new Promise<void>((resolve) => {
+      execFile(
+        execTarget.command,
+        execTarget.args,
+        { maxBuffer: 1024 * 1024, timeout: OCR_TIMEOUT_MS, killSignal: 'SIGKILL' },
+        (error) => {
+          if (error) {
+            console.warn('[main][OCR 预热] 预热执行失败（不影响正常使用）:', error.message)
+          } else {
+            console.log(`[main][OCR 预热] 完成，冷启动开销 ${Date.now() - start}ms`)
+          }
+          resolve()
+        }
+      )
+    })
+  } catch (error) {
+    console.warn('[main][OCR 预热] 异常:', error instanceof Error ? error.message : error)
+  } finally {
+    await unlink(prewarmImagePath).catch(() => {})
+  }
 }
 
 /**

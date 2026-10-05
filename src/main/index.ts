@@ -25,7 +25,7 @@ import {
   saveLLMConfig,
   testLLMConnection
 } from './services/configManager'
-import { triggerScreenshotTranslation } from './services/screenCapture'
+import { triggerScreenshotTranslation, prewarmOcrTool } from './services/screenCapture'
 
 loadEnv({ path: resolve(process.cwd(), '.env') })
 loadEnv({ path: resolve(process.cwd(), '.env.local'), override: true })
@@ -369,6 +369,9 @@ app.whenReady().then(async () => {
 
   createWindow()
   createTray()
+
+  // 后台预热 Vision OCR 子进程，把 dyld/Vision 冷加载开销移出用户截图关键路径
+  prewarmOcrTool()
 
   // 动态注册与管理全局快捷键
   let currentRegisteredShortcuts: ShortcutSettings | null = null
