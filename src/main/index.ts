@@ -31,6 +31,7 @@ loadEnv({ path: resolve(process.cwd(), '.env') })
 loadEnv({ path: resolve(process.cwd(), '.env.local'), override: true })
 
 let tray: Tray | null = null
+let trayMenu: Menu | null = null
 let mainWindow: BrowserWindow | null = null
 let configWindow: BrowserWindow | null = null
 
@@ -61,7 +62,7 @@ function openConfigWindow(): void {
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: true
     }
   })
 
@@ -130,7 +131,7 @@ function createWindow(): void {
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: true
     }
   })
 
@@ -179,33 +180,31 @@ function showInputTranslateWindow(): void {
   mainWindow?.webContents.send('translate:focus-input')
 }
 
-function createTray(): void {
-  if (process.platform !== 'darwin') return
+/**
+ * 依据当前生效的快捷键配置构建托盘菜单
+ * 用户修改全局快捷键后需重新构建，避免托盘加速键长期停留在硬编码旧值
+ */
+function buildTrayMenu(): Menu {
+  const shortcuts = getLLMConfig().shortcuts || DEFAULT_SHORTCUTS
 
-  const image = nativeImage.createFromPath(trayIcon2x)
-  image.setTemplateImage(true)
-
-  tray = new Tray(image)
-  tray.setToolTip('Xenon')
-
-  const contextMenu = Menu.buildFromTemplate([
+  return Menu.buildFromTemplate([
     {
       label: '输入翻译',
-      accelerator: 'Alt+A',
+      accelerator: shortcuts.inputTranslate,
       click: () => {
         showInputTranslateWindow()
       }
     },
     {
       label: '截图翻译',
-      accelerator: 'Alt+S',
+      accelerator: shortcuts.screenshot,
       click: () => {
         void triggerScreenshotTranslation(() => mainWindow)
       }
     },
     {
       label: '模型配置',
-      accelerator: 'CommandOrControl+,',
+      accelerator: shortcuts.openPreferences,
       click: () => {
         openConfigWindow()
       }
@@ -237,13 +236,33 @@ function createTray(): void {
       }
     }
   ])
+}
+
+/**
+ * 重建并缓存托盘菜单（快捷键热更新后调用）
+ */
+function refreshTrayMenu(): void {
+  if (!tray) return
+  trayMenu = buildTrayMenu()
+}
+
+function createTray(): void {
+  const image = nativeImage.createFromPath(trayIcon2x)
+  // 仅 macOS 需要模板图像以自动适配浅色/深色菜单栏
+  if (process.platform === 'darwin') {
+    image.setTemplateImage(true)
+  }
+
+  tray = new Tray(image)
+  tray.setToolTip('Xenon')
+  refreshTrayMenu()
 
   tray.on('right-click', () => {
-    tray?.popUpContextMenu(contextMenu)
+    if (trayMenu) tray?.popUpContextMenu(trayMenu)
   })
 
   tray.on('click', () => {
-    tray?.popUpContextMenu(contextMenu)
+    if (trayMenu) tray?.popUpContextMenu(trayMenu)
   })
 }
 
@@ -252,7 +271,7 @@ function createTray(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
   // 设置应用模型 ID（用于 Windows 任务栏识别）
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.electron.app')
 
   // 在 macOS 环境下设置 Dock 栏应用图标（开发环境与运行时即时生效）
   if (process.platform === 'darwin' && app.dock) {
@@ -410,6 +429,9 @@ app.whenReady().then(async () => {
     }
 
     currentRegisteredShortcuts = { ...nextShortcuts }
+
+    // 快捷键变更后同步刷新托盘菜单中的加速键展示
+    refreshTrayMenu()
   }
 
   function applyGeneralSettings(general?: GeneralSettings): void {

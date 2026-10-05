@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
-import type { LLMConfig, ModelOptionItem, ProviderItem } from '../../shared/config'
+import type { ModelOptionItem, ProviderItem } from '../../shared/config'
 import {
   detectLanguage,
   getLanguageInfo,
@@ -13,7 +13,7 @@ import {
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
-const INITIAL_SOURCE_TEXT = 'hello'
+const INITIAL_SOURCE_TEXT = ''
 const INITIAL_MODEL_OPTIONS: ModelOptionItem[] = [
   {
     value: 'step-3.5-flash',
@@ -473,34 +473,6 @@ function App(): React.JSX.Element {
       markTranslationPending()
     }
   }
-
-  // 监听独立配置窗口保存后的配置热同步事件
-  useEffect(() => {
-    return window.api.onConfigUpdated((newConfig: LLMConfig) => {
-      console.log('[renderer] 主窗口收到配置热更新广播', newConfig)
-      if (Array.isArray(newConfig.modelOptions) && newConfig.modelOptions.length > 0) {
-        setModelOptions(newConfig.modelOptions)
-        // 校验当前选中的模型是否依然有效
-        const isValidModel = newConfig.modelOptions.some((item) => item.value === selectedModel)
-        if (!isValidModel) {
-          const fallback = newConfig.model || newConfig.modelOptions[0].value
-          setSelectedModel(fallback)
-          localStorage.setItem('selectedModel', fallback)
-        }
-      }
-      if (newConfig.model) {
-        setSelectedModel(newConfig.model)
-        localStorage.setItem('selectedModel', newConfig.model)
-      }
-      if (typeof newConfig.enableThinking === 'boolean') {
-        setEnableThinking(newConfig.enableThinking)
-        localStorage.setItem('enableThinking', String(newConfig.enableThinking))
-      }
-      if (sourceText.trim()) {
-        markTranslationPending()
-      }
-    })
-  }, [selectedModel, sourceText])
 
   // 监听多浮层外部点击与 Esc 按键关闭
   useEffect(() => {
