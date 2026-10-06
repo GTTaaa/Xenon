@@ -6,7 +6,6 @@ import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../sh
 // 暴露给渲染进程的应用 API
 const api = {
   translateText: (request: TranslateRequest): Promise<TranslateResponse> => {
-    console.log('[preload] translateText invoke', request)
     return ipcRenderer.invoke('translate:text', request)
   },
   onFocusInput: (callback: () => void): (() => void) => {

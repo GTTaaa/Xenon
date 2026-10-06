@@ -122,7 +122,7 @@ const translateWithOpenAICompatible = async (
     })
 
     const rawResponseText = await response.text()
-    console.log('[main] 模型响应状态码:', response.status, '原始返回:', rawResponseText)
+    console.log('[main] 模型响应状态码:', response.status)
 
     let data: {
       choices?: Array<{
@@ -140,7 +140,7 @@ const translateWithOpenAICompatible = async (
     try {
       data = JSON.parse(rawResponseText)
     } catch {
-      console.error('[main] 模型返回非 JSON 格式响应:', rawResponseText)
+      console.error('[main] 模型返回非 JSON 格式响应:', rawResponseText.slice(0, 150))
       throw new TranslateServiceError(
         `HTTP_${response.status}`,
         `模型响应非 JSON: ${rawResponseText.slice(0, 100)}`
@@ -186,7 +186,7 @@ const translateWithOpenAICompatible = async (
       text = stripped || text
     }
 
-    console.log('[main] 翻译提取成功，结果长度:', text.length, '内容预览:', text.slice(0, 80))
+    console.log('[main] 翻译提取成功，结果长度:', text.length)
 
     return {
       ok: true,

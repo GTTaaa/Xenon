@@ -11,6 +11,13 @@ let isCapturing = false
 // OCR 子进程最长容忍时长：超时后强制杀掉，避免用户侧无限挂起
 const OCR_TIMEOUT_MS = 15000
 
+// 截图 / OCR 流程诊断日志开关：默认关闭，排查问题时以 DEBUG_CAPTURE=1 启动
+const DEBUG_CAPTURE = process.env.DEBUG_CAPTURE === '1'
+
+const debugCapture = (...args: unknown[]): void => {
+  if (DEBUG_CAPTURE) console.log(...args)
+}
+
 // 预热用极小 PNG（160x48 白底黑条），仅用于让 Vision 框架完成冷加载，不入库为资源文件
 const OCR_PREWARM_IMAGE_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAKAAAAAwCAIAAAAZy+Y5AAAAkklEQVR4nO3XwQmAQBAEwc0/aQ3BxyG6TVUEA/2auUibrwfwLoHjBI4TOE7gOIHjBI4TOE7gOIHjngMP/yZwnMBxAscJHCdwnMBxAscJHHcamNUEjhM4TuA4geMEjhM4zg9eT+A4geMEjhM4TuA4geMEjhM47jQwqwkcJ3CcwHECxwkcJ3CcwHECxwkcJ3CcwHE3WX5019R2b9UAAAAASUVORK5CYII='
@@ -35,7 +42,7 @@ const resolveOcrExecutionCommand = (): { binPath: string; isScript: boolean } =>
 
   for (const candidate of candidateBinaries) {
     if (existsSync(candidate)) {
-      console.log('[main] 命中已编译的 Vision OCR 二进制工具:', candidate)
+      debugCapture('[main] 命中已编译的 Vision OCR 二进制工具:', candidate)
       return { binPath: candidate, isScript: false }
     }
   }
@@ -70,7 +77,7 @@ const takeInteractiveScreenshot = async (tempImagePath: string): Promise<boolean
 
     // -i: 交互选区模式; -s: 强制锁定鼠标划选矩形模式(避免误切为窗口模式); -x: 静音
     const args = ['-i', '-s', '-x', tempImagePath]
-    console.log('[main] 启动截屏命令:', screencaptureBin, args)
+    debugCapture('[main] 启动截屏命令:', screencaptureBin, args)
 
     execFile(screencaptureBin, args, (error, stdout, stderr) => {
       const fileExists = existsSync(tempImagePath)
@@ -83,7 +90,7 @@ const takeInteractiveScreenshot = async (tempImagePath: string): Promise<boolean
         }
       }
 
-      console.log('[main] screencapture 执行完成:', {
+      debugCapture('[main] screencapture 执行完成:', {
         errorCode: error ? (error as { code?: number | string }).code : undefined,
         errorMessage: error?.message,
         stderr: stderr?.trim(),
@@ -128,7 +135,7 @@ const resolveOcrExecCommand = (imagePath: string): { command: string; args: stri
 const recognizeImageText = async (tempImagePath: string): Promise<string> => {
   const { command, args } = resolveOcrExecCommand(tempImagePath)
 
-  console.log('[main] 开始调用 Vision OCR 工具识别图片...', { command, args })
+  debugCapture('[main] 开始调用 Vision OCR 工具识别图片...', { command, args })
 
   return new Promise<string>((resolve, reject) => {
     const invokeStart = Date.now()
@@ -142,7 +149,7 @@ const recognizeImageText = async (tempImagePath: string): Promise<string> => {
         const totalElapsedMs = Date.now() - invokeStart
         const recognitionElapsedMs =
           spawnElapsedMs === null ? null : totalElapsedMs - spawnElapsedMs
-        console.log(
+        debugCapture(
           `[main][OCR 诊断] 子进程总耗时 ${totalElapsedMs}ms` +
             `（spawn ${spawnElapsedMs ?? '未捕获'}ms，识别 ${recognitionElapsedMs ?? '未捕获'}ms）`
         )
@@ -167,7 +174,7 @@ const recognizeImageText = async (tempImagePath: string): Promise<string> => {
           )
         } else {
           const text = stdout.trim()
-          console.log('[main] OCR 识别成功，输出字符数:', text.length)
+          debugCapture('[main] OCR 识别成功，输出字符数:', text.length)
           resolve(text)
         }
       }
@@ -176,7 +183,7 @@ const recognizeImageText = async (tempImagePath: string): Promise<string> => {
     // 记录真实 spawn 完成时刻，便于区分「进程启动慢」与「识别计算慢」
     child.on('spawn', () => {
       spawnElapsedMs = Date.now() - invokeStart
-      console.log(`[main][OCR 诊断] 子进程 spawn 完成耗时 ${spawnElapsedMs}ms`)
+      debugCapture(`[main][OCR 诊断] 子进程 spawn 完成耗时 ${spawnElapsedMs}ms`)
     })
   })
 }
@@ -213,16 +220,16 @@ export const prewarmOcrTool = async (): Promise<void> => {
         { maxBuffer: 1024 * 1024, timeout: OCR_TIMEOUT_MS, killSignal: 'SIGKILL' },
         (error) => {
           if (error) {
-            console.warn('[main][OCR 预热] 预热执行失败（不影响正常使用）:', error.message)
+            debugCapture('[main][OCR 预热] 预热执行失败（不影响正常使用）:', error.message)
           } else {
-            console.log(`[main][OCR 预热] 完成，冷启动开销 ${Date.now() - start}ms`)
+            debugCapture(`[main][OCR 预热] 完成，冷启动开销 ${Date.now() - start}ms`)
           }
           resolve()
         }
       )
     })
   } catch (error) {
-    console.warn('[main][OCR 预热] 异常:', error instanceof Error ? error.message : error)
+    debugCapture('[main][OCR 预热] 异常:', error instanceof Error ? error.message : error)
   } finally {
     await unlink(prewarmImagePath).catch(() => {})
   }
@@ -244,11 +251,11 @@ export const captureAndRecognize = async (): Promise<string | null> => {
     // 1. 调起系统原生交互截屏
     const hasCaptured = await takeInteractiveScreenshot(tempImagePath)
     if (!hasCaptured) {
-      console.log('[main] 用户按 ESC 取消了选区截图')
+      debugCapture('[main] 用户按 ESC 取消了选区截图')
       return null
     }
 
-    console.log('[main] 选区截图已生成:', tempImagePath)
+    debugCapture('[main] 选区截图已生成:', tempImagePath)
 
     // 2. 执行 OCR 文字提取
     const recognizedText = await recognizeImageText(tempImagePath)
@@ -335,11 +342,11 @@ const describeWindowStates = (): string => {
 export const triggerScreenshotTranslation = async (
   getMainWindow: () => BrowserWindow | null
 ): Promise<{ ok: boolean; message?: string }> => {
-  console.log('[main] 触发截图翻译...')
+  debugCapture('[main] 触发截图翻译...')
 
   // 防止连按快捷键并发触发多次截屏
   if (isCapturing) {
-    console.log('[main] 已有截屏流程进行中，忽略本次触发')
+    debugCapture('[main] 已有截屏流程进行中，忽略本次触发')
     return { ok: false, message: '截屏进行中' }
   }
   isCapturing = true
@@ -351,8 +358,8 @@ export const triggerScreenshotTranslation = async (
     (win) => !win.isDestroyed() && win.isVisible() && !win.isMinimized()
   )
 
-  console.log('[main][截图诊断] 触发时窗口状态:', describeWindowStates())
-  console.log(
+  debugCapture('[main][截图诊断] 触发时窗口状态:', describeWindowStates())
+  debugCapture(
     `[main][截图诊断] 需隐藏窗口 ${windowsBeforeCapture.length} 个，` +
       `主窗口可见=${Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible())}`
   )
@@ -370,11 +377,11 @@ export const triggerScreenshotTranslation = async (
       await new Promise((resolve) => setTimeout(resolve, 120))
 
       const totalElapsedMs = Date.now() - hideStart
-      console.log(
+      debugCapture(
         `[main][截图诊断] 隐藏窗口耗时 ${totalElapsedMs}ms` +
           `（轮询确认 ${elapsedMs}ms${timedOut ? '，⚠️ 轮询超时仍有窗口可见' : ''} + 淡出余量 120ms）`
       )
-      console.log('[main][截图诊断] 隐藏后窗口状态:', describeWindowStates())
+      debugCapture('[main][截图诊断] 隐藏后窗口状态:', describeWindowStates())
 
       if (timedOut) {
         console.warn(
@@ -382,12 +389,12 @@ export const triggerScreenshotTranslation = async (
         )
       }
     } else {
-      console.log('[main][截图诊断] 触发时无可见窗口，无需隐藏，直接截屏')
+      debugCapture('[main][截图诊断] 触发时无可见窗口，无需隐藏，直接截屏')
     }
 
     const captureStart = Date.now()
     const recognizedText = await captureAndRecognize()
-    console.log(`[main][截图诊断] 截屏+OCR 耗时 ${Date.now() - captureStart}ms`)
+    debugCapture(`[main][截图诊断] 截屏+OCR 耗时 ${Date.now() - captureStart}ms`)
 
     // 用户主动取消了截图，恢复截图前可见的所有窗口
     if (recognizedText === null) {
@@ -396,7 +403,7 @@ export const triggerScreenshotTranslation = async (
           win.show()
         }
       }
-      console.log('[main][截图诊断] 用户取消截图，已恢复窗口:', describeWindowStates())
+      debugCapture('[main][截图诊断] 用户取消截图，已恢复窗口:', describeWindowStates())
       return { ok: false, message: '用户取消截图' }
     }
 
@@ -424,7 +431,7 @@ export const triggerScreenshotTranslation = async (
     // 向渲染进程发送提取到的文本
     mainWindow.webContents.send('translate:apply-source-text', recognizedText)
 
-    console.log('[main][截图诊断] 截图成功，恢复后窗口状态:', describeWindowStates())
+    debugCapture('[main][截图诊断] 截图成功，恢复后窗口状态:', describeWindowStates())
     return { ok: true }
   } catch (error) {
     console.error('[main] 截图翻译流程异常', error)
@@ -456,6 +463,6 @@ export const triggerScreenshotTranslation = async (
     }
   } finally {
     isCapturing = false
-    console.log('[main][截图诊断] 截图流程结束，释放并发布锁')
+    debugCapture('[main][截图诊断] 截图流程结束，释放并发布锁')
   }
 }

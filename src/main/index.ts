@@ -27,15 +27,13 @@ import {
 } from './services/configManager'
 import { triggerScreenshotTranslation, prewarmOcrTool } from './services/screenCapture'
 
-loadEnv({ path: resolve(process.cwd(), '.env') })
-loadEnv({ path: resolve(process.cwd(), '.env.local'), override: true })
+loadEnv({ path: resolve(process.cwd(), '.env'), quiet: true })
+loadEnv({ path: resolve(process.cwd(), '.env.local'), override: true, quiet: true })
 
 let tray: Tray | null = null
 let trayMenu: Menu | null = null
 let mainWindow: BrowserWindow | null = null
 let configWindow: BrowserWindow | null = null
-
-console.log('[main] process booted')
 
 /**
  * 创建或激活独立的系统偏好设置窗口
@@ -302,11 +300,7 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
-
   ipcMain.handle('translate:text', async (_, request: TranslateRequest) => {
-    console.log('[main] ipcMain.handle translate:text', request)
     return await translateText(request)
   })
 
