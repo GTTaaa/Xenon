@@ -14,7 +14,8 @@ import {
 import { join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import trayIcon2x from '../../resources/trayTemplate@2x.png?asset'
+import trayIconTemplate2x from '../../resources/trayTemplate@2x.png?asset'
+import trayIconColor2x from '../../resources/xenon.png?asset'
 import type { TranslateRequest } from '../shared/translate'
 import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
 import { DEFAULT_SHORTCUTS } from '../shared/config'
@@ -39,6 +40,19 @@ let tray: Tray | null = null
 let trayMenu: Menu | null = null
 let mainWindow: BrowserWindow | null = null
 let configWindow: BrowserWindow | null = null
+
+// 标记应用是否正在退出
+// app.quit() 同样会触发窗口的 close 事件，若 close 处理器继续拦截，
+// 退出流程会被静默取消（窗口隐藏了但进程仍在），托盘「退出」会失效
+let isQuitting = false
+
+/** 非 macOS 托盘图标的缩放尺寸（覆盖 Windows 100%~200% 缩放的 16/24/32px 需求） */
+const TRAY_ICON_SIZE = 32
+
+/** 截图 OCR 依赖 macOS Vision 框架，其它平台不提供该能力 */
+function canCaptureOnThisPlatform(): boolean {
+  return process.platform === 'darwin'
+}
 
 /**
  * 创建或激活独立的系统偏好设置窗口
@@ -143,6 +157,9 @@ function createWindow(): void {
   })
 
   mainWindow.on('close', (event) => {
+    // 正在退出（app.quit / 托盘退出 / 系统关机）时不再拦截，否则应用无法关闭
+    if (isQuitting) return
+
     const currentConfig = getLLMConfig()
     if (currentConfig.general?.closeAction === 'tray') {
       event.preventDefault()
@@ -189,6 +206,7 @@ function showInputTranslateWindow(): void {
  */
 function buildTrayMenu(): Menu {
   const shortcuts = getLLMConfig().shortcuts || DEFAULT_SHORTCUTS
+  const canCapture = canCaptureOnThisPlatform()
 
   return Menu.buildFromTemplate([
     {
@@ -198,13 +216,17 @@ function buildTrayMenu(): Menu {
         showInputTranslateWindow()
       }
     },
-    {
-      label: '截图翻译',
-      accelerator: shortcuts.screenshot,
-      click: () => {
-        void triggerScreenshotTranslation(() => mainWindow)
-      }
-    },
+    ...(canCapture
+      ? [
+          {
+            label: '截图翻译',
+            accelerator: shortcuts.screenshot,
+            click: () => {
+              void triggerScreenshotTranslation(() => mainWindow)
+            }
+          }
+        ]
+      : []),
     {
       label: '模型配置',
       accelerator: shortcuts.openPreferences,
@@ -243,6 +265,9 @@ function buildTrayMenu(): Menu {
 
 /**
  * 重建并缓存托盘菜单（快捷键热更新后调用）
+ *
+ * 非 macOS 平台按截图能力做平台门禁：截图 OCR 依赖 macOS Vision 框架，
+ * 在 Windows / Linux 上保留菜单项只会让用户点击后收到报错
  */
 function refreshTrayMenu(): void {
   if (!tray) return
@@ -250,10 +275,18 @@ function refreshTrayMenu(): void {
 }
 
 function createTray(): void {
-  const image = nativeImage.createFromPath(trayIcon2x)
-  // 仅 macOS 需要模板图像以自动适配浅色/深色菜单栏
-  if (process.platform === 'darwin') {
+  const isMac = process.platform === 'darwin'
+  // macOS：使用纯黑模板图，由系统按浅色/深色菜单栏自动反色
+  // Windows / Linux：模板图是纯黑且尺寸偏小，在深色任务栏上几乎不可见，改用彩色应用图标
+  let image = nativeImage.createFromPath(isMac ? trayIconTemplate2x : trayIconColor2x)
+
+  if (isMac) {
     image.setTemplateImage(true)
+  } else {
+    // 非 macOS 平台显式缩放到 32px：原图 1156px 过大，而直接给 16px
+    // 在高 DPI（150%/200%）下会被系统放大变模糊；给 32px 则由系统平滑降采样
+    // 注意 resize 返回新对象，不会原地修改
+    image = image.resize({ width: TRAY_ICON_SIZE, height: TRAY_ICON_SIZE })
   }
 
   tray = new Tray(image)
@@ -265,7 +298,17 @@ function createTray(): void {
   })
 
   tray.on('click', () => {
-    if (trayMenu) tray?.popUpContextMenu(trayMenu)
+    // macOS 习惯左键直接展开菜单；Windows 习惯左键切换主窗口，Linux 则往往收不到 click
+    if (isMac) {
+      if (trayMenu) tray?.popUpContextMenu(trayMenu)
+      return
+    }
+
+    if (mainWindow?.isVisible() && !mainWindow.isMinimized()) {
+      mainWindow.hide()
+    } else {
+      showMainWindow()
+    }
   })
 }
 
@@ -406,7 +449,8 @@ app.whenReady().then(async () => {
       }
     }
 
-    if (nextShortcuts.screenshot) {
+    // 截图快捷键同样只在具备截图能力的平台注册，避免占用快捷键却只能报错
+    if (nextShortcuts.screenshot && canCaptureOnThisPlatform()) {
       try {
         const ok = globalShortcut.register(nextShortcuts.screenshot, () => {
           void triggerScreenshotTranslation(() => mainWindow)
@@ -465,6 +509,11 @@ app.whenReady().then(async () => {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
   })
+})
+
+// 只要退出流程被发起（托盘退出、Cmd+Q、系统关机等），就必须放行 close 事件
+app.on('before-quit', () => {
+  isQuitting = true
 })
 
 // Quit when all windows are closed, except on macOS. There, it's common
