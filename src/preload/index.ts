@@ -37,20 +37,6 @@ const api = {
   getAlwaysOnTop: (): Promise<boolean> => {
     return ipcRenderer.invoke('window:get-always-on-top')
   },
-  onOpenConfig: (callback: () => void): (() => void) => {
-    const listener = (): void => {
-      callback()
-    }
-
-    ipcRenderer.on('app:open-config', listener)
-
-    return () => {
-      ipcRenderer.removeListener('app:open-config', listener)
-    }
-  },
-  captureScreen: (): Promise<{ ok: boolean; message?: string }> => {
-    return ipcRenderer.invoke('capture:screen')
-  },
   onApplySourceText: (callback: (text: string) => void): (() => void) => {
     const listener = (_: unknown, text: string): void => {
       callback(text)

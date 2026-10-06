@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: screenshot-translator
+productName: Xenon
 directories:
   buildResources: build
 files:
@@ -12,21 +12,19 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: screenshot-translator
+  executableName: Xenon
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
-# 指向 Icon Composer 制作的 .icon 文件（需要 macOS 26 + Xcode 26 打包）
+  # 指向 Icon Composer 制作的 .icon 文件（需要 macOS 26 + Xcode 26 打包）
   icon: build/AppIcon.icon
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    # 截图 OCR 需要屏幕录制权限；本应用不使用摄像头/麦克风，也不访问文档/下载目录
+    - NSScreenCaptureUsageDescription: Xenon 需要「屏幕录制」权限以截取屏幕内容并进行文字识别。
   notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}
@@ -40,8 +38,5 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-publish:
-  provider: generic
-  url: https://example.com/auto-updates
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

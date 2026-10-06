@@ -431,13 +431,6 @@ function App(): React.JSX.Element {
     setTranslateTriggerToken((prev) => prev + 1)
   }
 
-  // 监听快捷打开配置面板事件
-  useEffect(() => {
-    return window.api.onOpenConfig(() => {
-      void window.api.openConfigWindow()
-    })
-  }, [])
-
   // 监听截图 OCR 提取出的文本并自动填充触发翻译
   useEffect(() => {
     return window.api.onApplySourceText((recognizedText) => {

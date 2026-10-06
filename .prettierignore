@@ -4,3 +4,6 @@ pnpm-lock.yaml
 LICENSE.md
 tsconfig.json
 tsconfig.*.json
+
+# Icon Composer 资产（非 Prettier 可格式化）
+build/AppIcon.icon
