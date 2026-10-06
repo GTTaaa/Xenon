@@ -12,7 +12,6 @@ import {
   screen
 } from 'electron'
 import { join, resolve } from 'path'
-import { existsSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import trayIcon2x from '../../resources/trayTemplate@2x.png?asset'
@@ -27,25 +26,14 @@ import {
   testLLMConnection
 } from './services/configManager'
 import { triggerScreenshotTranslation, prewarmOcrTool } from './services/screenCapture'
+import { migrateLegacyUserData } from './services/configMigration'
 
 loadEnv({ path: resolve(process.cwd(), '.env'), quiet: true })
 loadEnv({ path: resolve(process.cwd(), '.env.local'), override: true, quiet: true })
 
-// 品牌名从 screenshot-translator 改为 Xenon 后，默认的 userData 目录也会随之改名，
-// 导致老用户已经填好的服务商 / API Key / 快捷键全部"丢失"（实际是读不到旧目录）。
-// 这里在 app ready 之前锁定旧目录，保证升级后配置延续。
-const LEGACY_USER_DATA_DIR_NAME = 'screenshot-translator'
-
-if (app.getPath('userData').endsWith(LEGACY_USER_DATA_DIR_NAME) === false) {
-  try {
-    const legacyUserDataPath = join(app.getPath('appData'), LEGACY_USER_DATA_DIR_NAME)
-    if (existsSync(join(legacyUserDataPath, 'llm-config.json'))) {
-      app.setPath('userData', legacyUserDataPath)
-    }
-  } catch (error) {
-    console.warn('[main] 迁移旧配置目录失败，继续使用新目录:', error)
-  }
-}
+// 品牌名从 screenshot-translator 改为 Xenon 后 userData 目录会改名，
+// 必须在 app ready 之前完成旧数据迁移，否则用户配置 / API Key 会"丢失"
+migrateLegacyUserData()
 
 let tray: Tray | null = null
 let trayMenu: Menu | null = null
