@@ -24,38 +24,23 @@ type PrefNavCategory = 'providers' | 'shortcuts' | 'translation' | 'general'
 interface NavItem {
   id: PrefNavCategory
   title: string
-  subtitle: string
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'providers', title: 'AI 模型', subtitle: 'PROVIDERS & MODELS' },
-  { id: 'shortcuts', title: '快捷键', subtitle: 'GLOBAL SHORTCUTS' },
-  { id: 'translation', title: '翻译偏好', subtitle: 'TRANSLATE BEHAVIOR' },
-  { id: 'general', title: '通用设置', subtitle: 'SYSTEM & LAUNCH' }
+  { id: 'providers', title: 'AI 模型' },
+  { id: 'shortcuts', title: '快捷键' },
+  { id: 'translation', title: '翻译偏好' },
+  { id: 'general', title: '通用设置' }
 ]
 
 /**
- * 偏好设置外观主题风格类型
+ * 偏好设置外观主题风格类型。
+ * 运行时的主题切换入口已移除，设置弹窗固定使用 Wise 先锋绿，
+ * 保留类型是为了将来恢复「设备原色」外观时不用重新推导字面量。
  */
 type PrefTheme = 'wise' | 'classic'
 
-interface ThemeOption {
-  id: PrefTheme
-  label: string
-}
-
-const PREF_THEMES: ThemeOption[] = [
-  { id: 'classic', label: '设备原色' },
-  { id: 'wise', label: 'Wise 先锋绿' }
-]
-
-/**
- * 主题偏好的本地持久化键。
- * 旧键 xenon_pref_theme 跨越了 glass / linear / macos / wise 几代主题体系，
- * 里面残留的 Wise 选择会盖住新的默认值，所以升级键名并清掉旧键。
- */
-const THEME_STORAGE_KEY = 'xenon_pref_theme_v2'
-const LEGACY_THEME_STORAGE_KEY = 'xenon_pref_theme'
+const PREF_THEME: PrefTheme = 'wise'
 
 /**
  * 预设厂商模板定义
@@ -129,31 +114,6 @@ const PRESET_TEMPLATES: ProviderTemplate[] = [
 export const ConfigPage = (): React.JSX.Element => {
   // 当前处于的左侧分类
   const [activeCategory, setActiveCategory] = useState<PrefNavCategory>('providers')
-
-  // 偏好设置外观风格：默认 Wise 先锋绿，支持本地持久化
-  const [prefTheme, setPrefTheme] = useState<PrefTheme>(() => {
-    try {
-      // 旧键的历史值不再沿用，读取时顺手清掉
-      localStorage.removeItem(LEGACY_THEME_STORAGE_KEY)
-      const saved = localStorage.getItem(THEME_STORAGE_KEY)
-      if (saved === 'wise' || saved === 'classic') {
-        return saved
-      }
-    } catch {
-      // 忽略存储读取异常
-    }
-    return 'wise'
-  })
-
-  // 风格切换处理函数
-  const handleSelectTheme = (theme: PrefTheme): void => {
-    setPrefTheme(theme)
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, theme)
-    } catch {
-      // 忽略存储写入异常
-    }
-  }
 
   // 服务商列表
   const [providers, setProviders] = useState<ProviderItem[]>([])
@@ -628,8 +588,8 @@ export const ConfigPage = (): React.JSX.Element => {
   }, [fetchedModels, modelSearchQuery])
 
   return (
-    <div className="pref-root" data-pref-theme={prefTheme}>
-      {/* 顶部栏：一级分类导航（药丸式切换）+ 主题切换 + 关闭 */}
+    <div className="pref-root" data-pref-theme={PREF_THEME}>
+      {/* 顶部栏：一级分类导航（药丸式切换）+ 关闭 */}
       <header className="pref-header">
         <nav className="pref-topnav" aria-label="偏好设置分类">
           {NAV_ITEMS.map((item) => {
@@ -647,25 +607,8 @@ export const ConfigPage = (): React.JSX.Element => {
           })}
         </nav>
 
-        {/* 顶部右侧：主题风格实时切换器与关闭按钮 */}
+        {/* 顶部右侧：关闭按钮 */}
         <div className="pref-header-actions">
-          <div className="pref-theme-switcher" role="group" aria-label="主题风格实时切换">
-            {PREF_THEMES.map((theme) => {
-              const isActive = prefTheme === theme.id
-              return (
-                <button
-                  key={theme.id}
-                  type="button"
-                  className={`pref-theme-btn ${isActive ? 'pref-theme-btn-active' : ''}`}
-                  onClick={() => handleSelectTheme(theme.id)}
-                  title={`切换为 ${theme.label} 视觉风格`}
-                >
-                  {theme.label}
-                </button>
-              )
-            })}
-          </div>
-
           <button
             type="button"
             className="pref-close-btn"
