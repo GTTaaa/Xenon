@@ -235,15 +235,6 @@ function App(): React.JSX.Element {
     return () => window.clearTimeout(timer)
   }, [isSourceLangMenuOpen, isTargetLangMenuOpen])
 
-  // 目标语言 Chip 选中视觉样式方案：'vernier'（方案 B 极简游标线）| 'inset'（方案 A 机械物理凹陷）
-  const [chipStyle, setChipStyle] = useState<'vernier' | 'inset'>(() => {
-    return (localStorage.getItem('targetChipStyle') as 'vernier' | 'inset') || 'vernier'
-  })
-
-  useEffect(() => {
-    localStorage.setItem('targetChipStyle', chipStyle)
-  }, [chipStyle])
-
   // 横向滑轨鼠标滚轮自适应水平滚动（触控板横滑原生放行，纵向滚轮驱动横移）
   const handleRibbonWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
     // 若横向位移占主导（触控板双指横滑），完全交由系统原生 120Hz 硬件加速物理管线处理
@@ -727,13 +718,7 @@ function App(): React.JSX.Element {
                     return (
                       <button
                         key={lang.code}
-                        className={`tape-chip ${
-                          isSelected
-                            ? chipStyle === 'vernier'
-                              ? 'tape-chip-selected tape-chip-selected-vernier'
-                              : 'tape-chip-selected tape-chip-selected-inset'
-                            : ''
-                        }`}
+                        className={`tape-chip ${isSelected ? 'tape-chip-selected' : ''}`}
                         type="button"
                         role="option"
                         aria-selected={isSelected}
@@ -758,15 +743,6 @@ function App(): React.JSX.Element {
                   })}
                 </div>
                 <div className="tape-ribbon-controls">
-                  <button
-                    type="button"
-                    className="tape-style-chip-btn"
-                    onClick={() => setChipStyle((s) => (s === 'vernier' ? 'inset' : 'vernier'))}
-                    title="切换方案 B(极简游标) 与方案 A(机械按键)"
-                    aria-label="切换选中样式风格"
-                  >
-                    {chipStyle === 'vernier' ? 'B: 游标' : 'A: 按键'}
-                  </button>
                   <button
                     type="button"
                     className="tape-close-btn"
@@ -935,13 +911,7 @@ function App(): React.JSX.Element {
                   aria-label="目标语言选择"
                 >
                   <button
-                    className={`tape-chip ${
-                      manualTargetLang === null
-                        ? chipStyle === 'vernier'
-                          ? 'tape-chip-selected tape-chip-selected-vernier'
-                          : 'tape-chip-selected tape-chip-selected-inset'
-                        : ''
-                    }`}
+                    className={`tape-chip ${manualTargetLang === null ? 'tape-chip-selected' : ''}`}
                     type="button"
                     role="option"
                     aria-selected={manualTargetLang === null}
@@ -965,13 +935,7 @@ function App(): React.JSX.Element {
                     return (
                       <button
                         key={lang.code}
-                        className={`tape-chip ${
-                          isSelected
-                            ? chipStyle === 'vernier'
-                              ? 'tape-chip-selected tape-chip-selected-vernier'
-                              : 'tape-chip-selected tape-chip-selected-inset'
-                            : ''
-                        }`}
+                        className={`tape-chip ${isSelected ? 'tape-chip-selected' : ''}`}
                         type="button"
                         role="option"
                         aria-selected={isSelected}
@@ -992,15 +956,6 @@ function App(): React.JSX.Element {
                   })}
                 </div>
                 <div className="tape-ribbon-controls">
-                  <button
-                    type="button"
-                    className="tape-style-chip-btn"
-                    onClick={() => setChipStyle((s) => (s === 'vernier' ? 'inset' : 'vernier'))}
-                    title="切换方案 B(极简游标) 与方案 A(机械按键)"
-                    aria-label="切换选中样式风格"
-                  >
-                    {chipStyle === 'vernier' ? 'B: 游标' : 'A: 按键'}
-                  </button>
                   <button
                     type="button"
                     className="tape-close-btn"
