@@ -2343,11 +2343,17 @@ body {
 .pref-root[data-pref-theme='wise'] {
   /* 背景与画布：Wise 纯白 Paper 画布，搭配 Fog 浅灰绿分界线 */
   --pref-bg: #ffffff;
-  --pref-header-bg: #ffffff;
+  --pref-header-bg: #f1efea;
   --pref-header-border: #e8ebe6;
   --pref-title-main: #163300;
   --pref-title-sub: #454745;
   --pref-header-actions-gap: 12px;
+
+  /* 顶栏一级分类导航：选中项做成浮起的白色药丸 */
+  --pref-topnav-tab-active-bg: #ffffff;
+  --pref-topnav-tab-active-text: #163300;
+  --pref-topnav-tab-active-border: #e6e2db;
+  --pref-topnav-tab-active-shadow: 0 1px 2px rgba(22, 51, 0, 0.07);
 
   /* 侧边栏：Fog 柔灰微绿面板 */
   --pref-sidebar-bg: #f8faf7;
@@ -2450,12 +2456,18 @@ body {
 .pref-root[data-pref-theme='classic'] {
   /* 壳体：与主窗口同一块米灰面板 */
   --pref-bg: #e5e0d8;
-  --pref-header-bg: #ded8ce;
+  --pref-header-bg: #d5cec2;
   --pref-header-border: #c2b8ab;
   --pref-title-main: #2f3848;
   /* 标题副文字采用主窗口的刻印线色，和壳体上的丝印文字同一支笔 */
   --pref-title-sub: #657086;
   --pref-header-actions-gap: 12px;
+
+  /* 顶栏一级分类导航：选中项做成被按下的深色机械键 */
+  --pref-topnav-tab-active-bg: #2f3848;
+  --pref-topnav-tab-active-text: #e5e0d8;
+  --pref-topnav-tab-active-border: #232a36;
+  --pref-topnav-tab-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 
   /* 侧边栏：选中项做成被按下的深色机械键，副标题用荧光绿点缀 */
   --pref-sidebar-bg: #ded8ce;
@@ -2682,7 +2694,7 @@ body {
 
 /* 顶部可拖拽工业/现代标题栏 */
 .pref-header {
-  height: 48px;
+  height: 56px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -2695,6 +2707,43 @@ body {
   transition:
     background 160ms ease,
     border-color 160ms ease;
+}
+
+/* 顶栏一级分类导航：药丸式切换，取消下划线与图标 */
+.pref-topnav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.pref-topnav-tab {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pref-text-secondary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.pref-topnav-tab:hover {
+  color: var(--pref-text-primary);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.pref-topnav-tab-active,
+.pref-topnav-tab-active:hover {
+  background: var(--pref-topnav-tab-active-bg);
+  color: var(--pref-topnav-tab-active-text);
+  border-color: var(--pref-topnav-tab-active-border);
+  box-shadow: var(--pref-topnav-tab-active-shadow);
 }
 
 .pref-header-title {

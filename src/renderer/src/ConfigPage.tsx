@@ -629,12 +629,23 @@ export const ConfigPage = (): React.JSX.Element => {
 
   return (
     <div className="pref-root" data-pref-theme={prefTheme}>
-      {/* 顶部标题栏 */}
+      {/* 顶部栏：一级分类导航（药丸式切换）+ 主题切换 + 关闭 */}
       <header className="pref-header">
-        <div className="pref-header-title">
-          <span className="pref-title-main">偏好设置</span>
-          <span className="pref-title-sub">SYSTEM PREFERENCES // XENON WORKBENCH</span>
-        </div>
+        <nav className="pref-topnav" aria-label="偏好设置分类">
+          {NAV_ITEMS.map((item) => {
+            const isActive = item.id === activeCategory
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`pref-topnav-tab ${isActive ? 'pref-topnav-tab-active' : ''}`}
+                onClick={() => setActiveCategory(item.id)}
+              >
+                {item.title}
+              </button>
+            )
+          })}
+        </nav>
 
         {/* 顶部右侧：主题风格实时切换器与关闭按钮 */}
         <div className="pref-header-actions">
@@ -669,29 +680,7 @@ export const ConfigPage = (): React.JSX.Element => {
 
       {/* 左右双栏主体布局 */}
       <div className="pref-layout-split">
-        {/* 左侧导航栏 */}
-        <aside className="pref-sidebar">
-          <nav className="pref-nav-menu">
-            {NAV_ITEMS.map((item) => {
-              const isActive = item.id === activeCategory
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`pref-nav-item ${isActive ? 'pref-nav-item-active' : ''}`}
-                  onClick={() => setActiveCategory(item.id)}
-                >
-                  <div className="pref-nav-text-group">
-                    <span className="pref-nav-title">{item.title}</span>
-                    <span className="pref-nav-subtitle">{item.subtitle}</span>
-                  </div>
-                </button>
-              )
-            })}
-          </nav>
-        </aside>
-
-        {/* 右侧核心内容面板 */}
+        {/* 核心内容面板：一级分类已上移到顶部导航 */}
         <main className="pref-main-content">
           {/* ===================== 分类 1: AI 模型 (Providers) ===================== */}
           {activeCategory === 'providers' && (
