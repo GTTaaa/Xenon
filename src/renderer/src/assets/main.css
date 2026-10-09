@@ -1,5 +1,22 @@
 @import './base.css';
 
+/* Space Mono 本地打包（SIL OFL 1.1，许可全文见 ./fonts/OFL.txt），保证跨平台视觉一致 */
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/SpaceMono-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/SpaceMono-Bold.ttf') format('truetype');
+}
+
 :root {
   --device-bg: #e5e0d8;
   --device-border: #c2b8ab;
@@ -9,6 +26,14 @@
   --screen-green: #00f05a;
   --screen-bg-top: #0b0d16;
   --screen-bg-bottom: #080a10;
+  /* 机械标签字体：Space Mono 不含中文字形，故在等宽字体之后补中文回退 */
+  --font-display:
+    'Space Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'DejaVu Sans Mono',
+    'PingFang SC', 'Microsoft YaHei', monospace;
+  /* 屏幕终端字体：优先保留 Courier New 的终端观感 */
+  --font-screen:
+    'Courier New', ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', 'PingFang SC',
+    'Microsoft YaHei', monospace;
 }
 
 body {
@@ -95,7 +120,7 @@ body {
 .status-label,
 .language-label {
   color: var(--panel-line);
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-screen);
   letter-spacing: 0.9px;
   font-weight: 700;
 }
@@ -104,7 +129,7 @@ body {
   color: rgba(101, 112, 134, 0.74);
   font-size: 12px;
   line-height: 1;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: 1.1px;
   opacity: 0.9;
@@ -137,7 +162,7 @@ body {
   display: inline-flex;
   align-items: center;
   color: rgba(101, 112, 134, 0.78);
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8.5px;
   font-weight: 700;
   line-height: 1;
@@ -151,7 +176,7 @@ body {
   display: inline-flex;
   align-items: center;
   color: #384255;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 9.5px;
   font-weight: 800;
   line-height: 1;
@@ -280,7 +305,7 @@ button:focus-visible {
   gap: 6px;
   color: #9cb1c6;
   font-size: 8.5px;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 1.2px;
 }
@@ -312,7 +337,7 @@ button:focus-visible {
   align-items: center;
   font-size: 7.5px;
   font-weight: 700;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   color: #00f05a;
   background: rgba(0, 240, 90, 0.1);
   border: 1px solid rgba(0, 240, 90, 0.24);
@@ -398,7 +423,7 @@ button:focus-visible {
   border: 1px solid transparent;
   border-radius: 4px;
   color: #8fa3b7;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8.5px;
   font-weight: 700;
   cursor: pointer;
@@ -481,7 +506,7 @@ button:focus-visible {
 }
 
 .terminal-engine-pane-badge {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   font-weight: 700;
   color: #c4d1de;
@@ -489,7 +514,7 @@ button:focus-visible {
 }
 
 .terminal-engine-pane-endpoint {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 7.5px;
   color: #556270;
   letter-spacing: 0.4px;
@@ -537,7 +562,7 @@ button:focus-visible {
   text-align: center;
   font-size: 8.5px;
   color: #64748b;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
 }
 
 /* 单个引擎模型选项按钮 */
@@ -579,7 +604,7 @@ button:focus-visible {
 }
 
 .terminal-engine-code {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   color: #5d6d7e;
   letter-spacing: 0.5px;
@@ -599,7 +624,7 @@ button:focus-visible {
 }
 
 .terminal-engine-name {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 9.5px;
   font-weight: 700;
   color: #c9d5e3;
@@ -613,7 +638,7 @@ button:focus-visible {
 }
 
 .terminal-engine-profile {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 7px;
   color: #5d6d7e;
   letter-spacing: 0.6px;
@@ -623,7 +648,7 @@ button:focus-visible {
 }
 
 .terminal-engine-active-tag {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 7px;
   font-weight: 700;
   letter-spacing: 0.8px;
@@ -668,7 +693,7 @@ button:focus-visible {
   border: 1px solid rgba(0, 240, 90, 0.24);
   border-radius: 3px;
   color: rgba(0, 240, 90, 0.9);
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.8px;
@@ -694,7 +719,7 @@ button:focus-visible {
   font-size: 18px;
   line-height: 1;
   font-weight: 600;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   letter-spacing: 0.12px;
 }
 
@@ -828,7 +853,7 @@ button:focus-visible {
 
 .display-screen-actions-label {
   color: rgba(0, 240, 90, 0.6);
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   line-height: 1;
   letter-spacing: 1px;
@@ -1136,7 +1161,7 @@ button:focus-visible {
   color: var(--screen-green);
   font-size: 32px;
   line-height: 1.82;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-screen);
   font-weight: 700;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1157,7 +1182,7 @@ button:focus-visible {
   caret-color: var(--screen-green);
   font-size: 27px;
   line-height: 1.74;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-screen);
   font-weight: 600;
   overflow-y: auto;
   user-select: text;
@@ -1194,7 +1219,7 @@ button:focus-visible {
   color: #a84646;
   font-size: 11px;
   line-height: 1.4;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
 }
 
 .translate-error-label {
@@ -1558,7 +1583,7 @@ button:focus-visible {
 
 .config-header-code {
   color: #798294;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 7px;
   line-height: 1;
   letter-spacing: 1.1px;
@@ -1567,7 +1592,7 @@ button:focus-visible {
 .config-modal-title {
   margin: 0;
   color: #293240;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 12px;
   font-weight: 700;
   line-height: 1.1;
@@ -1637,7 +1662,7 @@ button:focus-visible {
 
 .config-field-label {
   color: #556073;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8.5px;
   font-weight: 700;
   line-height: 1;
@@ -1666,7 +1691,7 @@ button:focus-visible {
     inset 1px 1px 0 #edf1f5,
     inset -1px -1px 0 #8b96a7;
   color: #4a5567;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.6px;
@@ -1699,7 +1724,7 @@ button:focus-visible {
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.6);
   color: #3b4455;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 7.5px;
   font-weight: 600;
   letter-spacing: 0.4px;
@@ -1725,7 +1750,7 @@ button:focus-visible {
   padding: 6px 8px;
   background: #090c13;
   color: #00f05a;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-screen);
   font-size: 11px;
   font-weight: 600;
   line-height: 1.4;
@@ -1752,7 +1777,7 @@ button:focus-visible {
   padding: 0;
   background: transparent;
   color: #657086;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 7.5px;
   cursor: pointer;
   letter-spacing: 0.5px;
@@ -1811,7 +1836,7 @@ button:focus-visible {
 }
 
 .config-toggle-switch-text {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -1848,7 +1873,7 @@ button:focus-visible {
     inset 1px 1px 0 #edf1f5,
     inset -1px -1px 0 #8b96a7;
   color: #2f3848;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.6px;
@@ -1883,14 +1908,14 @@ button:focus-visible {
 }
 
 .config-test-result-title {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.6px;
 }
 
 .config-test-result-desc {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 7.5px;
   line-height: 1.3;
   overflow-wrap: anywhere;
@@ -1953,7 +1978,7 @@ button:focus-visible {
   background: rgba(255, 255, 255, 0.75);
   border: 1px solid rgba(85, 96, 115, 0.25);
   border-radius: 3px;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 7.5px;
 }
 
@@ -2006,7 +2031,7 @@ button:focus-visible {
     inset 1px 1px 0 #edf1f5,
     inset -1px -1px 0 #8b96a7;
   color: #384255;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   font-weight: 700;
   cursor: pointer;
@@ -2024,7 +2049,7 @@ button:focus-visible {
   background: rgba(42, 196, 88, 0.12);
   border: 1px solid rgba(42, 196, 88, 0.3);
   color: #1f5130;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8.5px;
   text-align: center;
 }
@@ -2042,7 +2067,7 @@ button:focus-visible {
 .config-footer-button {
   padding: 7px 12px;
   border-radius: 3px;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.6px;
@@ -2137,7 +2162,7 @@ button:focus-visible {
   border-radius: 2px;
   background: rgba(101, 112, 134, 0.1);
   color: #4f596b;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 7px;
   font-weight: 700;
   line-height: 1;
@@ -2208,7 +2233,7 @@ button:focus-visible {
   border: 1px solid transparent;
   border-radius: 4px;
   padding: 1px 5px;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8.5px;
   line-height: 14px;
   font-weight: 700;
@@ -2630,7 +2655,7 @@ button:focus-visible {
 }
 
 .pref-title-sub {
-  font-family: 'Space Mono', 'Courier New', monospace;
+  font-family: var(--font-display);
   font-size: 9px;
   font-weight: 600;
   color: var(--pref-title-sub);
@@ -2886,7 +2911,7 @@ button:focus-visible {
 .pref-input {
   height: 31px;
   padding: 0 10px;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 11px;
   color: var(--pref-input-text);
   background: var(--pref-input-bg);
@@ -3059,7 +3084,7 @@ button:focus-visible {
   gap: 6px;
   height: 28px;
   padding: 0 11px;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
@@ -3276,7 +3301,7 @@ button:focus-visible {
   gap: 5px;
   height: 23px;
   padding: 0 5px 0 7px;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 11px;
   font-weight: 500;
   color: var(--pref-pill-text);
@@ -3622,7 +3647,7 @@ button:focus-visible {
 .pref-provider-count-tip {
   font-size: 10px;
   color: var(--pref-text-muted);
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
 }
 
 /* 主用服务商 Tab 指示标签 */
@@ -3906,7 +3931,7 @@ button:focus-visible {
 }
 
 .pref-modal-badge {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 9.5px;
   background: var(--pref-field-btn-bg);
   color: var(--pref-text-secondary);
@@ -3977,7 +4002,7 @@ button:focus-visible {
   border-radius: var(--pref-radius-btn);
   cursor: pointer;
   transition: all 100ms ease;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 11.5px;
   color: var(--pref-text-primary);
   background: var(--pref-modal-item-bg);
@@ -4144,7 +4169,7 @@ button:focus-visible {
 .pref-error-meta-val {
   color: var(--pref-text-primary);
   word-break: break-all;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 11px;
   flex: 1;
 }
@@ -4167,7 +4192,7 @@ button:focus-visible {
   background: #181c22;
   color: #cbd5e1;
   border: 1px solid #2d3540;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 10.5px;
   line-height: 1.5;
   border-radius: var(--pref-radius-btn);
@@ -4253,7 +4278,7 @@ button:focus-visible {
 }
 
 .pref-nav-subtitle {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   color: var(--pref-text-muted);
   letter-spacing: 0.3px;
@@ -4294,7 +4319,7 @@ button:focus-visible {
 .pref-shortcut-tip {
   font-size: 10px;
   color: var(--pref-text-muted);
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-display);
 }
 
 .pref-shortcut-input-group {
@@ -4324,7 +4349,7 @@ button:focus-visible {
 /* 大段提示词输入框 */
 .pref-textarea {
   padding: 8px 10px;
-  font-family: 'Space Mono', 'PingFang SC', monospace;
+  font-family: var(--font-display);
   font-size: 11px;
   line-height: 1.45;
   color: var(--pref-input-text);
