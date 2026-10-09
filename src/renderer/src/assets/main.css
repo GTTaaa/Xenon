@@ -34,6 +34,8 @@
   --font-screen:
     'Courier New', ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', 'PingFang SC',
     'Microsoft YaHei', monospace;
+  /* 键盘焦点环：浅色壳体用深色描边，深色屏幕内改用荧光绿（见下方 .display-screen 覆盖） */
+  --focus-ring: #2f3848;
 }
 
 body {
@@ -228,9 +230,27 @@ body {
   display: block;
 }
 
-button:focus,
-button:focus-visible {
+/* 深色屏幕与终端面板内部，焦点环切换为荧光绿 */
+.display-screen,
+.terminal-engine-deck {
+  --focus-ring: var(--screen-green);
+}
+
+/* 键盘焦点环默认关闭：本产品面向鼠标操作用户，仅在主窗口显式开启 */
+:where(button, [tabindex]):focus-visible {
   outline: none;
+}
+
+/* 主窗口开启焦点环，只在键盘导航时显示，鼠标点击不出现 */
+.translator-device :where(button, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* 贴边元素改用内缩焦点环，避免轮廓被 overflow 裁掉 */
+.terminal-engine-models-list .terminal-engine-option:focus-visible,
+.terminal-engine-sidebar .terminal-engine-provider-item:focus-visible {
+  outline-offset: -2px;
 }
 
 .model-switcher-trigger:hover {
