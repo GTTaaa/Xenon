@@ -45,9 +45,17 @@ interface ThemeOption {
 }
 
 const PREF_THEMES: ThemeOption[] = [
-  { id: 'wise', label: 'Wise 先锋绿' },
-  { id: 'classic', label: '经典原版' }
+  { id: 'classic', label: '设备原色' },
+  { id: 'wise', label: 'Wise 先锋绿' }
 ]
+
+/**
+ * 主题偏好的本地持久化键。
+ * 旧键 xenon_pref_theme 跨越了 glass / linear / macos / wise 几代主题体系，
+ * 里面残留的 Wise 选择会盖住新的默认值，所以升级键名并清掉旧键。
+ */
+const THEME_STORAGE_KEY = 'xenon_pref_theme_v2'
+const LEGACY_THEME_STORAGE_KEY = 'xenon_pref_theme'
 
 /**
  * 预设厂商模板定义
@@ -122,12 +130,14 @@ export const ConfigPage = (): React.JSX.Element => {
   // 当前处于的左侧分类
   const [activeCategory, setActiveCategory] = useState<PrefNavCategory>('providers')
 
-  // 偏好设置外观风格，默认采用 Wise 先锋绿，支持本地持久化
+  // 偏好设置外观风格：默认 Wise 先锋绿，支持本地持久化
   const [prefTheme, setPrefTheme] = useState<PrefTheme>(() => {
     try {
-      const saved = localStorage.getItem('xenon_pref_theme')
-      if (saved === 'classic') {
-        return 'classic'
+      // 旧键的历史值不再沿用，读取时顺手清掉
+      localStorage.removeItem(LEGACY_THEME_STORAGE_KEY)
+      const saved = localStorage.getItem(THEME_STORAGE_KEY)
+      if (saved === 'wise' || saved === 'classic') {
+        return saved
       }
     } catch {
       // 忽略存储读取异常
@@ -139,7 +149,7 @@ export const ConfigPage = (): React.JSX.Element => {
   const handleSelectTheme = (theme: PrefTheme): void => {
     setPrefTheme(theme)
     try {
-      localStorage.setItem('xenon_pref_theme', theme)
+      localStorage.setItem(THEME_STORAGE_KEY, theme)
     } catch {
       // 忽略存储写入异常
     }
@@ -689,32 +699,39 @@ export const ConfigPage = (): React.JSX.Element => {
               {/* 顶部：服务商切换与管理栏（扁平化无框集成，释放纵向空间） */}
               <div className="pref-provider-bar">
                 <div className="pref-provider-tabs-row">
-                  <div className="pref-provider-tabs" ref={providerTabsRef}>
-                    {providers.map((p) => {
-                      const isSelected = p.id === selectedTabId
-                      const isPrimary = p.id === activeProviderId
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          data-item-id={p.id}
-                          className={`pref-provider-tab ${isSelected ? 'pref-provider-tab-active' : ''} ${
-                            !p.enabled ? 'pref-provider-tab-disabled' : ''
-                          }`}
-                          onClick={() => {
-                            setSelectedTabId(p.id)
-                            setTestResult(null)
-                          }}
-                          title={isPrimary ? '当前全局生效的默认服务商' : '点击查看与编辑此服务商'}
-                        >
-                          <span
-                            className={`pref-provider-tab-dot ${p.enabled ? 'dot-enabled' : 'dot-disabled'}`}
-                          />
-                          <span className="pref-provider-tab-name">{p.name}</span>
-                          {isPrimary ? <span className="pref-primary-indicator">默认</span> : null}
-                        </button>
-                      )
-                    })}
+                  {/* 滑轨视口包一层，才能在两端叠溢出提示阴影 */}
+                  <div className="pref-provider-tabs-viewport">
+                    <div className="pref-provider-tabs" ref={providerTabsRef}>
+                      {providers.map((p) => {
+                        const isSelected = p.id === selectedTabId
+                        const isPrimary = p.id === activeProviderId
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            data-item-id={p.id}
+                            className={`pref-provider-tab ${isSelected ? 'pref-provider-tab-active' : ''} ${
+                              !p.enabled ? 'pref-provider-tab-disabled' : ''
+                            }`}
+                            onClick={() => {
+                              setSelectedTabId(p.id)
+                              setTestResult(null)
+                            }}
+                            title={
+                              isPrimary ? '当前全局生效的默认服务商' : '点击查看与编辑此服务商'
+                            }
+                          >
+                            <span
+                              className={`pref-provider-tab-dot ${p.enabled ? 'dot-enabled' : 'dot-disabled'}`}
+                            />
+                            <span className="pref-provider-tab-name">{p.name}</span>
+                            {isPrimary ? (
+                              <span className="pref-primary-indicator">默认</span>
+                            ) : null}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
 
                   {/* 整合 + 新建与预设导入的下拉选择器 */}
@@ -793,7 +810,7 @@ export const ConfigPage = (): React.JSX.Element => {
                       onClick={() => updateActiveProvider({ enabled: !activeProvider.enabled })}
                       title="开启后该厂商的模型才会出现在主界面下拉框中"
                     >
-                      <span style={{ fontSize: '11px', color: '#5a5247', marginRight: '6px' }}>
+                      <span className="pref-switch-label">
                         {activeProvider.enabled ? '已启用' : '已停用'}
                       </span>
                       <div
@@ -1062,7 +1079,7 @@ export const ConfigPage = (): React.JSX.Element => {
                   <button
                     type="button"
                     className="pref-btn pref-btn-secondary"
-                    style={{ fontSize: '11px', padding: '3px 8px' }}
+                    style={{ fontSize: '12px', padding: '4px 10px' }}
                     onClick={() => {
                       setShortcuts({ ...DEFAULT_SHORTCUTS })
                       setFeedbackMessage('快捷键已重置为默认值')

@@ -2371,12 +2371,18 @@ body {
   --pref-text-secondary: #454745;
   --pref-text-muted: #868685;
 
-  /* 表单输入框：10px 圆角，1px Pebble 边框，聚焦为 Forest Ink 边框 */
+  /* 表单输入框：白底保留（Paper 逻辑，最亮的面留给可输入内容），
+     描边由中性灰换成同一明度的绿调灰，让它和墨绿/青柠体系同色系；
+     顶部 1px 高光 + 极淡外投影替代原来"描边一发亮"的线框感 */
   --pref-input-bg: #ffffff;
-  --pref-input-border: #868685;
+  --pref-input-border: #7f8a7b;
+  --pref-input-hover-border: #5f6b5c;
   --pref-input-text: #163300;
+  --pref-input-placeholder: #6a756a;
+  /* 聚焦回到品牌语言：墨绿实边 + 青柠光晕，而不是只把边框变个颜色 */
   --pref-input-focus-border: #163300;
-  --pref-input-focus-ring: transparent;
+  --pref-input-focus-ring: rgba(159, 232, 112, 0.45);
+  --pref-input-shadow: 0 1px 1px rgba(22, 51, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 
   /* 品牌高亮：Lime Voltage (#9fe870) */
   --pref-accent: #9fe870;
@@ -2435,91 +2441,124 @@ body {
   --pref-theme-switcher-bg: #f4f6f3;
   --pref-theme-switcher-border: #e2e6df;
   --pref-theme-btn-active-bg: #163300;
+
+  /* Tab 滑轨溢出提示：内容被裁切一侧压上的边缘阴影 */
+  --pref-tabs-edge-scrim: rgba(22, 51, 0, 0.14);
 }
 
-/* 主题 2：经典复古工控原版 (Classic Industrial) */
+/* 主题 2：复古工控设备原色 (Xenon Device) —— 与主窗口共用同一套设备语言 */
 .pref-root[data-pref-theme='classic'] {
-  --pref-bg: #ece7df;
-  --pref-header-bg: #e2dcd3;
-  --pref-header-border: #c7beaf;
-  --pref-title-main: #1e242e;
-  --pref-title-sub: #788396;
+  /* 壳体：与主窗口同一块米灰面板 */
+  --pref-bg: #e5e0d8;
+  --pref-header-bg: #ded8ce;
+  --pref-header-border: #c2b8ab;
+  --pref-title-main: #2f3848;
+  /* 标题副文字采用主窗口的刻印线色，和壳体上的丝印文字同一支笔 */
+  --pref-title-sub: #657086;
   --pref-header-actions-gap: 12px;
 
-  --pref-sidebar-bg: #ded7cc;
-  --pref-sidebar-border: #c7beaf;
-  --pref-nav-hover: #d4ccbf;
-  --pref-nav-active-bg: #f7f3ec;
-  --pref-nav-active-border: #c9c1b3;
-  --pref-nav-active-text: #1e2530;
-  --pref-nav-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --pref-nav-subtitle-active: #c95d2c;
+  /* 侧边栏：选中项做成被按下的深色机械键，副标题用荧光绿点缀 */
+  --pref-sidebar-bg: #ded8ce;
+  --pref-sidebar-border: #c2b8ab;
+  --pref-nav-hover: #d5cec3;
+  --pref-nav-active-bg: #2f3848;
+  --pref-nav-active-border: #232a36;
+  --pref-nav-active-text: #e5e0d8;
+  --pref-nav-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --pref-nav-subtitle-active: #00f05a;
 
-  --pref-card-bg: #f4f0ea;
-  --pref-card-border: #dcd4c8;
-  --pref-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  /* 卡片：比壳体略亮的金属面，用双向内阴影做出压印边缘 */
+  --pref-card-bg: #ece7df;
+  --pref-card-border: #c2b8ab;
+  --pref-card-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.7), inset -1px -1px 0 rgba(90, 99, 116, 0.14);
   --pref-card-backdrop: none;
   --pref-card-inner-shadow: none;
 
-  --pref-text-primary: #2e3542;
-  --pref-text-secondary: #4f5b6d;
-  --pref-text-muted: #7f8a9d;
+  --pref-text-primary: #2f3848;
+  --pref-text-secondary: #4f596b;
+  --pref-text-muted: #657086;
 
-  --pref-input-bg: #ffffff;
-  --pref-input-border: #c9c1b3;
-  --pref-input-text: #1e2530;
-  --pref-input-focus-border: #3f6aa6;
-  --pref-input-focus-ring: rgba(63, 106, 166, 0.14);
+  /* 输入控件：米白磨砂凹槽，用内阴影做出下陷的槽体，字用墨色 */
+  --pref-input-bg: #f2efe9;
+  --pref-input-border: #c2b8ab;
+  --pref-input-hover-border: #a99f8f;
+  --pref-input-text: #2f3848;
+  /* 占位符在凹槽面上需 ≥4.5:1，直接用实色而非半透明墨色 */
+  --pref-input-placeholder: #5a6374;
+  /* 荧光绿在浅底上只有 1.1:1，做不了描边，聚焦改用墨色加深 + 一层极淡光圈 */
+  --pref-input-focus-border: #2f3848;
+  --pref-input-focus-ring: rgba(47, 56, 72, 0.14);
+  --pref-input-shadow:
+    inset 1px 2px 3px rgba(47, 56, 72, 0.16), inset -1px -1px 0 rgba(255, 255, 255, 0.9);
 
-  --pref-accent: #e06c3a;
-  --pref-accent-hover: #c95927;
-  --pref-accent-light: rgba(224, 108, 58, 0.12);
-  --pref-accent-border: rgba(224, 108, 58, 0.3);
-  --pref-accent-text: #b94b1a;
+  /* 强调色：主窗口的荧光主绿 */
+  --pref-accent: #00f05a;
+  --pref-accent-hover: #39ff80;
+  --pref-accent-light: rgba(0, 240, 90, 0.14);
+  --pref-accent-border: rgba(0, 240, 90, 0.4);
+  --pref-accent-text: #0a2b14;
 
-  --pref-tab-bg: #dbd3c5;
-  --pref-tab-border: #bfb6a6;
-  --pref-tab-text: #555047;
-  --pref-tab-hover-bg: #d4caa8;
-  --pref-tab-active-bg: #f4f0ea;
-  --pref-tab-active-border: #e06c3a;
-  --pref-tab-active-text: #1f2530;
-  --pref-tab-active-shadow: 0 1px 3px rgba(224, 108, 58, 0.15);
+  /* 服务商按键排：金属灰键面，选中项深色反白 */
+  --pref-tab-bg: #d3d7dd;
+  --pref-tab-border: #aeb5c0;
+  --pref-tab-text: #4f596b;
+  --pref-tab-hover-bg: #dfe4ea;
+  --pref-tab-active-bg: #2f3848;
+  --pref-tab-active-border: #232a36;
+  --pref-tab-active-text: #00f05a;
+  --pref-tab-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
-  --pref-field-btn-bg: #f4efe6;
-  --pref-field-btn-border: #c9c1b3;
-  --pref-field-btn-text: #4a5463;
-  --pref-field-btn-hover-bg: #e7dfd1;
+  --pref-field-btn-bg: #d3d7dd;
+  --pref-field-btn-border: #aeb5c0;
+  --pref-field-btn-text: #4f596b;
+  --pref-field-btn-hover-bg: #dfe4ea;
 
-  --pref-pill-bg: #ebe5d9;
-  --pref-pill-border: #c8c0b1;
-  --pref-pill-text: #3b4455;
-  --pref-pill-hover-bg: #ded7c9;
-  --pref-pill-active-bg: #fbf2eb;
-  --pref-pill-active-border: #e06c3a;
-  --pref-pill-active-text: #b94b1a;
+  --pref-pill-bg: #d3d7dd;
+  --pref-pill-border: #aeb5c0;
+  --pref-pill-text: #4f596b;
+  --pref-pill-hover-bg: #dfe4ea;
+  --pref-pill-active-bg: #2f3848;
+  --pref-pill-active-border: #232a36;
+  --pref-pill-active-text: #00f05a;
 
-  --pref-footer-bg: #e2dcd3;
-  --pref-footer-border: #c7beaf;
-  --pref-btn-sec-bg: #ded7cc;
-  --pref-btn-sec-border: #b8b0a2;
-  --pref-btn-sec-text: #3b4455;
-  --pref-btn-sec-hover: #e6dfd4;
+  --pref-footer-bg: #ded8ce;
+  --pref-footer-border: #c2b8ab;
+  --pref-btn-sec-bg: #d3d7dd;
+  --pref-btn-sec-border: #aeb5c0;
+  --pref-btn-sec-text: #2f3848;
+  --pref-btn-sec-hover: #dfe4ea;
 
-  --pref-modal-bg: #ece7df;
-  --pref-modal-header-bg: #e2dcd3;
-  --pref-modal-border: #c7beaf;
-  --pref-modal-inner-bg: #fbf9f5;
-  --pref-modal-item-bg: #ffffff;
-  --pref-modal-item-border: #e4ddd3;
+  --pref-modal-bg: #e5e0d8;
+  --pref-modal-header-bg: #ded8ce;
+  --pref-modal-border: #c2b8ab;
+  --pref-modal-inner-bg: #ece7df;
+  --pref-modal-item-bg: #f2efe9;
+  --pref-modal-item-border: #cfc6b9;
 
-  --pref-radius-card: 6px;
-  --pref-radius-btn: 4px;
-  --pref-radius-input: 4px;
+  /* 几何规范：与主窗口一致的硬边直角 */
+  --pref-radius-card: 3px;
+  --pref-radius-btn: 3px;
+  --pref-radius-input: 3px;
 
-  --pref-theme-switcher-bg: #d8d0c2;
-  --pref-theme-switcher-border: #b8af9f;
-  --pref-theme-btn-active-bg: #f4f0ea;
+  --pref-theme-switcher-bg: #d5cec3;
+  --pref-theme-switcher-border: #b7aea3;
+  --pref-theme-btn-active-bg: #2f3848;
+  --pref-theme-btn-active-text: #e5e0d8;
+
+  /* Tab 滑轨溢出提示：用主窗口的墨蓝压一层边缘阴影，而不是淡出到壳体色 */
+  --pref-tabs-edge-scrim: rgba(47, 56, 72, 0.22);
+}
+
+/* 深色胶囊（当前默认模型）内部的子元素改用荧光绿系，否则浅色主题的灰绿会糊在深底上 */
+.pref-root[data-pref-theme='classic'] .pref-pill-active .pref-pill-prefix {
+  color: rgba(0, 240, 90, 0.75);
+}
+
+.pref-root[data-pref-theme='classic'] .pref-pill-active .pref-pill-default-badge {
+  background: var(--pref-accent);
+  border-color: var(--pref-accent);
+  color: var(--pref-accent-text);
 }
 
 /* ==========================================================================
@@ -2545,23 +2584,20 @@ body {
 }
 
 /* Wise 主行动按钮 (Primary CTA): Lime Voltage 满药丸 + Forest Ink 粗体字，无边框与投影 */
+/* 底色与文字色已由 --pref-accent 系列变量接管，这里只保留 Wise 的形状与字重特征 */
 .pref-root[data-pref-theme='wise'] .pref-btn-save {
-  background: #9fe870 !important;
-  color: #163300 !important;
-  border: none !important;
-  font-weight: 800 !important;
-  box-shadow: none !important;
+  border: none;
+  font-weight: 800;
+  box-shadow: none;
   letter-spacing: 0.1px;
 }
 
 .pref-root[data-pref-theme='wise'] .pref-btn-save:hover:not(:disabled) {
-  background: #b4f08d !important;
-  color: #163300 !important;
   transform: none;
 }
 
 .pref-root[data-pref-theme='wise'] .pref-btn-save:active:not(:disabled) {
-  background: #8cdb5b !important;
+  background: #8cdb5b;
   transform: translateY(1px);
 }
 
@@ -2646,7 +2682,7 @@ body {
 
 /* 顶部可拖拽工业/现代标题栏 */
 .pref-header {
-  height: 46px;
+  height: 48px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -2668,7 +2704,7 @@ body {
 }
 
 .pref-title-main {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--pref-title-main);
   letter-spacing: 0.3px;
@@ -2676,7 +2712,7 @@ body {
 
 .pref-title-sub {
   font-family: var(--font-display);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--pref-title-sub);
   letter-spacing: 0.6px;
@@ -2704,8 +2740,8 @@ body {
 }
 
 .pref-theme-btn {
-  padding: 3px 8px;
-  font-size: 10.5px;
+  padding: 4px 10px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--pref-text-secondary);
   background: transparent;
@@ -2723,7 +2759,7 @@ body {
 
 .pref-theme-btn-active {
   background: var(--pref-theme-btn-active-bg);
-  color: var(--pref-text-primary);
+  color: var(--pref-theme-btn-active-text, var(--pref-text-primary));
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
@@ -2733,13 +2769,13 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border: 1px solid var(--pref-btn-sec-border);
   border-radius: var(--pref-radius-btn);
   background: var(--pref-btn-sec-bg);
   color: var(--pref-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition: all 120ms ease;
@@ -2783,7 +2819,7 @@ body {
   background: var(--pref-card-bg);
   border: 1px solid var(--pref-card-border);
   border-radius: var(--pref-radius-card);
-  padding: 13px 15px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2806,14 +2842,14 @@ body {
 
 .pref-card-title {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--pref-text-primary);
   letter-spacing: 0.2px;
 }
 
 .pref-card-subtitle {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pref-text-muted);
 }
 
@@ -2827,8 +2863,8 @@ body {
 }
 
 .pref-seg-btn {
-  padding: 3px 11px;
-  font-size: 11px;
+  padding: 4px 12px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pref-text-secondary);
   border: none;
@@ -2854,7 +2890,7 @@ body {
 }
 
 .pref-preset-tip {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--pref-text-muted);
 }
 
@@ -2866,7 +2902,7 @@ body {
 
 .pref-preset-chip {
   padding: 1px 8px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--pref-text-secondary);
   background: var(--pref-field-btn-bg);
@@ -2888,7 +2924,7 @@ body {
 
 .pref-mock-hint {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pref-text-muted);
   line-height: 1.4;
 }
@@ -2897,13 +2933,13 @@ body {
 .pref-fields-grid {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 13px;
 }
 
 .pref-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .pref-label-row {
@@ -2913,7 +2949,7 @@ body {
 }
 
 .pref-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pref-text-secondary);
 }
@@ -2922,21 +2958,22 @@ body {
   background: none;
   border: none;
   padding: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pref-accent-text);
   cursor: pointer;
   text-decoration: underline;
 }
 
 .pref-input {
-  height: 31px;
+  height: 34px;
   padding: 0 10px;
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pref-input-text);
   background: var(--pref-input-bg);
   border: 1px solid var(--pref-input-border);
   border-radius: var(--pref-radius-input);
+  box-shadow: var(--pref-input-shadow);
   outline: none;
   transition:
     border-color 120ms ease,
@@ -2946,11 +2983,18 @@ body {
 
 .pref-input:focus {
   border-color: var(--pref-input-focus-border);
-  box-shadow: 0 0 0 2px var(--pref-input-focus-ring);
+  box-shadow:
+    var(--pref-input-shadow),
+    0 0 0 2px var(--pref-input-focus-ring);
+}
+
+/* 鼠标悬停时描边加深，聚焦态优先，避免两个状态互相覆盖 */
+.pref-input:hover:not(:focus) {
+  border-color: var(--pref-input-hover-border, var(--pref-input-border));
 }
 
 .pref-input::placeholder {
-  color: var(--pref-text-muted);
+  color: var(--pref-input-placeholder, var(--pref-text-muted));
 }
 
 /* 深度思考 Switch 拨动开关 */
@@ -2958,6 +3002,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 8px 11px;
   background: var(--pref-card-bg);
   border: 1px solid var(--pref-card-border);
@@ -2976,22 +3021,24 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  flex: 1;
+  min-width: 0;
 }
 
 .pref-switch-name {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--pref-text-primary);
 }
 
 .pref-switch-sub {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pref-text-muted);
 }
 
 .pref-switch {
-  width: 34px;
-  height: 18px;
+  width: 38px;
+  height: 20px;
   background: var(--pref-btn-sec-border);
   border-radius: 10px;
   padding: 2px;
@@ -3001,12 +3048,12 @@ body {
 }
 
 .pref-switch-on {
-  background: #27ae60;
+  background: var(--pref-accent);
 }
 
 .pref-switch-thumb {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   background: #ffffff;
   border-radius: 50%;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -3027,7 +3074,15 @@ body {
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  min-height: 28px;
+  min-height: 30px;
+}
+
+/* 滑轨视口：承载可滚动的 Tab 列表与两端溢出提示 */
+.pref-provider-tabs-viewport {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
 }
 
 .pref-provider-tabs {
@@ -3058,37 +3113,37 @@ body {
   pointer-events: none;
 }
 
-/* 动态边缘渐变遮罩：在两端有更多内容可滚动时平滑淡出提示 */
-.pref-provider-tabs[data-has-scroll-left='true'][data-has-scroll-right='true'] {
-  mask-image: linear-gradient(
-    to right,
-    transparent 0px,
-    black 14px,
-    black calc(100% - 14px),
-    transparent 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0px,
-    black 14px,
-    black calc(100% - 14px),
-    transparent 100%
-  );
+/*
+ * 溢出提示：滑轨两端在有未展示渠道时压上一层渐隐阴影。
+ * 之前用的是 mask 淡出到壳体色，但壳体（#e5e0d8）与键面（#d3d7dd）对比度只有 1.1:1，
+ * 淡出等于没有效果，被裁切的渠道看起来像渲染错误；改成压一层墨色阴影才读得出"还有内容"。
+ */
+.pref-provider-tabs-viewport::before,
+.pref-provider-tabs-viewport::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 22px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  z-index: 1;
 }
 
-.pref-provider-tabs[data-has-scroll-left='true'][data-has-scroll-right='false'] {
-  mask-image: linear-gradient(to right, transparent 0px, black 14px, black 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0px, black 14px, black 100%);
+.pref-provider-tabs-viewport::before {
+  left: 0;
+  background: linear-gradient(to right, var(--pref-tabs-edge-scrim), transparent);
 }
 
-.pref-provider-tabs[data-has-scroll-left='false'][data-has-scroll-right='true'] {
-  mask-image: linear-gradient(to right, black 0%, black calc(100% - 14px), transparent 100%);
-  -webkit-mask-image: linear-gradient(
-    to right,
-    black 0%,
-    black calc(100% - 14px),
-    transparent 100%
-  );
+.pref-provider-tabs-viewport::after {
+  right: 0;
+  background: linear-gradient(to left, var(--pref-tabs-edge-scrim), transparent);
+}
+
+.pref-provider-tabs-viewport:has(.pref-provider-tabs[data-has-scroll-left='true'])::before,
+.pref-provider-tabs-viewport:has(.pref-provider-tabs[data-has-scroll-right='true'])::after {
+  opacity: 1;
 }
 
 .pref-provider-tabs::-webkit-scrollbar {
@@ -3102,10 +3157,10 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 11px;
+  height: 30px;
+  padding: 0 12px;
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   box-sizing: border-box;
@@ -3147,20 +3202,21 @@ body {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  height: 28px;
+  height: 30px;
 }
 
 .pref-btn-add-provider {
-  height: 28px;
-  padding: 0 11px;
+  height: 30px;
+  padding: 0 12px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   box-sizing: border-box;
   color: var(--pref-text-secondary);
-  background: var(--pref-field-btn-bg);
-  border: 1px dashed var(--pref-field-btn-border);
+  /* 空键位：透明底 + 实线边框，与实心键面的服务商 Tab 区分开 */
+  background: transparent;
+  border: 1px solid var(--pref-field-btn-border);
   border-radius: var(--pref-radius-btn);
   cursor: pointer;
   white-space: nowrap;
@@ -3180,7 +3236,7 @@ body {
 }
 
 .pref-dropdown-arrow {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--pref-text-muted);
   line-height: 1;
 }
@@ -3221,7 +3277,7 @@ body {
   gap: 6px;
   padding: 5px 8px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--pref-text-primary);
   background: none;
@@ -3256,7 +3312,7 @@ body {
 
 .pref-add-menu-label {
   padding: 3px 8px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--pref-text-muted);
   user-select: none;
@@ -3264,7 +3320,7 @@ body {
 
 /* 激活服务商主配置卡片 */
 .pref-provider-active-card {
-  padding: 12px 14px;
+  padding: 13px 15px;
   gap: 9px;
 }
 
@@ -3286,6 +3342,13 @@ body {
   display: flex;
   align-items: center;
   cursor: pointer;
+}
+
+/* 启用状态文字标签：跟随主题次级文字色，不再写死暖棕内联色 */
+.pref-switch-label {
+  font-size: 12px;
+  color: var(--pref-text-secondary);
+  margin-right: 6px;
 }
 
 /* 快捷模型库池容器 */
@@ -3319,10 +3382,10 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 23px;
-  padding: 0 5px 0 7px;
+  height: 25px;
+  padding: 0 6px 0 8px;
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--pref-pill-text);
   background: var(--pref-pill-bg);
@@ -3332,7 +3395,7 @@ body {
   user-select: none;
   transition: all 120ms ease;
   box-sizing: border-box;
-  max-width: 250px;
+  max-width: 260px;
 }
 
 .pref-pill:hover {
@@ -3354,13 +3417,13 @@ body {
 /* 默认模型微徽章 (DEF) */
 .pref-pill-default-badge {
   font-family: inherit;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--pref-accent-text);
   background: var(--pref-accent-light);
   border: 1px solid var(--pref-accent-border);
   padding: 0 3px;
-  height: 13px;
+  height: 14px;
   line-height: 11px;
   border-radius: 2px;
   display: inline-flex;
@@ -3380,7 +3443,7 @@ body {
 }
 
 .pref-pill-prefix {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pref-text-muted);
   user-select: none;
   flex-shrink: 0;
@@ -3392,16 +3455,16 @@ body {
   white-space: nowrap;
 }
 
-/* 模型列表内虚线录入微按钮 */
+/* 模型列表内的录入微按钮（空键位） */
 .pref-pill-btn-add {
-  height: 23px;
+  height: 25px;
   padding: 0 8px;
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--pref-text-secondary);
-  background: var(--pref-field-btn-bg);
-  border: 1px dashed var(--pref-field-btn-border);
+  background: transparent;
+  border: 1px solid var(--pref-field-btn-border);
   border-radius: var(--pref-radius-btn);
   cursor: pointer;
   user-select: none;
@@ -3420,8 +3483,8 @@ body {
 
 /* 精致矢量删除按钮 */
 .pref-pill-remove {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   padding: 0;
   margin-left: 1px;
   background: none;
@@ -3454,12 +3517,12 @@ body {
 
 .pref-add-input {
   flex: 1;
-  height: 28px;
+  height: 30px;
 }
 
 /* 底栏操作工具栏 */
 .pref-footer {
-  height: 52px;
+  height: 56px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -3495,9 +3558,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
-  padding: 0 14px;
-  font-size: 11.5px;
+  height: 32px;
+  padding: 0 15px;
+  font-size: 12.5px;
   font-weight: 600;
   border-radius: var(--pref-radius-btn);
   cursor: pointer;
@@ -3525,7 +3588,7 @@ body {
   background: var(--pref-btn-sec-bg);
   border: 1px solid var(--pref-btn-sec-border);
   color: var(--pref-btn-sec-text);
-  height: 30px;
+  height: 32px;
 }
 
 .pref-btn-secondary:hover:not(:disabled) {
@@ -3545,16 +3608,16 @@ body {
 }
 
 .pref-btn-save {
-  background: #27ae60;
-  border: 1px solid #1e8449;
-  color: #ffffff;
+  background: var(--pref-accent);
+  border: 1px solid var(--pref-accent-border);
+  color: var(--pref-accent-text);
   font-weight: 700;
-  box-shadow: 0 1px 2px rgba(39, 174, 96, 0.25);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .pref-btn-save:hover:not(:disabled) {
-  background: #2ecc71;
-  border-color: #27ae60;
+  background: var(--pref-accent-hover);
+  border-color: var(--pref-accent-hover);
 }
 
 .pref-btn-save:active:not(:disabled) {
@@ -3599,8 +3662,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  height: 24px;
+  font-size: 12px;
+  height: 26px;
   padding: 0 8px;
   border-radius: var(--pref-radius-btn);
   background: rgba(0, 0, 0, 0.04);
@@ -3648,7 +3711,7 @@ body {
 }
 
 .pref-feedback-text {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #27ae60;
   white-space: nowrap;
@@ -3665,16 +3728,16 @@ body {
 }
 
 .pref-provider-count-tip {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pref-text-muted);
   font-family: var(--font-display);
 }
 
 /* 主用服务商 Tab 指示标签 */
 .pref-primary-indicator {
-  font-size: 9px;
+  font-size: 10px;
   background: var(--pref-accent);
-  color: #ffffff;
+  color: var(--pref-accent-text);
   padding: 1px 4px;
   border-radius: 3px;
   font-weight: 700;
@@ -3683,7 +3746,7 @@ body {
 
 /* 全部模板添加完成后的弱提示 */
 .pref-preset-tip-dim {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--pref-text-muted);
 }
 
@@ -3695,7 +3758,7 @@ body {
 }
 
 .pref-badge-primary {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--pref-accent-text);
   background: var(--pref-accent-light);
@@ -3708,7 +3771,7 @@ body {
   background: var(--pref-btn-sec-bg);
   border: 1px solid var(--pref-btn-sec-border);
   color: var(--pref-text-secondary);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   padding: 2px 7px;
   border-radius: var(--pref-radius-btn);
@@ -3734,9 +3797,9 @@ body {
 
 /* 统一表单字段右侧微型操作按键 */
 .pref-field-btn {
-  height: 22px;
-  padding: 0 8px;
-  font-size: 11px;
+  height: 24px;
+  padding: 0 9px;
+  font-size: 12px;
   font-weight: 500;
   font-family: inherit;
   border-radius: var(--pref-radius-btn);
@@ -3787,7 +3850,7 @@ body {
 
 .pref-field-btn-primary:hover:not(:disabled) {
   background: var(--pref-accent);
-  color: #ffffff;
+  color: var(--pref-accent-text);
 }
 
 .pref-field-btn-primary:active:not(:disabled) {
@@ -3815,9 +3878,9 @@ body {
 
 /* 兼容保留自动拉取模型旧类名 */
 .pref-btn-fetch {
-  height: 22px;
+  height: 24px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   font-family: inherit;
   border-radius: var(--pref-radius-btn);
@@ -3853,17 +3916,17 @@ body {
 }
 
 .pref-test-detail-btn {
-  height: 24px;
+  height: 26px;
   padding: 0 8px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   flex-shrink: 0;
 }
 
 .pref-btn-error-detail {
-  height: 24px;
+  height: 26px;
   padding: 0 8px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   border-radius: var(--pref-radius-btn);
   background: #fdf2f1;
@@ -3923,7 +3986,7 @@ body {
 }
 
 .pref-modal-header {
-  height: 42px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3937,7 +4000,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--pref-text-primary);
 }
@@ -3952,7 +4015,7 @@ body {
 
 .pref-modal-badge {
   font-family: var(--font-display);
-  font-size: 9.5px;
+  font-size: 10.5px;
   background: var(--pref-field-btn-bg);
   color: var(--pref-text-secondary);
   padding: 1px 6px;
@@ -3992,7 +4055,7 @@ body {
 
 .pref-modal-search {
   flex: 1;
-  height: 28px;
+  height: 30px;
 }
 
 .pref-modal-quick-select {
@@ -4018,12 +4081,12 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 7px 11px;
   border-radius: var(--pref-radius-btn);
   cursor: pointer;
   transition: all 100ms ease;
   font-family: var(--font-display);
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--pref-text-primary);
   background: var(--pref-modal-item-bg);
   border: 1px solid var(--pref-modal-item-border);
@@ -4038,8 +4101,8 @@ body {
 .pref-modal-checkbox {
   accent-color: var(--pref-accent);
   cursor: pointer;
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   margin: 0;
 }
 
@@ -4063,7 +4126,7 @@ body {
 }
 
 .pref-modal-item-tag {
-  font-size: 9.5px;
+  font-size: 10.5px;
   padding: 1px 6px;
   border-radius: 3px;
   flex-shrink: 0;
@@ -4086,11 +4149,11 @@ body {
   padding: 36px 20px;
   text-align: center;
   color: var(--pref-text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .pref-modal-footer {
-  height: 48px;
+  height: 50px;
   padding: 0 14px;
   background: var(--pref-modal-header-bg);
   border-top: 1px solid var(--pref-modal-border);
@@ -4106,7 +4169,7 @@ body {
 }
 
 .pref-modal-selected-badge {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pref-text-secondary);
   padding: 2px 7px;
   border-radius: 3px;
@@ -4175,7 +4238,7 @@ body {
 .pref-error-meta-row {
   display: flex;
   align-items: baseline;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -4190,7 +4253,7 @@ body {
   color: var(--pref-text-primary);
   word-break: break-all;
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 12px;
   flex: 1;
 }
 
@@ -4200,7 +4263,7 @@ body {
 }
 
 .pref-error-body-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--pref-text-secondary);
   margin-top: 2px;
@@ -4213,7 +4276,7 @@ body {
   color: #cbd5e1;
   border: 1px solid #2d3540;
   font-family: var(--font-display);
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.5;
   border-radius: var(--pref-radius-btn);
   max-height: 220px;
@@ -4261,7 +4324,7 @@ body {
 .pref-nav-item {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-radius: var(--pref-radius-btn);
   border: 1px solid transparent;
   background: transparent;
@@ -4292,14 +4355,14 @@ body {
 }
 
 .pref-nav-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .pref-nav-subtitle {
   font-family: var(--font-display);
-  font-size: 8px;
+  font-size: 10px;
   color: var(--pref-text-muted);
   letter-spacing: 0.3px;
 }
@@ -4312,7 +4375,7 @@ body {
 .pref-main-content {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px 16px;
+  padding: 13px 16px 16px;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -4337,7 +4400,7 @@ body {
 
 /* 快捷键设置专属样式 */
 .pref-shortcut-tip {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pref-text-muted);
   font-family: var(--font-display);
 }
@@ -4368,14 +4431,15 @@ body {
 
 /* 大段提示词输入框 */
 .pref-textarea {
-  padding: 8px 10px;
+  padding: 9px 11px;
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--pref-input-text);
   background: var(--pref-input-bg);
   border: 1px solid var(--pref-input-border);
   border-radius: var(--pref-radius-input);
+  box-shadow: var(--pref-input-shadow);
   outline: none;
   resize: vertical;
   min-height: 60px;
@@ -4387,11 +4451,17 @@ body {
 
 .pref-textarea:focus {
   border-color: var(--pref-input-focus-border);
-  box-shadow: 0 0 0 2px var(--pref-input-focus-ring);
+  box-shadow:
+    var(--pref-input-shadow),
+    0 0 0 2px var(--pref-input-focus-ring);
+}
+
+.pref-textarea:hover:not(:focus) {
+  border-color: var(--pref-input-hover-border, var(--pref-input-border));
 }
 
 .pref-textarea::placeholder {
-  color: var(--pref-text-muted);
+  color: var(--pref-input-placeholder, var(--pref-text-muted));
 }
 
 /* 单选框样式 */
@@ -4406,7 +4476,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--pref-text-primary);
   cursor: pointer;
   user-select: none;
