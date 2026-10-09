@@ -827,7 +827,7 @@ button:focus-visible {
 }
 
 .display-screen-actions-label {
-  color: rgba(0, 240, 90, 0.32);
+  color: rgba(0, 240, 90, 0.6);
   font-family: 'Space Mono', monospace;
   font-size: 8px;
   line-height: 1;
@@ -850,7 +850,7 @@ button:focus-visible {
   border-radius: 3px;
   padding: 0;
   background: transparent;
-  color: rgba(0, 240, 90, 0.56);
+  color: rgba(0, 240, 90, 0.6);
   cursor: pointer;
   position: relative;
   display: inline-flex;
@@ -877,15 +877,11 @@ button:focus-visible {
   height: 22px;
   border: 0;
   background: transparent;
-  color: rgba(0, 240, 90, 0.45);
-  opacity: 0.7;
-  transition:
-    opacity 120ms ease,
-    color 120ms ease;
+  color: rgba(0, 240, 90, 0.62);
+  transition: color 120ms ease;
 }
 
 .display-screen-action-button-think:hover:not(:disabled) {
-  opacity: 1;
   color: rgba(0, 240, 90, 0.9);
 }
 
@@ -925,9 +921,11 @@ button:focus-visible {
   background: rgba(0, 240, 90, 0.08);
 }
 
-.display-screen-action-button:disabled {
+.display-screen .display-screen-action-button:disabled,
+.display-screen-source .display-screen-action-button:disabled {
   cursor: not-allowed;
-  opacity: 0.28;
+  color: rgba(0, 240, 90, 0.34);
+  opacity: 1;
 }
 
 .display-screen-action-icon {
@@ -1040,11 +1038,11 @@ button:focus-visible {
 }
 
 .display-screen-source .display-screen-actions-label {
-  color: rgba(0, 240, 90, 0.24);
+  color: rgba(0, 240, 90, 0.6);
 }
 
 .display-screen-source .display-screen-action-button {
-  color: rgba(0, 240, 90, 0.44);
+  color: rgba(0, 240, 90, 0.6);
 }
 
 .translation-loader {
@@ -1166,7 +1164,7 @@ button:focus-visible {
 }
 
 .display-input::placeholder {
-  color: rgba(0, 240, 90, 0.28);
+  color: rgba(0, 240, 90, 0.6);
   text-shadow: none;
 }
 
@@ -1214,7 +1212,7 @@ button:focus-visible {
 }
 
 .display-placeholder {
-  color: rgba(0, 240, 90, 0.45);
+  color: rgba(0, 240, 90, 0.6);
   text-shadow: none;
 }
 
