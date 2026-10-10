@@ -19,8 +19,6 @@
 
 :root {
   --device-bg: #e5e0d8;
-  --device-border: #c2b8ab;
-  --device-shadow: #b7aea3;
   --panel-line: #657086;
   --screen-border: #333333;
   --screen-green: #00f05a;
@@ -119,8 +117,7 @@ body {
   align-self: center;
 }
 
-.status-label,
-.language-label {
+.status-label {
   color: var(--panel-line);
   font-family: var(--font-screen);
   letter-spacing: 0.9px;
@@ -135,14 +132,6 @@ body {
   font-weight: 600;
   letter-spacing: 1.1px;
   opacity: 0.9;
-}
-
-.language-label {
-  color: rgba(101, 112, 134, 0.82);
-  font-size: 13px;
-  line-height: 1;
-  letter-spacing: 0.8px;
-  white-space: nowrap;
 }
 
 .display-section-header {
@@ -1333,11 +1322,6 @@ body {
     letter-spacing: 0.8px;
   }
 
-  .language-label {
-    font-size: 8px;
-    letter-spacing: 0.45px;
-  }
-
   .display-section-header,
   .display-section-header-target {
     height: 20px;
@@ -1377,10 +1361,6 @@ body {
   .display-section + .display-section,
   .display-section-target-wrap {
     margin-top: 8px;
-  }
-
-  .language-label {
-    margin-bottom: 10px;
   }
 
   .display-screen {
@@ -1465,16 +1445,6 @@ body {
   .display-screen-action-icon-copy::after {
     top: 0;
     left: 3px;
-  }
-
-  .display-screen-toolbar {
-    top: 8px;
-    right: 10px;
-  }
-
-  .display-inline-action-text {
-    font-size: 6px;
-    letter-spacing: 0.7px;
   }
 
   .display-scroll {
@@ -1763,13 +1733,11 @@ body {
   --pref-card-hover-bg: #ececef;
   --pref-card-shadow: none;
   --pref-card-backdrop: none;
-  --pref-card-inner-shadow: none;
 
   /* 文本系统：近黑标题锚点 + 三级灰阶拉开层级（层级靠灰度，不靠加粗） */
   --pref-text-primary: #1c1c21;
   --pref-text-secondary: #4b4b53;
   --pref-text-muted: #85858d;
-  --pref-text-disabled: #b9b9c2;
 
   /* 中性强调描边：悬停与"按下"状态共用的深一档灰 */
   --pref-border-strong: #b9b9c2;
@@ -1840,9 +1808,7 @@ body {
   --pref-radius-card: 10px;
   --pref-radius-btn: 9999px;
   --pref-radius-input: 10px;
-
 }
-
 
 /* ==========================================================================
    偏好设置窗口的组件级样式特征 (Preferences Signature Styling)
@@ -1859,7 +1825,6 @@ body {
 :where(.pref-root) :where(button, input, textarea, select) {
   font-family: inherit;
 }
-
 
 /* 区块标题：近黑锚点 + 600 字重，字号层级之外不再叠加其他强调手段 */
 .pref-root[data-pref-theme='wise'] .pref-card-title {
@@ -1902,7 +1867,6 @@ body {
   border-color: var(--pref-border-strong);
 }
 
-
 /* 拨动开关：开启态近黑轨道 + 白滑块，绿色只留给状态点 */
 .pref-root[data-pref-theme='wise'] .pref-switch-on {
   background: var(--pref-switch-on-bg);
@@ -1913,7 +1877,6 @@ body {
 }
 
 /* 状态微徽章：浅绿底 + 深绿字，是页面上唯一允许出现的彩色文字 */
-.pref-root[data-pref-theme='wise'] .pref-badge-primary,
 .pref-root[data-pref-theme='wise'] .pref-primary-indicator,
 .pref-root[data-pref-theme='wise'] .pref-test-status-ok {
   background: var(--pref-accent-light);
@@ -1925,7 +1888,6 @@ body {
 .pref-root[data-pref-theme='wise'] .pref-test-status-ok .pref-status-dot {
   background: var(--pref-accent);
 }
-
 
 .pref-root {
   position: fixed;
@@ -2014,7 +1976,6 @@ body {
   box-shadow: var(--pref-topnav-tab-active-shadow);
 }
 
-
 /* 顶部右侧操作栏 */
 .pref-header-actions {
   display: flex;
@@ -2022,7 +1983,6 @@ body {
   gap: var(--pref-header-actions-gap);
   -webkit-app-region: no-drag;
 }
-
 
 .pref-close-btn {
   -webkit-app-region: no-drag;
@@ -2051,7 +2011,6 @@ body {
 .pref-close-btn:active {
   transform: translateY(1px);
 }
-
 
 /* 轻量卡片容器 */
 .pref-card {
@@ -2092,54 +2051,7 @@ body {
   color: var(--pref-text-muted);
 }
 
-/* 分段模式选择器 */
-.pref-seg-control {
-  display: inline-flex;
-  background: var(--pref-field-btn-bg);
-  padding: 2px;
-  border-radius: var(--pref-radius-btn);
-  border: 1px solid var(--pref-field-btn-border);
-}
-
-.pref-seg-btn {
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--pref-text-secondary);
-  border: none;
-  background: transparent;
-  border-radius: calc(var(--pref-radius-btn) - 1px);
-  cursor: pointer;
-  transition: all 120ms ease;
-}
-
-.pref-seg-btn-active {
-  background: var(--pref-card-bg);
-  color: var(--pref-text-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-
-/* 厂商预设快速标签 */
-.pref-preset-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 1px 2px;
-}
-
-.pref-preset-tip {
-  font-weight: 400;
-  font-size: 12px;
-  color: var(--pref-text-muted);
-}
-
-.pref-preset-chips {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-
+/* 快捷键预设微胶囊 */
 .pref-preset-chip {
   padding: 1px 8px;
   font-size: 12px;
@@ -2160,14 +2072,6 @@ body {
 
 .pref-preset-chip:active {
   transform: translateY(1px);
-}
-
-.pref-mock-hint {
-  font-weight: 400;
-  margin: 0;
-  font-size: 12px;
-  color: var(--pref-text-muted);
-  line-height: 1.4;
 }
 
 /* 表单字段 */
@@ -2193,17 +2097,6 @@ body {
   font-size: 12px;
   font-weight: 500;
   color: var(--pref-text-secondary);
-}
-
-.pref-text-btn {
-  font-weight: 400;
-  background: none;
-  border: none;
-  padding: 0;
-  font-size: 12px;
-  color: var(--pref-accent-ink);
-  cursor: pointer;
-  text-decoration: underline;
 }
 
 .pref-input {
@@ -2311,7 +2204,7 @@ body {
   transform: translateX(18px);
 }
 
-/* 服务商选择条：标题行（统计 + 翻页箭头 + 添加渠道）+ 单行卡片滑轨 */
+/* 服务商管理区：标题行（选择引导语 + 数量统计 + 添加渠道）与下方分组列表 */
 .pref-provider-bar {
   display: flex;
   flex-direction: column;
@@ -2319,7 +2212,7 @@ body {
   margin-bottom: 12px;
 }
 
-/* 标题行：左侧分组标题，右侧统计、翻页箭头与添加入口 */
+/* 标题行：左侧选择引导语，右侧统计与添加入口 */
 .pref-provider-bar-head {
   display: flex;
   align-items: center;
@@ -2349,96 +2242,67 @@ body {
   white-space: nowrap;
 }
 
-/* 翻页箭头：圆形空键位，与实心卡片形成轻/重对比 */
-.pref-provider-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+/*
+ * 服务商品牌标识：统一 18px 方格内等比缩放居中。
+ * 未命中品牌的厂商不会渲染这个节点（见 ProviderBrandLogo），行内自动回到纯文字形态。
+ */
+.pref-brand-logo {
+  flex-shrink: 0;
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 
-.pref-provider-nav-btn {
+/*
+ * 横向图幅的品牌图形补偿。
+ * DeepSeek 的鲸鱼在图幅里只占 99%×73%，放进 18px 方格后实高仅约 13px，与方形图标并排会明显偏小。
+ * 注意 object-fit: contain 受短边约束，只改 width 不会生效，必须同时放大高度。
+ * 21px 是让两个品牌图形面积接近的平衡点（DeepSeek 实约 20.9×15.4，Cline 实约 17.1×18.0）。
+ */
+.pref-brand-logo-wide {
+  width: 21px;
+  height: 21px;
+}
+
+/* 下拉菜单项内统一收到方形尺寸，与无品牌的圆点占位共用一个 18px 槽位，保证文字左边缘对齐 */
+.pref-add-menu-item .pref-brand-logo,
+.pref-add-menu-item .pref-brand-logo-wide {
+  width: 18px;
+  height: 18px;
+}
+
+/* 服务商列表：按启用状态分组，行内直接完成"打开详情 / 设默认 / 启停"三件事 */
+.pref-provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pref-provider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 分组标题：与"选择服务商"引导语同档（12px / 400 / 三级灰），靠灰度分层而不是字号 */
+.pref-provider-group-title {
   font-weight: 400;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: inherit;
   font-size: 12px;
-  line-height: 1;
-  color: var(--pref-text-secondary);
-  background: #ffffff;
-  border: 1px solid var(--pref-card-border);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 120ms ease;
+  color: var(--pref-text-muted);
 }
 
-.pref-provider-nav-btn:hover {
-  color: var(--pref-text-primary);
-  border-color: var(--pref-text-primary);
-  background: var(--pref-card-bg);
-}
-
-.pref-provider-nav-btn:active {
-  transform: translateY(1px);
-}
-
-/* 滑轨视口：承载可横向滚动的卡片列表 */
-.pref-provider-tabs-viewport {
-  position: relative;
-  min-width: 0;
-}
-
-.pref-provider-tabs {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  /*
-   * 左右各留 4px 呼吸位：滚动位置只要不是整数 0（轻微拖拽、平滑滚动被打断都会留下
-   * 几像素残差），首尾卡片最外侧的 1px 边框就会被 overflow 裁掉。用负外边距抵消掉
-   * 这段留白，卡片视觉左边仍与上方"选择服务商"标题对齐。
-   */
-  padding: 0 4px;
-  margin: 0 -4px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  cursor: grab;
-}
-
-.pref-provider-tabs.pref-tabs-dragging {
-  cursor: grabbing !important;
-  user-select: none !important;
-}
-
-.pref-tabs-dragging .pref-provider-card {
-  cursor: grabbing !important;
-  user-select: none !important;
-  pointer-events: none;
-}
-
-.pref-provider-tabs::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-
-/* 服务商卡片：两行信息 + 右侧启用开关，单行横排 */
-.pref-provider-card {
+/*
+ * 单条服务商：一行承载品牌标识、名称、默认模型、模型数量与两个动作。
+ * 版式用 flex + 弹性文本列，模型名是唯一可压缩的单元格，窗口再窄也不会挤掉右侧动作。
+ */
+.pref-provider-row {
   box-sizing: border-box;
-  flex: 0 0 205px;
-  width: 205px;
-  min-width: 205px;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   padding: 8px 10px;
-  border-radius: 11px;
+  border-radius: var(--pref-radius-card);
   background: var(--pref-card-bg);
   border: 1px solid var(--pref-card-border);
   cursor: pointer;
@@ -2450,118 +2314,79 @@ body {
     opacity 140ms ease;
 }
 
-.pref-provider-card:hover {
+.pref-provider-row:hover {
   background: var(--pref-card-hover-bg);
   border-color: var(--pref-border-strong);
 }
 
-/*
- * 选中态：白底浮起 + 墨绿双线边框，读作"按下的机械键"。
- * 描边用 inset 画在边框盒内部（而不是向外扩），这样即使滑轨停在非零滚动位置，
- * 也不会被滚动容器的 overflow 裁掉。
- */
-.pref-provider-card-active {
+.pref-provider-row:focus-visible {
+  outline: 1px solid var(--pref-text-primary);
+  outline-offset: 1px;
+}
+
+/* 正在编辑的行：白底 + 墨色描边，读作"按下的机械键"，不填色 */
+.pref-provider-row.is-selected {
   background: #ffffff;
   border-color: var(--pref-text-primary);
   box-shadow: inset 0 0 0 1px var(--pref-text-primary);
 }
 
-/* 停用态：整卡降灰，但开关本身保持可点可读 */
-.pref-provider-card-off {
-  opacity: 0.55;
-}
-
-.pref-provider-card-off:hover {
-  opacity: 0.78;
-}
-
-.pref-provider-card-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.pref-provider-card-name {
+.pref-provider-row-name {
   display: flex;
   align-items: center;
   gap: 5px;
-  min-width: 0;
-}
-
-.pref-provider-card-name-text {
+  flex-shrink: 0;
+  max-width: 42%;
   font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
+  font-weight: 500;
+  line-height: 1.3;
   color: var(--pref-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.pref-provider-card-state {
-  font-weight: 400;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.2;
-  color: var(--pref-text-muted);
-}
-
-.pref-provider-card-dot {
+/* 默认渠道徽章：浅色强调底 + 深绿字，只做小面积标记 */
+.pref-primary-indicator {
   flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--pref-text-disabled);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--pref-accent-ink);
+  background: var(--pref-accent-light);
+  border: 1px solid var(--pref-accent-border);
+  padding: 0 5px;
+  border-radius: var(--pref-radius-btn);
 }
 
-.pref-provider-card-dot.is-on {
-  background: var(--pref-accent);
-}
-
-.pref-provider-card-model {
-  flex: 0 1 auto;
+/* 模型名：唯一可压缩列，过长省略号收尾，不与右侧动作抢位 */
+.pref-provider-row-model {
+  flex: 1 1 auto;
   min-width: 0;
+  font-weight: 400;
+  font-size: 12px;
   color: var(--pref-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.pref-provider-card-meta {
-  font-weight: 400;
+.pref-provider-row-count {
   flex-shrink: 0;
+  font-weight: 400;
   font-size: 12px;
+  color: var(--pref-text-muted);
   white-space: nowrap;
 }
 
-/* 有模型时把数量推到行尾，让每张卡的"· N 个模型"落在同一列 */
-.pref-provider-card-model + .pref-provider-card-meta {
-  margin-left: auto;
+/* 行内"设为默认"：次要描边按钮，存在感低于右侧开关但保持可发现 */
+.pref-provider-row-action {
+  flex-shrink: 0;
 }
 
-/* 卡片内开关：比全局开关略小一档，避免压过卡片信息 */
-.pref-provider-card-switch {
-  width: 32px;
-  height: 18px;
-  padding: 2px;
-  border: none;
-  border-radius: 9px;
-  cursor: pointer;
-  appearance: none;
-}
-
-.pref-provider-card-switch .pref-switch-thumb {
-  width: 14px;
-  height: 14px;
-}
-
-.pref-provider-card-switch.pref-switch-on .pref-switch-thumb {
-  transform: translateX(14px);
+/* 行内开关沿用全局尺寸即可，不再做缩小变体以保证一行内的点击热区一致 */
+.pref-provider-row .pref-switch {
+  flex-shrink: 0;
 }
 
 /* 添加服务商下拉容器与按钮 */
@@ -2669,6 +2494,10 @@ body {
 }
 
 .pref-menu-item-bullet {
+  /* 与品牌标识共用 18px 槽位，有图标和没图标的菜单项文字左边缘才能对齐 */
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
   font-weight: 400;
   color: var(--pref-text-muted);
   font-size: 12px;
@@ -2688,18 +2517,6 @@ body {
   user-select: none;
 }
 
-/* 激活服务商主配置卡片 */
-.pref-provider-active-card {
-  padding: 13px 15px;
-  gap: 9px;
-}
-
-.pref-provider-active-card .pref-card-header {
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--pref-card-border);
-  margin-bottom: 2px;
-}
-
 .pref-switch-inline {
   display: flex;
   align-items: center;
@@ -2712,13 +2529,6 @@ body {
   font-size: 12px;
   color: var(--pref-text-secondary);
   margin-right: 6px;
-}
-
-/* 快捷模型库池容器 */
-.pref-pool-container {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .pref-pills-wrap {
@@ -3087,74 +2897,11 @@ body {
   max-width: 200px;
 }
 
-/* 标题栏与徽标 */
-.pref-header-with-badge {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-/* 主用服务商 Tab 指示标签 */
-.pref-primary-indicator {
-  font-size: 12px;
-  background: var(--pref-accent);
-  color: var(--pref-accent-text);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-/* 全部模板添加完成后的弱提示 */
-.pref-preset-tip-dim {
-  font-weight: 400;
-  font-size: 12px;
-  color: var(--pref-text-muted);
-}
-
-/* 专属面板标题行与主用切换 */
-.pref-title-with-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pref-badge-primary {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--pref-accent-text);
-  background: var(--pref-accent-light);
-  border: 1px solid var(--pref-accent-border);
-  padding: 2px 6px;
-  border-radius: var(--pref-radius-btn);
-}
-
-.pref-btn-set-primary {
-  background: var(--pref-btn-sec-bg);
-  border: 1px solid var(--pref-btn-sec-border);
-  color: var(--pref-text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 2px 7px;
-  border-radius: var(--pref-radius-btn);
-  cursor: pointer;
-  transition: all 120ms ease;
-}
-
-.pref-btn-set-primary:hover {
-  background: var(--pref-btn-sec-hover);
-  color: var(--pref-text-primary);
-}
-
-/* 字段右侧操作按键组 */
+/* 字段右侧操作按键组 */ /* 字段右侧操作按键组 */
 .pref-field-actions {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-}
-
-.pref-action-divider {
-  display: none;
 }
 
 /* 统一表单字段右侧微型操作按键 */
@@ -3239,37 +2986,6 @@ body {
   transform: translateY(1px);
 }
 
-/* 兼容保留自动拉取模型旧类名 */
-.pref-btn-fetch {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 12px;
-  font-weight: 500;
-  font-family: inherit;
-  line-height: 1;
-  border-radius: var(--pref-radius-btn);
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-  cursor: pointer;
-  background: var(--pref-accent-light);
-  border: 1px solid var(--pref-accent-border);
-  color: var(--pref-accent-ink);
-  transition: all 120ms ease;
-}
-
-.pref-btn-fetch:hover:not(:disabled) {
-  background: var(--pref-accent);
-  color: #ffffff;
-}
-
-.pref-btn-fetch:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 /* 测试结果组与错误详情入口 */
 .pref-test-result-group {
   display: inline-flex;
@@ -3285,30 +3001,6 @@ body {
   font-size: 12px;
   font-weight: 500;
   flex-shrink: 0;
-}
-
-.pref-btn-error-detail {
-  height: 26px;
-  padding: 0 8px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: var(--pref-radius-btn);
-  background: #fdf2f1;
-  border: 1px solid rgba(216, 92, 92, 0.45);
-  color: #b53838;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 120ms ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.pref-btn-error-detail:hover {
-  background: #fae3e1;
-  border-color: #c74242;
-  color: #992929;
 }
 
 /* 通用全屏模态弹窗 */
@@ -3347,6 +3039,48 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* 服务商详情弹窗：原内嵌配置面板改居中卡片，宽度略大于模型弹窗以容纳四组字段 */
+.pref-provider-dialog {
+  max-width: 560px;
+}
+
+/* 头部左区：品牌标识 + 名称 + 默认徽章；名称是唯一可压缩项 */
+.pref-provider-dialog .pref-modal-title {
+  min-width: 0;
+  gap: 8px;
+}
+
+.pref-provider-dialog-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 头部右区：启用开关与关闭键并排，不被左侧长名称挤走 */
+.pref-provider-dialog-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+/* 弹窗主体通用区：吃满剩余高度并内部滚动，内容再多也不会把底部动作条顶出视野 */
+.pref-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pref-provider-dialog-body {
+  padding: 14px;
+}
+
+.pref-provider-dialog-body .pref-fields-grid {
+  gap: 12px;
 }
 
 .pref-modal-header {
@@ -3658,7 +3392,6 @@ body {
   background: var(--pref-bg);
   transition: background 160ms ease;
 }
-
 
 /* 右侧内容面板 */
 .pref-main-content {

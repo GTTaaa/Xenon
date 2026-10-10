@@ -14,7 +14,8 @@ import {
   DEFAULT_TRANSLATION_SETTINGS
 } from '../../shared/config'
 import { SUPPORTED_LANGUAGES } from '../../shared/languageDetector'
-import { useSmoothHorizontalScroll } from './utils/useSmoothHorizontalScroll'
+import deepseekLogo from './assets/brands/deepseek.svg'
+import clineLogo from './assets/brands/cline.svg'
 
 /**
  * 偏好设置一级分类菜单定义
@@ -43,11 +44,6 @@ type PrefTheme = 'wise' | 'classic'
 const PREF_THEME: PrefTheme = 'wise'
 
 /**
- * 服务商卡片翻页步长（像素）：约等于两张卡片的宽度，避免一次滚过头丢失方位感
- */
-const PROVIDER_TAB_STEP = 430
-
-/**
  * 预设厂商模板定义
  */
 interface ProviderTemplate {
@@ -56,6 +52,55 @@ interface ProviderTemplate {
   baseUrl: string
   defaultModel: string
   models: ProviderModelItem[]
+}
+
+/**
+ * 单个服务商的品牌标识定义
+ */
+interface ProviderBrand {
+  /** 品牌图形资源地址（构建时由 Vite 处理成内联 data URI） */
+  src: string
+  /**
+   * 图幅是否为横向图形。
+   * 横向图形等比缩进同一方格后视觉高度只有一半左右（如 DeepSeek 鲸鱼），
+   * 需要单独加宽补回视觉重量，否则和方形图标放在一起会显得小一圈。
+   */
+  wide?: boolean
+}
+
+/**
+ * 服务商品牌标识映射：按 provider.id 在代码内匹配，不写进用户配置文件。
+ * 这样老用户配置无需迁移，自定义服务商没有命中时自动退回纯文字，不占位、不留空白。
+ */
+const PROVIDER_BRANDS: Record<string, ProviderBrand> = {
+  deepseek: { src: deepseekLogo, wide: true },
+  cline: { src: clineLogo }
+}
+
+/**
+ * 服务商列表分组定义：按启用状态分段，未启用的一律排在后面。
+ * 服务商变多时，分组比单一顺序更容易一眼找到停用的那个。
+ */
+const PROVIDER_GROUPS = [
+  { key: 'on', title: '已启用' },
+  { key: 'off', title: '未启用' }
+] as const
+
+/**
+ * 服务商品牌标识渲染组件。
+ * 未命中品牌的厂商不渲染任何节点，调用处布局会自动退回纯文字形态。
+ */
+const ProviderBrandLogo = ({ providerId }: { providerId: string }): React.JSX.Element | null => {
+  const brand = PROVIDER_BRANDS[providerId]
+  if (!brand) return null
+  return (
+    <img
+      className={`pref-brand-logo ${brand.wide ? 'pref-brand-logo-wide' : ''}`.trim()}
+      src={brand.src}
+      alt=""
+      aria-hidden="true"
+    />
+  )
 }
 
 const PRESET_TEMPLATES: ProviderTemplate[] = [
@@ -124,6 +169,8 @@ export const ConfigPage = (): React.JSX.Element => {
   const [providers, setProviders] = useState<ProviderItem[]>([])
   // 当前正在查看/编辑的 Tab ID
   const [selectedTabId, setSelectedTabId] = useState<string>('deepseek')
+  // 服务商编辑弹窗是否展开（点击列表行打开，关闭后回到列表）
+  const [isProviderDialogOpen, setIsProviderDialogOpen] = useState(false)
   // 当前软件全局生效的主用服务商 ID
   const [activeProviderId, setActiveProviderId] = useState<string>('deepseek')
 
@@ -169,14 +216,6 @@ export const ConfigPage = (): React.JSX.Element => {
 
   // 手动录入单模型展开状态（默认收起以释放纵向空间）
   const [showManualAdd, setShowManualAdd] = useState(false)
-
-  // 渠道横向滑轨丝滑手势交互管理器（触控板原生高帧率放行、鼠标滚轮阻尼平滑、按住抓取拖拽）
-  const { containerRef: providerTabsRef, scrollByStep: scrollProviderTabs } =
-    useSmoothHorizontalScroll<HTMLDivElement>({
-      activeItemId: selectedTabId,
-      lerpFactor: 0.22,
-      enableDrag: true
-    })
 
   // 点击外部自动收起添加服务商下拉菜单
   useEffect(() => {
@@ -237,6 +276,10 @@ export const ConfigPage = (): React.JSX.Element => {
           setShowErrorModal(false)
           return
         }
+        if (isProviderDialogOpen) {
+          setIsProviderDialogOpen(false)
+          return
+        }
         void window.api.closeConfigWindow()
       }
     }
@@ -244,7 +287,7 @@ export const ConfigPage = (): React.JSX.Element => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [showFetchModal, showErrorModal])
+  }, [showFetchModal, showErrorModal, isProviderDialogOpen])
 
   // 当前正在查看编辑的厂商
   const activeProvider = providers.find((p) => p.id === selectedTabId) || providers[0]
@@ -281,15 +324,30 @@ export const ConfigPage = (): React.JSX.Element => {
   }
 
   /**
-   * 显式将当前查看的厂商设为全局默认服务商
+   * 把指定服务商设为全局默认（列表行内快捷操作，不需要先打开弹窗）。
+   * 顺带确保它是启用状态，否则设成默认也不会出现在主界面下拉框里。
    */
-  const handleSetAsPrimary = (): void => {
-    if (!activeProvider) return
-    setActiveProviderId(activeProvider.id)
-    if (!activeProvider.enabled) {
-      updateActiveProvider({ enabled: true })
-    }
-    setFeedbackMessage(`已将【${activeProvider.name}】设为默认服务商`)
+  const handleSetProviderPrimary = (providerId: string): void => {
+    const target = providers.find((p) => p.id === providerId)
+    if (!target) return
+    setProviders((prev) =>
+      prev.map((item) => (item.id === providerId ? { ...item, enabled: true } : item))
+    )
+    setActiveProviderId(providerId)
+    setFeedbackMessage(`已将【${target.name}】设为默认服务商`)
+  }
+
+  /**
+   * 打开某个服务商的编辑弹窗
+   */
+  const openProviderDialog = (providerId: string): void => {
+    setSelectedTabId(providerId)
+    setTestResult(null)
+    // 每次打开都回到干净的表单态：收起手动录入、模型 ID 置空、密钥强制掩码
+    setShowManualAdd(false)
+    setNewModelId('')
+    setShowApiKey(false)
+    setIsProviderDialogOpen(true)
   }
 
   /**
@@ -361,6 +419,8 @@ export const ConfigPage = (): React.JSX.Element => {
       setActiveProviderId(nextList[0].id)
     }
 
+    // 详情弹窗还停在被删掉的服务商上会跳到别的渠道，直接收起更符合预期
+    setIsProviderDialogOpen(false)
     setFeedbackMessage('已移除该服务商')
   }
 
@@ -656,24 +716,6 @@ export const ConfigPage = (): React.JSX.Element => {
                     <span className="pref-provider-count">
                       {providers.length} 个 · 已启用 {enabledProviderCount} 个
                     </span>
-                    <div className="pref-provider-nav">
-                      <button
-                        type="button"
-                        className="pref-provider-nav-btn"
-                        onClick={() => scrollProviderTabs(-PROVIDER_TAB_STEP)}
-                        aria-label="向左查看更多服务商"
-                      >
-                        ‹
-                      </button>
-                      <button
-                        type="button"
-                        className="pref-provider-nav-btn"
-                        onClick={() => scrollProviderTabs(PROVIDER_TAB_STEP)}
-                        aria-label="向右查看更多服务商"
-                      >
-                        ›
-                      </button>
-                    </div>
                     <div className="pref-add-dropdown-container" ref={addMenuRef}>
                       <button
                         type="button"
@@ -713,7 +755,12 @@ export const ConfigPage = (): React.JSX.Element => {
                                     handleAddFromTemplate(tmpl)
                                   }}
                                 >
-                                  <span className="pref-menu-item-bullet">•</span>
+                                  {/* 有品牌图标的走图标，其余保留圆点占位，保证左侧文字对齐 */}
+                                  {PROVIDER_BRANDS[tmpl.id] ? (
+                                    <ProviderBrandLogo providerId={tmpl.id} />
+                                  ) : (
+                                    <span className="pref-menu-item-bullet">•</span>
+                                  )}
                                   <span>{tmpl.name}</span>
                                 </button>
                               ))}
@@ -725,344 +772,84 @@ export const ConfigPage = (): React.JSX.Element => {
                   </div>
                 </div>
 
-                {/* 服务商卡片滑轨：横向单行，超出的卡片靠箭头或滚轮滑动查看 */}
-                <div className="pref-provider-tabs-viewport">
-                  <div className="pref-provider-tabs" ref={providerTabsRef}>
-                    {providers.map((p) => {
-                      const isSelected = p.id === selectedTabId
-                      const isPrimary = p.id === activeProviderId
-                      // 状态行：已配置模型时展示默认模型 + 模型数量，未配置时只提示未接入
-                      const hasModels = p.models.length > 0
-                      const modelText = hasModels ? p.defaultModel || p.models[0]?.id || '' : ''
-                      const metaText = hasModels ? `· ${p.models.length} 个模型` : '未接入'
-                      return (
-                        <div
-                          key={p.id}
-                          data-item-id={p.id}
-                          className={`pref-provider-card ${isSelected ? 'pref-provider-card-active' : ''} ${
-                            p.enabled ? '' : 'pref-provider-card-off'
-                          }`}
-                          onClick={() => {
-                            setSelectedTabId(p.id)
-                            setTestResult(null)
-                          }}
-                          title={isPrimary ? '当前全局生效的默认服务商' : '点击查看与编辑此服务商'}
-                        >
-                          <div className="pref-provider-card-info">
-                            <div className="pref-provider-card-name">
-                              <span className="pref-provider-card-name-text">{p.name}</span>
-                              {isPrimary ? (
-                                <span className="pref-primary-indicator">默认</span>
-                              ) : null}
-                            </div>
-                            <div className="pref-provider-card-state">
-                              <span
-                                className={`pref-provider-card-dot ${p.enabled ? 'is-on' : ''}`}
-                              />
-                              {modelText ? (
-                                <span className="pref-provider-card-model">{modelText}</span>
-                              ) : null}
-                              <span className="pref-provider-card-meta">{metaText}</span>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            className={`pref-switch pref-provider-card-switch ${
-                              p.enabled ? 'pref-switch-on' : ''
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleToggleProviderEnabled(p.id)
-                            }}
-                            title={p.enabled ? '停用该服务商' : '启用该服务商'}
-                            aria-label={p.enabled ? `停用 ${p.name}` : `启用 ${p.name}`}
-                          >
-                            <span className="pref-switch-thumb" />
-                          </button>
+                {/* 服务商列表：按启用状态分组，点击任意一行打开编辑弹窗 */}
+                <div className="pref-provider-list">
+                  {PROVIDER_GROUPS.map((group) => {
+                    const items = providers.filter((p) =>
+                      group.key === 'on' ? p.enabled : !p.enabled
+                    )
+                    if (items.length === 0) return null
+                    return (
+                      <div key={group.key} className="pref-provider-group">
+                        <div className="pref-provider-group-title">
+                          {group.title} · {items.length}
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* 当前选中厂商的核心连接配置面板 */}
-              {activeProvider ? (
-                <section className="pref-card pref-provider-active-card">
-                  <div className="pref-card-header">
-                    <div className="pref-title-with-actions">
-                      <h2 className="pref-card-title">{activeProvider.name}</h2>
-                      {activeProvider.id !== activeProviderId ? (
-                        <button
-                          type="button"
-                          className="pref-field-btn pref-field-btn-primary"
-                          onClick={handleSetAsPrimary}
-                          title="点击设为主界面默认使用的大模型渠道"
-                        >
-                          设为默认服务商
-                        </button>
-                      ) : null}
-                    </div>
-
-                    {/* 启用/停用开关 */}
-                    <div
-                      className="pref-switch-inline"
-                      onClick={() => updateActiveProvider({ enabled: !activeProvider.enabled })}
-                      title="开启后该厂商的模型才会出现在主界面下拉框中"
-                    >
-                      <span className="pref-switch-label">
-                        {activeProvider.enabled ? '已启用' : '已停用'}
-                      </span>
-                      <div
-                        className={`pref-switch ${activeProvider.enabled ? 'pref-switch-on' : ''}`}
-                      >
-                        <div className="pref-switch-thumb" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pref-fields-grid">
-                    {/* 厂商名称 */}
-                    <div className="pref-field">
-                      <div className="pref-label-row">
-                        <label className="pref-label" htmlFor="prov-name">
-                          服务商显示名称
-                        </label>
-                        {providers.length > 1 ? (
-                          <div className="pref-field-actions">
-                            <button
-                              type="button"
-                              className="pref-field-btn pref-field-btn-danger"
-                              onClick={() => handleDeleteProvider(activeProvider.id)}
-                            >
-                              删除该服务商
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                      <input
-                        id="prov-name"
-                        type="text"
-                        className="pref-input"
-                        value={activeProvider.name}
-                        onChange={(e) => updateActiveProvider({ name: e.target.value })}
-                        placeholder="如：DeepSeek 官方"
-                        spellCheck={false}
-                      />
-                    </div>
-
-                    {/* 服务地址 (Base URL) */}
-                    <div className="pref-field">
-                      <label className="pref-label" htmlFor="prov-base-url">
-                        服务地址 (Base URL)
-                      </label>
-                      <input
-                        id="prov-base-url"
-                        type="text"
-                        className="pref-input"
-                        value={activeProvider.baseUrl}
-                        onChange={(e) => updateActiveProvider({ baseUrl: e.target.value })}
-                        onBlur={(e) => {
-                          const cleaned = cleanBaseUrl(e.target.value)
-                          if (cleaned !== e.target.value) {
-                            updateActiveProvider({ baseUrl: cleaned })
-                          }
-                        }}
-                        placeholder="https://api.deepseek.com/v1"
-                        spellCheck={false}
-                        autoComplete="off"
-                      />
-                    </div>
-
-                    {/* 访问密钥 (API Key) */}
-                    <div className="pref-field">
-                      <div className="pref-label-row">
-                        <label className="pref-label" htmlFor="prov-api-key">
-                          访问密钥 (API Key)
-                        </label>
-                        <div className="pref-field-actions">
-                          {activeProvider.apiKey ? (
-                            <>
-                              <button
-                                type="button"
-                                className="pref-field-btn"
-                                onClick={() => void handleCopyApiKey()}
-                                title="复制 API Key 到剪贴板"
-                              >
-                                复制
-                              </button>
-                              <button
-                                type="button"
-                                className="pref-field-btn"
-                                onClick={() => updateActiveProvider({ apiKey: '' })}
-                                title="清空当前输入的密钥"
-                              >
-                                清空
-                              </button>
-                            </>
-                          ) : null}
-                          <button
-                            type="button"
-                            className={`pref-field-btn ${showApiKey ? 'pref-field-btn-active' : ''}`}
-                            onClick={() => setShowApiKey((prev) => !prev)}
-                            title={showApiKey ? '点击以掩码形式隐藏密钥' : '点击查看明文密钥'}
-                          >
-                            {showApiKey ? '隐藏' : '显示'}
-                          </button>
-                        </div>
-                      </div>
-                      <input
-                        id="prov-api-key"
-                        type={showApiKey ? 'text' : 'password'}
-                        className="pref-input"
-                        value={activeProvider.apiKey}
-                        onChange={(e) => updateActiveProvider({ apiKey: e.target.value })}
-                        onBlur={(e) => {
-                          const trimmed = e.target.value.trim()
-                          if (trimmed !== e.target.value) {
-                            updateActiveProvider({ apiKey: trimmed })
-                          }
-                        }}
-                        placeholder="填入该服务商的 API Key..."
-                        spellCheck={false}
-                        autoComplete="off"
-                      />
-                    </div>
-
-                    {/* 可用模型列表 */}
-                    <div className="pref-field">
-                      <div className="pref-label-row">
-                        <label className="pref-label">
-                          可用模型列表 (MODELS FOR {activeProvider.name.toUpperCase()})
-                        </label>
-                        <div className="pref-field-actions">
-                          <button
-                            type="button"
-                            className="pref-field-btn pref-field-btn-primary"
-                            onClick={() => void handleFetchModels()}
-                            disabled={isFetchingModels || !activeProvider.baseUrl}
-                            title="从接口端点自动获取该服务商支持的全部模型"
-                          >
-                            {isFetchingModels ? '正在拉取...' : '自动获取模型列表'}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="pref-pills-wrap">
-                        {activeProvider.models.map((m) => {
-                          const isDefault =
-                            (activeProvider.defaultModel || activeProvider.models[0]?.id) === m.id
-                          const { prefix, name } = formatModelDisplay(m.id)
+                        {items.map((p) => {
+                          const isSelected = p.id === selectedTabId
+                          const isPrimary = p.id === activeProviderId
+                          const modelText =
+                            p.models.length > 0 ? p.defaultModel || p.models[0]?.id || '' : ''
                           return (
-                            <span
-                              key={m.id}
-                              className={`pref-pill ${isDefault ? 'pref-pill-active' : ''}`}
-                              title={
-                                isDefault
-                                  ? `当前渠道的默认模型: ${m.id}`
-                                  : `点击将【${m.id}】设为默认模型`
-                              }
-                              onClick={() => updateActiveProvider({ defaultModel: m.id })}
+                            <div
+                              key={p.id}
+                              role="button"
+                              tabIndex={0}
+                              className={`pref-provider-row ${isSelected ? 'is-selected' : ''}`}
+                              onClick={() => openProviderDialog(p.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  openProviderDialog(p.id)
+                                }
+                              }}
+                              title={isPrimary ? '当前全局生效的默认服务商' : `编辑 ${p.name}`}
                             >
-                              {isDefault ? (
-                                <span className="pref-pill-default-badge" title="默认模型">
-                                  DEF
-                                </span>
-                              ) : null}
-                              <span className="pref-pill-name">
-                                {prefix ? (
-                                  <span className="pref-pill-prefix" title={m.id}>
-                                    {prefix}
-                                  </span>
+                              <ProviderBrandLogo providerId={p.id} />
+                              <span className="pref-provider-row-name">
+                                {p.name}
+                                {isPrimary ? (
+                                  <span className="pref-primary-indicator">默认</span>
                                 ) : null}
-                                <span className="pref-pill-main-name">{name}</span>
                               </span>
-                              {activeProvider.models.length > 1 ? (
+                              <span className="pref-provider-row-model">
+                                {modelText || '未接入'}
+                              </span>
+                              <span className="pref-provider-row-count">
+                                {p.models.length > 0 ? `· ${p.models.length} 个模型` : ''}
+                              </span>
+                              {isPrimary ? null : (
                                 <button
                                   type="button"
-                                  className="pref-pill-remove"
+                                  className="pref-field-btn pref-provider-row-action"
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    handleRemoveModelFromActive(m.id)
+                                    handleSetProviderPrimary(p.id)
                                   }}
-                                  title={`从列表中移除 ${m.id}`}
-                                  aria-label={`移除 ${m.id}`}
+                                  title={`将 ${p.name} 设为主界面默认渠道`}
                                 >
-                                  <svg
-                                    width="8"
-                                    height="8"
-                                    viewBox="0 0 8 8"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className="pref-pill-remove-icon"
-                                  >
-                                    <path
-                                      d="M1 1L7 7M7 1L1 7"
-                                      stroke="currentColor"
-                                      strokeWidth="1.3"
-                                      strokeLinecap="round"
-                                    />
-                                  </svg>
+                                  设为默认
                                 </button>
-                              ) : null}
-                            </span>
+                              )}
+                              <button
+                                type="button"
+                                className={`pref-switch ${p.enabled ? 'pref-switch-on' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleToggleProviderEnabled(p.id)
+                                }}
+                                title={p.enabled ? '停用该服务商' : '启用该服务商'}
+                                aria-label={p.enabled ? `停用 ${p.name}` : `启用 ${p.name}`}
+                              >
+                                <span className="pref-switch-thumb" />
+                              </button>
+                            </div>
                           )
                         })}
-
-                        {/* 手动录入触发按键（以紧凑虚线微胶囊呈现，平时不占大行） */}
-                        <button
-                          type="button"
-                          className="pref-pill-btn-add"
-                          onClick={() => setShowManualAdd((prev) => !prev)}
-                          title="手动录入单个自定义模型 ID"
-                        >
-                          {showManualAdd ? '取消录入' : '+ 手动录入'}
-                        </button>
                       </div>
-
-                      {/* 手动追加模型输入栏（仅在点击手动录入时展开） */}
-                      {showManualAdd ? (
-                        <div className="pref-add-row" style={{ marginTop: '8px' }}>
-                          <input
-                            type="text"
-                            className="pref-input pref-add-input"
-                            value={newModelId}
-                            onChange={(e) => setNewModelId(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                handleAddModelToActive()
-                              }
-                            }}
-                            placeholder="输入模型 ID（如 gpt-4o、claude-3-5-sonnet...）"
-                            spellCheck={false}
-                            autoFocus
-                          />
-                          <button
-                            type="button"
-                            className="pref-field-btn pref-field-btn-primary"
-                            onClick={handleAddModelToActive}
-                            disabled={!newModelId.trim()}
-                          >
-                            + 保存模型
-                          </button>
-                          <button
-                            type="button"
-                            className="pref-field-btn"
-                            onClick={() => {
-                              setNewModelId('')
-                              setShowManualAdd(false)
-                            }}
-                          >
-                            收起
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </section>
-              ) : null}
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1477,6 +1264,335 @@ export const ConfigPage = (): React.JSX.Element => {
           </button>
         </div>
       </footer>
+
+      {/* 服务商详情弹窗：点击列表行后弹出的居中编辑面板 */}
+      {isProviderDialogOpen && activeProvider ? (
+        <div className="pref-modal-mask" onClick={() => setIsProviderDialogOpen(false)}>
+          <div
+            className="pref-modal-card pref-provider-dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pref-modal-header">
+              <div className="pref-modal-title">
+                <ProviderBrandLogo providerId={activeProvider.id} />
+                <span className="pref-provider-dialog-name">{activeProvider.name}</span>
+                {activeProvider.id === activeProviderId ? (
+                  <span className="pref-modal-badge">默认服务商</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="pref-field-btn pref-field-btn-primary"
+                    onClick={() => handleSetProviderPrimary(activeProvider.id)}
+                    title="点击设为主界面默认使用的大模型渠道"
+                  >
+                    设为默认服务商
+                  </button>
+                )}
+              </div>
+              <div className="pref-provider-dialog-tools">
+                <div
+                  className="pref-switch-inline"
+                  onClick={() => updateActiveProvider({ enabled: !activeProvider.enabled })}
+                  title="开启后该厂商的模型才会出现在主界面下拉框中"
+                >
+                  <span className="pref-switch-label">
+                    {activeProvider.enabled ? '已启用' : '已停用'}
+                  </span>
+                  <div className={`pref-switch ${activeProvider.enabled ? 'pref-switch-on' : ''}`}>
+                    <div className="pref-switch-thumb" />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="pref-modal-close"
+                  onClick={() => setIsProviderDialogOpen(false)}
+                  title="关闭 (ESC)"
+                  aria-label="关闭"
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="pref-modal-body pref-provider-dialog-body">
+              <div className="pref-fields-grid">
+                {/* 厂商名称 */}
+                <div className="pref-field">
+                  <div className="pref-label-row">
+                    <label className="pref-label" htmlFor="prov-name">
+                      服务商显示名称
+                    </label>
+                    {providers.length > 1 ? (
+                      <div className="pref-field-actions">
+                        <button
+                          type="button"
+                          className="pref-field-btn pref-field-btn-danger"
+                          onClick={() => handleDeleteProvider(activeProvider.id)}
+                        >
+                          删除该服务商
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <input
+                    id="prov-name"
+                    type="text"
+                    className="pref-input"
+                    value={activeProvider.name}
+                    onChange={(e) => updateActiveProvider({ name: e.target.value })}
+                    placeholder="如：DeepSeek 官方"
+                    spellCheck={false}
+                  />
+                </div>
+
+                {/* 服务地址 (Base URL) */}
+                <div className="pref-field">
+                  <label className="pref-label" htmlFor="prov-base-url">
+                    服务地址 (Base URL)
+                  </label>
+                  <input
+                    id="prov-base-url"
+                    type="text"
+                    className="pref-input"
+                    value={activeProvider.baseUrl}
+                    onChange={(e) => updateActiveProvider({ baseUrl: e.target.value })}
+                    onBlur={(e) => {
+                      const cleaned = cleanBaseUrl(e.target.value)
+                      if (cleaned !== e.target.value) {
+                        updateActiveProvider({ baseUrl: cleaned })
+                      }
+                    }}
+                    placeholder="https://api.deepseek.com/v1"
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                </div>
+
+                {/* 访问密钥 (API Key) */}
+                <div className="pref-field">
+                  <div className="pref-label-row">
+                    <label className="pref-label" htmlFor="prov-api-key">
+                      访问密钥 (API Key)
+                    </label>
+                    <div className="pref-field-actions">
+                      {activeProvider.apiKey ? (
+                        <>
+                          <button
+                            type="button"
+                            className="pref-field-btn"
+                            onClick={() => void handleCopyApiKey()}
+                            title="复制 API Key 到剪贴板"
+                          >
+                            复制
+                          </button>
+                          <button
+                            type="button"
+                            className="pref-field-btn"
+                            onClick={() => updateActiveProvider({ apiKey: '' })}
+                            title="清空当前输入的密钥"
+                          >
+                            清空
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={`pref-field-btn ${showApiKey ? 'pref-field-btn-active' : ''}`}
+                        onClick={() => setShowApiKey((prev) => !prev)}
+                        title={showApiKey ? '点击以掩码形式隐藏密钥' : '点击查看明文密钥'}
+                      >
+                        {showApiKey ? '隐藏' : '显示'}
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    id="prov-api-key"
+                    type={showApiKey ? 'text' : 'password'}
+                    className="pref-input"
+                    value={activeProvider.apiKey}
+                    onChange={(e) => updateActiveProvider({ apiKey: e.target.value })}
+                    onBlur={(e) => {
+                      const trimmed = e.target.value.trim()
+                      if (trimmed !== e.target.value) {
+                        updateActiveProvider({ apiKey: trimmed })
+                      }
+                    }}
+                    placeholder="填入该服务商的 API Key..."
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                </div>
+
+                {/* 可用模型列表 */}
+                <div className="pref-field">
+                  <div className="pref-label-row">
+                    <label className="pref-label">
+                      可用模型列表 (MODELS FOR {activeProvider.name.toUpperCase()})
+                    </label>
+                    <div className="pref-field-actions">
+                      <button
+                        type="button"
+                        className="pref-field-btn pref-field-btn-primary"
+                        onClick={() => void handleFetchModels()}
+                        disabled={isFetchingModels || !activeProvider.baseUrl}
+                        title="从接口端点自动获取该服务商支持的全部模型"
+                      >
+                        {isFetchingModels ? '正在拉取...' : '自动获取模型列表'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pref-pills-wrap">
+                    {activeProvider.models.map((m) => {
+                      const isDefault =
+                        (activeProvider.defaultModel || activeProvider.models[0]?.id) === m.id
+                      const { prefix, name } = formatModelDisplay(m.id)
+                      return (
+                        <span
+                          key={m.id}
+                          className={`pref-pill ${isDefault ? 'pref-pill-active' : ''}`}
+                          title={
+                            isDefault
+                              ? `当前渠道的默认模型: ${m.id}`
+                              : `点击将【${m.id}】设为默认模型`
+                          }
+                          onClick={() => updateActiveProvider({ defaultModel: m.id })}
+                        >
+                          {isDefault ? (
+                            <span className="pref-pill-default-badge" title="默认模型">
+                              DEF
+                            </span>
+                          ) : null}
+                          <span className="pref-pill-name">
+                            {prefix ? (
+                              <span className="pref-pill-prefix" title={m.id}>
+                                {prefix}
+                              </span>
+                            ) : null}
+                            <span className="pref-pill-main-name">{name}</span>
+                          </span>
+                          {activeProvider.models.length > 1 ? (
+                            <button
+                              type="button"
+                              className="pref-pill-remove"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleRemoveModelFromActive(m.id)
+                              }}
+                              title={`从列表中移除 ${m.id}`}
+                              aria-label={`移除 ${m.id}`}
+                            >
+                              <svg
+                                width="8"
+                                height="8"
+                                viewBox="0 0 8 8"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="pref-pill-remove-icon"
+                              >
+                                <path
+                                  d="M1 1L7 7M7 1L1 7"
+                                  stroke="currentColor"
+                                  strokeWidth="1.3"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            </button>
+                          ) : null}
+                        </span>
+                      )
+                    })}
+
+                    {/* 手动录入触发按键（以紧凑虚线微胶囊呈现，平时不占大行） */}
+                    <button
+                      type="button"
+                      className="pref-pill-btn-add"
+                      onClick={() => setShowManualAdd((prev) => !prev)}
+                      title="手动录入单个自定义模型 ID"
+                    >
+                      {showManualAdd ? '取消录入' : '+ 手动录入'}
+                    </button>
+                  </div>
+
+                  {/* 手动追加模型输入栏（仅在点击手动录入时展开） */}
+                  {showManualAdd ? (
+                    <div className="pref-add-row" style={{ marginTop: '8px' }}>
+                      <input
+                        type="text"
+                        className="pref-input pref-add-input"
+                        value={newModelId}
+                        onChange={(e) => setNewModelId(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleAddModelToActive()
+                          }
+                        }}
+                        placeholder="输入模型 ID（如 gpt-4o、claude-3-5-sonnet...）"
+                        spellCheck={false}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="pref-field-btn pref-field-btn-primary"
+                        onClick={handleAddModelToActive}
+                        disabled={!newModelId.trim()}
+                      >
+                        + 保存模型
+                      </button>
+                      <button
+                        type="button"
+                        className="pref-field-btn"
+                        onClick={() => {
+                          setNewModelId('')
+                          setShowManualAdd(false)
+                        }}
+                      >
+                        收起
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="pref-modal-footer">
+              <div className="pref-modal-footer-left">
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-cancel"
+                  onClick={() => setIsProviderDialogOpen(false)}
+                >
+                  关闭
+                </button>
+              </div>
+              <div className="pref-modal-footer-btns">
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-save"
+                  onClick={handleSaveAll}
+                  disabled={isSaving}
+                >
+                  {isSaving ? '正在保存...' : '保存所有设置'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* 自动拉取模型列表对话框 */}
       {showFetchModal ? (
