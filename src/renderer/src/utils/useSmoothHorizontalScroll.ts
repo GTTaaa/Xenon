@@ -30,6 +30,10 @@ export interface SmoothHorizontalScrollOptions {
 export interface SmoothHorizontalScrollReturn<T extends HTMLElement> {
   containerRef: React.RefObject<T | null>
   updateScrollMaskAttributes: () => void
+  /**
+   * 按像素增量平滑滚动容器，供左右翻页箭头按钮调用
+   */
+  scrollByStep: (delta: number) => void
 }
 
 export function useSmoothHorizontalScroll<T extends HTMLElement = HTMLDivElement>(
@@ -293,8 +297,31 @@ export function useSmoothHorizontalScroll<T extends HTMLElement = HTMLDivElement
     return () => clearTimeout(timer)
   }, [activeItemId, updateScrollMaskAttributes])
 
+  /**
+   * 箭头按钮翻页：以像素增量平滑滚动。
+   * 必须同步阻尼插值的目标值，否则用户下一次拨动滚轮时，
+   * 内部目标值仍是旧位置，内容会被"拉回"到翻页之前。
+   */
+  const scrollByStep = useCallback(
+    (delta: number): void => {
+      const container = containerRef.current
+      if (!container) return
+
+      const maxScroll = container.scrollWidth - container.clientWidth
+      if (maxScroll <= 0) return
+
+      stopAllAnimations()
+      const next = Math.max(0, Math.min(maxScroll, container.scrollLeft + delta))
+      targetScrollRef.current = next
+      container.scrollTo({ left: next, behavior: 'smooth' })
+      updateScrollMaskAttributes()
+    },
+    [stopAllAnimations, updateScrollMaskAttributes]
+  )
+
   return {
     containerRef,
-    updateScrollMaskAttributes
+    updateScrollMaskAttributes,
+    scrollByStep
   }
 }

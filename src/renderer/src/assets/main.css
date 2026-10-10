@@ -1833,9 +1833,6 @@ body {
   --pref-radius-btn: 9999px;
   --pref-radius-input: 10px;
 
-
-  /* Tab 滑轨溢出提示：内容被裁切一侧压上的边缘阴影 */
-  --pref-tabs-edge-scrim: rgba(22, 51, 0, 0.14);
 }
 
 
@@ -2256,6 +2253,8 @@ body {
 }
 
 .pref-switch-thumb {
+  /* 兜底块级化：开关内既可能是 <div> 也可能是 <span>，行内元素不认宽高 */
+  display: block;
   width: 16px;
   height: 16px;
   background: #ffffff;
@@ -2264,41 +2263,102 @@ body {
   transition: transform 160ms ease;
 }
 
-/* 服务商顶部切换工具条（扁平无边框集成，释放纵向空间） */
+/* 开启态滑块右移：轨道 38px - 左右内边距 4px - 滑块 16px = 18px */
+.pref-switch-on .pref-switch-thumb {
+  transform: translateX(18px);
+}
+
+/* 服务商选择条：标题行（统计 + 翻页箭头 + 添加渠道）+ 单行卡片滑轨 */
 .pref-provider-bar {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-.pref-provider-tabs-row {
+/* 标题行：左侧分组标题，右侧统计、翻页箭头与添加入口 */
+.pref-provider-bar-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  min-height: 30px;
+  gap: 12px;
+  min-height: 26px;
 }
 
-/* 滑轨视口：承载可滚动的 Tab 列表与两端溢出提示 */
+.pref-provider-bar-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--pref-text-muted);
+  white-space: nowrap;
+}
+
+.pref-provider-bar-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pref-provider-count {
+  font-size: 11.5px;
+  color: var(--pref-text-muted);
+  white-space: nowrap;
+}
+
+/* 翻页箭头：圆形空键位，与实心卡片形成轻/重对比 */
+.pref-provider-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pref-provider-nav-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--pref-text-secondary);
+  background: #ffffff;
+  border: 1px solid var(--pref-card-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.pref-provider-nav-btn:hover {
+  color: var(--pref-text-primary);
+  border-color: var(--pref-text-primary);
+  background: var(--pref-accent-light);
+}
+
+.pref-provider-nav-btn:active {
+  transform: translateY(1px);
+}
+
+/* 滑轨视口：承载可横向滚动的卡片列表 */
 .pref-provider-tabs-viewport {
   position: relative;
-  display: flex;
-  flex: 1;
   min-width: 0;
 }
 
 .pref-provider-tabs {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: stretch;
+  gap: 8px;
   overflow-x: auto;
   overflow-y: hidden;
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  margin: 0;
+  /*
+   * 左右各留 4px 呼吸位：滚动位置只要不是整数 0（轻微拖拽、平滑滚动被打断都会留下
+   * 几像素残差），首尾卡片最外侧的 1px 边框就会被 overflow 裁掉。用负外边距抵消掉
+   * 这段留白，卡片视觉左边仍与上方"选择服务商"标题对齐。
+   */
+  padding: 0 4px;
+  margin: 0 -4px;
   scrollbar-width: none;
   -ms-overflow-style: none;
   overscroll-behavior-x: contain;
@@ -2311,43 +2371,10 @@ body {
   user-select: none !important;
 }
 
-.pref-tabs-dragging .pref-provider-tab {
+.pref-tabs-dragging .pref-provider-card {
   cursor: grabbing !important;
   user-select: none !important;
   pointer-events: none;
-}
-
-/*
- * 溢出提示：滑轨两端在有未展示渠道时压上一层渐隐阴影。
- * 之前用的是 mask 淡出到壳体色，但壳体（#e5e0d8）与键面（#d3d7dd）对比度只有 1.1:1，
- * 淡出等于没有效果，被裁切的渠道看起来像渲染错误；改成压一层墨色阴影才读得出"还有内容"。
- */
-.pref-provider-tabs-viewport::before,
-.pref-provider-tabs-viewport::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 22px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 120ms ease;
-  z-index: 1;
-}
-
-.pref-provider-tabs-viewport::before {
-  left: 0;
-  background: linear-gradient(to right, var(--pref-tabs-edge-scrim), transparent);
-}
-
-.pref-provider-tabs-viewport::after {
-  right: 0;
-  background: linear-gradient(to left, var(--pref-tabs-edge-scrim), transparent);
-}
-
-.pref-provider-tabs-viewport:has(.pref-provider-tabs[data-has-scroll-left='true'])::before,
-.pref-provider-tabs-viewport:has(.pref-provider-tabs[data-has-scroll-right='true'])::after {
-  opacity: 1;
 }
 
 .pref-provider-tabs::-webkit-scrollbar {
@@ -2356,48 +2383,139 @@ body {
   height: 0 !important;
 }
 
-.pref-provider-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
+/* 服务商卡片：两行信息 + 右侧启用开关，单行横排 */
+.pref-provider-card {
   box-sizing: border-box;
-  color: var(--pref-tab-text);
-  background: var(--pref-tab-bg);
-  border: 1px solid var(--pref-tab-border);
-  border-radius: var(--pref-radius-btn);
+  flex: 0 0 205px;
+  width: 205px;
+  min-width: 205px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 11px;
+  background: var(--pref-card-bg);
+  border: 1px solid var(--pref-card-border);
   cursor: pointer;
-  transition: all 120ms ease;
-  white-space: nowrap;
-  flex-shrink: 0;
+  user-select: none;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
 }
 
-.pref-provider-tab:hover {
-  background: var(--pref-tab-hover-bg);
+.pref-provider-card:hover {
+  background: #eef1ec;
+  border-color: #cdd6c7;
+}
+
+/*
+ * 选中态：白底浮起 + 墨绿双线边框，读作"按下的机械键"。
+ * 描边用 inset 画在边框盒内部（而不是向外扩），这样即使滑轨停在非零滚动位置，
+ * 也不会被滚动容器的 overflow 裁掉。
+ */
+.pref-provider-card-active {
+  background: #ffffff;
+  border-color: var(--pref-text-primary);
+  box-shadow: inset 0 0 0 1px var(--pref-text-primary);
+}
+
+/* 停用态：整卡降灰，但开关本身保持可点可读 */
+.pref-provider-card-off {
+  opacity: 0.55;
+}
+
+.pref-provider-card-off:hover {
+  opacity: 0.78;
+}
+
+.pref-provider-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pref-provider-card-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.pref-provider-card-name-text {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.15;
   color: var(--pref-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.pref-provider-tab-active {
-  background: var(--pref-tab-active-bg);
-  color: var(--pref-tab-active-text);
-  border-color: var(--pref-tab-active-border);
-  box-shadow: var(--pref-tab-active-shadow);
+.pref-provider-card-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--pref-text-muted);
 }
 
-.pref-provider-tab-disabled {
-  opacity: 0.65;
-}
-
-.pref-provider-tab-dot {
+.pref-provider-card-dot {
+  flex-shrink: 0;
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  background: #c4cbc0;
+}
+
+.pref-provider-card-dot.is-on {
+  background: #37b24d;
+}
+
+.pref-provider-card-model {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--font-display);
+  color: var(--pref-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pref-provider-card-meta {
+  flex-shrink: 0;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* 有模型时把数量推到行尾，让每张卡的"· N 个模型"落在同一列 */
+.pref-provider-card-model + .pref-provider-card-meta {
+  margin-left: auto;
+}
+
+/* 卡片内开关：比全局开关略小一档，避免压过卡片信息 */
+.pref-provider-card-switch {
+  width: 32px;
+  height: 18px;
+  padding: 2px;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  appearance: none;
+}
+
+.pref-provider-card-switch .pref-switch-thumb {
+  width: 14px;
+  height: 14px;
+}
+
+.pref-provider-card-switch.pref-switch-on .pref-switch-thumb {
+  transform: translateX(14px);
 }
 
 /* 添加服务商下拉容器与按钮 */
@@ -2532,14 +2650,6 @@ body {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--pref-card-border);
   margin-bottom: 2px;
-}
-
-.dot-enabled {
-  background: #27ae60;
-}
-
-.dot-disabled {
-  background: #9aa2ae;
 }
 
 .pref-switch-inline {
@@ -2929,12 +3039,6 @@ body {
   display: flex;
   align-items: baseline;
   gap: 8px;
-}
-
-.pref-provider-count-tip {
-  font-size: 11px;
-  color: var(--pref-text-muted);
-  font-family: var(--font-display);
 }
 
 /* 主用服务商 Tab 指示标签 */

@@ -43,6 +43,11 @@ type PrefTheme = 'wise' | 'classic'
 const PREF_THEME: PrefTheme = 'wise'
 
 /**
+ * 服务商卡片翻页步长（像素）：约等于两张卡片的宽度，避免一次滚过头丢失方位感
+ */
+const PROVIDER_TAB_STEP = 430
+
+/**
  * 预设厂商模板定义
  */
 interface ProviderTemplate {
@@ -166,11 +171,12 @@ export const ConfigPage = (): React.JSX.Element => {
   const [showManualAdd, setShowManualAdd] = useState(false)
 
   // 渠道横向滑轨丝滑手势交互管理器（触控板原生高帧率放行、鼠标滚轮阻尼平滑、按住抓取拖拽）
-  const { containerRef: providerTabsRef } = useSmoothHorizontalScroll<HTMLDivElement>({
-    activeItemId: selectedTabId,
-    lerpFactor: 0.22,
-    enableDrag: true
-  })
+  const { containerRef: providerTabsRef, scrollByStep: scrollProviderTabs } =
+    useSmoothHorizontalScroll<HTMLDivElement>({
+      activeItemId: selectedTabId,
+      lerpFactor: 0.22,
+      enableDrag: true
+    })
 
   // 点击外部自动收起添加服务商下拉菜单
   useEffect(() => {
@@ -260,6 +266,16 @@ export const ConfigPage = (): React.JSX.Element => {
     if (!activeProvider) return
     setProviders((prev) =>
       prev.map((item) => (item.id === activeProvider.id ? { ...item, ...patch } : item))
+    )
+    setTestResult(null)
+  }
+
+  /**
+   * 切换指定服务商的启用状态（服务商卡片上的快捷开关，无需先选中）
+   */
+  const handleToggleProviderEnabled = (providerId: string): void => {
+    setProviders((prev) =>
+      prev.map((item) => (item.id === providerId ? { ...item, enabled: !item.enabled } : item))
     )
     setTestResult(null)
   }
@@ -587,6 +603,9 @@ export const ConfigPage = (): React.JSX.Element => {
     return fetchedModels.filter((m) => m.toLowerCase().includes(q))
   }, [fetchedModels, modelSearchQuery])
 
+  // 已启用的服务商数量，用于标题行统计文案
+  const enabledProviderCount = useMemo(() => providers.filter((p) => p.enabled).length, [providers])
+
   return (
     <div className="pref-root" data-pref-theme={PREF_THEME}>
       {/* 顶部栏：一级分类导航（药丸式切换）+ 关闭 */}
@@ -630,90 +649,140 @@ export const ConfigPage = (): React.JSX.Element => {
             <div className="pref-panel-fade">
               {/* 顶部：服务商切换与管理栏（扁平化无框集成，释放纵向空间） */}
               <div className="pref-provider-bar">
-                <div className="pref-provider-tabs-row">
-                  {/* 滑轨视口包一层，才能在两端叠溢出提示阴影 */}
-                  <div className="pref-provider-tabs-viewport">
-                    <div className="pref-provider-tabs" ref={providerTabsRef}>
-                      {providers.map((p) => {
-                        const isSelected = p.id === selectedTabId
-                        const isPrimary = p.id === activeProviderId
-                        return (
+                {/* 标题行：数量统计、翻页箭头与添加渠道入口 */}
+                <div className="pref-provider-bar-head">
+                  <span className="pref-provider-bar-title">选择服务商</span>
+                  <div className="pref-provider-bar-tools">
+                    <span className="pref-provider-count">
+                      {providers.length} 个 · 已启用 {enabledProviderCount} 个
+                    </span>
+                    <div className="pref-provider-nav">
+                      <button
+                        type="button"
+                        className="pref-provider-nav-btn"
+                        onClick={() => scrollProviderTabs(-PROVIDER_TAB_STEP)}
+                        aria-label="向左查看更多服务商"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        className="pref-provider-nav-btn"
+                        onClick={() => scrollProviderTabs(PROVIDER_TAB_STEP)}
+                        aria-label="向右查看更多服务商"
+                      >
+                        ›
+                      </button>
+                    </div>
+                    <div className="pref-add-dropdown-container" ref={addMenuRef}>
+                      <button
+                        type="button"
+                        className={`pref-btn-add-provider ${showAddMenu ? 'pref-btn-add-active' : ''}`}
+                        onClick={() => setShowAddMenu((prev) => !prev)}
+                        title="添加服务商（自定义或从官方预置快速导入）"
+                      >
+                        <span>+ 添加渠道</span>
+                        <span className="pref-dropdown-arrow">{showAddMenu ? '▴' : '▾'}</span>
+                      </button>
+
+                      {showAddMenu ? (
+                        <div className="pref-add-menu">
                           <button
-                            key={p.id}
                             type="button"
-                            data-item-id={p.id}
-                            className={`pref-provider-tab ${isSelected ? 'pref-provider-tab-active' : ''} ${
-                              !p.enabled ? 'pref-provider-tab-disabled' : ''
-                            }`}
+                            className="pref-add-menu-item"
                             onClick={() => {
-                              setSelectedTabId(p.id)
-                              setTestResult(null)
+                              setShowAddMenu(false)
+                              handleAddCustomProvider()
                             }}
-                            title={
-                              isPrimary ? '当前全局生效的默认服务商' : '点击查看与编辑此服务商'
-                            }
                           >
-                            <span
-                              className={`pref-provider-tab-dot ${p.enabled ? 'dot-enabled' : 'dot-disabled'}`}
-                            />
-                            <span className="pref-provider-tab-name">{p.name}</span>
-                            {isPrimary ? (
-                              <span className="pref-primary-indicator">默认</span>
-                            ) : null}
+                            <span className="pref-menu-item-icon">+</span>
+                            <span>自定义空白服务商</span>
                           </button>
-                        )
-                      })}
+
+                          {unaddedTemplates.length > 0 ? (
+                            <>
+                              <div className="pref-add-menu-divider" />
+                              <div className="pref-add-menu-label">从官方预置快速导入：</div>
+                              {unaddedTemplates.map((tmpl) => (
+                                <button
+                                  key={tmpl.id}
+                                  type="button"
+                                  className="pref-add-menu-item"
+                                  onClick={() => {
+                                    setShowAddMenu(false)
+                                    handleAddFromTemplate(tmpl)
+                                  }}
+                                >
+                                  <span className="pref-menu-item-bullet">•</span>
+                                  <span>{tmpl.name}</span>
+                                </button>
+                              ))}
+                            </>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
+                </div>
 
-                  {/* 整合 + 新建与预设导入的下拉选择器 */}
-                  <div className="pref-add-dropdown-container" ref={addMenuRef}>
-                    <button
-                      type="button"
-                      className={`pref-btn-add-provider ${showAddMenu ? 'pref-btn-add-active' : ''}`}
-                      onClick={() => setShowAddMenu((prev) => !prev)}
-                      title="添加服务商（自定义或从官方预置快速导入）"
-                    >
-                      <span>+ 添加渠道</span>
-                      <span className="pref-dropdown-arrow">{showAddMenu ? '▴' : '▾'}</span>
-                    </button>
-
-                    {showAddMenu ? (
-                      <div className="pref-add-menu">
-                        <button
-                          type="button"
-                          className="pref-add-menu-item"
+                {/* 服务商卡片滑轨：横向单行，超出的卡片靠箭头或滚轮滑动查看 */}
+                <div className="pref-provider-tabs-viewport">
+                  <div className="pref-provider-tabs" ref={providerTabsRef}>
+                    {providers.map((p) => {
+                      const isSelected = p.id === selectedTabId
+                      const isPrimary = p.id === activeProviderId
+                      // 状态行：已配置模型时展示默认模型 + 模型数量，未配置时只提示未接入
+                      const hasModels = p.models.length > 0
+                      const modelText = hasModels ? p.defaultModel || p.models[0]?.id || '' : ''
+                      const metaText = hasModels ? `· ${p.models.length} 个模型` : '未接入'
+                      return (
+                        <div
+                          key={p.id}
+                          data-item-id={p.id}
+                          className={`pref-provider-card ${isSelected ? 'pref-provider-card-active' : ''} ${
+                            p.enabled ? '' : 'pref-provider-card-off'
+                          }`}
                           onClick={() => {
-                            setShowAddMenu(false)
-                            handleAddCustomProvider()
+                            setSelectedTabId(p.id)
+                            setTestResult(null)
                           }}
+                          title={isPrimary ? '当前全局生效的默认服务商' : '点击查看与编辑此服务商'}
                         >
-                          <span className="pref-menu-item-icon">+</span>
-                          <span>自定义空白服务商</span>
-                        </button>
+                          <div className="pref-provider-card-info">
+                            <div className="pref-provider-card-name">
+                              <span className="pref-provider-card-name-text">{p.name}</span>
+                              {isPrimary ? (
+                                <span className="pref-primary-indicator">默认</span>
+                              ) : null}
+                            </div>
+                            <div className="pref-provider-card-state">
+                              <span
+                                className={`pref-provider-card-dot ${p.enabled ? 'is-on' : ''}`}
+                              />
+                              {modelText ? (
+                                <span className="pref-provider-card-model">{modelText}</span>
+                              ) : null}
+                              <span className="pref-provider-card-meta">{metaText}</span>
+                            </div>
+                          </div>
 
-                        {unaddedTemplates.length > 0 ? (
-                          <>
-                            <div className="pref-add-menu-divider" />
-                            <div className="pref-add-menu-label">从官方预置快速导入：</div>
-                            {unaddedTemplates.map((tmpl) => (
-                              <button
-                                key={tmpl.id}
-                                type="button"
-                                className="pref-add-menu-item"
-                                onClick={() => {
-                                  setShowAddMenu(false)
-                                  handleAddFromTemplate(tmpl)
-                                }}
-                              >
-                                <span className="pref-menu-item-bullet">•</span>
-                                <span>{tmpl.name}</span>
-                              </button>
-                            ))}
-                          </>
-                        ) : null}
-                      </div>
-                    ) : null}
+                          <button
+                            type="button"
+                            className={`pref-switch pref-provider-card-switch ${
+                              p.enabled ? 'pref-switch-on' : ''
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleToggleProviderEnabled(p.id)
+                            }}
+                            title={p.enabled ? '停用该服务商' : '启用该服务商'}
+                            aria-label={p.enabled ? `停用 ${p.name}` : `启用 ${p.name}`}
+                          >
+                            <span className="pref-switch-thumb" />
+                          </button>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
