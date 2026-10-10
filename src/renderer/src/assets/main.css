@@ -1741,92 +1741,100 @@ body {
 /* 主题 1：Wise 先锋墨绿/电气青柠风 (Wise — Deep Moss & Lime Voltage) */
 .pref-root,
 .pref-root[data-pref-theme='wise'] {
-  /* 背景与画布：Wise 纯白 Paper 画布，搭配 Fog 浅灰绿分界线 */
+  /* 字体栈：全页只用一套系统 UI 字体，设置页里不再保留等宽档 */
+  --pref-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+
+  /* 背景与画布：画布纯白，顶栏用零色偏浅灰做分隔（中性色一律不带色相） */
   --pref-bg: #ffffff;
-  --pref-header-bg: #f1efea;
-  --pref-header-border: #e8ebe6;
+  --pref-header-bg: #f4f4f6;
+  --pref-header-border: #e3e3e8;
   --pref-header-actions-gap: 12px;
 
-  /* 顶栏一级分类导航：选中项做成浮起的白色药丸 */
+  /* 顶栏一级分类导航：选中项做成浮起的白药丸，靠描边和微投影表达，不靠颜色 */
   --pref-topnav-tab-active-bg: #ffffff;
-  --pref-topnav-tab-active-text: #163300;
-  --pref-topnav-tab-active-border: #e6e2db;
-  --pref-topnav-tab-active-shadow: 0 1px 2px rgba(22, 51, 0, 0.07);
+  --pref-topnav-tab-active-text: #1c1c21;
+  --pref-topnav-tab-active-border: #e3e3e8;
+  --pref-topnav-tab-active-shadow: 0 1px 2px rgba(28, 28, 33, 0.06);
 
-  /* 侧边栏：Fog 柔灰微绿面板 */
-
-  /* 卡片表面：Fog (#e8ebe6) 灰绿底板，搭配 10px 柔和圆角与 1px 微边框 */
-  --pref-card-bg: #f4f6f3;
-  --pref-card-border: #e2e6df;
+  /* 卡片表面：零色偏浅灰底板 + 1px 浅灰描边，圆角仍是 8–12px 档 */
+  --pref-card-bg: #f4f4f6;
+  --pref-card-border: #e3e3e8;
+  /* 卡片/行级 hover：比常态底色深一档，保证"悬停"看得见 */
+  --pref-card-hover-bg: #ececef;
   --pref-card-shadow: none;
   --pref-card-backdrop: none;
   --pref-card-inner-shadow: none;
 
-  /* 文本系统：Forest Ink 与 Charcoal */
-  --pref-text-primary: #163300;
-  --pref-text-secondary: #454745;
-  --pref-text-muted: #868685;
+  /* 文本系统：近黑标题锚点 + 三级灰阶拉开层级（层级靠灰度，不靠加粗） */
+  --pref-text-primary: #1c1c21;
+  --pref-text-secondary: #4b4b53;
+  --pref-text-muted: #85858d;
+  --pref-text-disabled: #b9b9c2;
 
-  /* 表单输入框：白底保留（Paper 逻辑，最亮的面留给可输入内容），
-     描边由中性灰换成同一明度的绿调灰，让它和墨绿/青柠体系同色系；
-     顶部 1px 高光 + 极淡外投影替代原来"描边一发亮"的线框感 */
+  /* 中性强调描边：悬停与"按下"状态共用的深一档灰 */
+  --pref-border-strong: #b9b9c2;
+
+  /* 表单输入框：最亮的面留给可输入内容，描边彻底去掉绿调 */
   --pref-input-bg: #ffffff;
-  --pref-input-border: #7f8a7b;
-  --pref-input-hover-border: #5f6b5c;
-  --pref-input-text: #163300;
-  --pref-input-placeholder: #6a756a;
-  /* 聚焦回到品牌语言：墨绿实边 + 青柠光晕，而不是只把边框变个颜色 */
-  --pref-input-focus-border: #163300;
-  --pref-input-focus-ring: rgba(159, 232, 112, 0.45);
-  --pref-input-shadow: 0 1px 1px rgba(22, 51, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --pref-input-border: #d4d4db;
+  --pref-input-hover-border: #b9b9c2;
+  --pref-input-text: #1c1c21;
+  --pref-input-placeholder: #b9b9c2;
+  /* 聚焦 = 近黑实边 + 极淡中性光晕，不再用高亮绿抢视线 */
+  --pref-input-focus-border: #1c1c21;
+  --pref-input-focus-ring: rgba(28, 28, 33, 0.08);
+  --pref-input-shadow: none;
 
-  /* 品牌高亮：Lime Voltage (#9fe870) */
-  --pref-accent: #9fe870;
-  --pref-accent-hover: #b4f08d;
-  --pref-accent-light: #e2f6d5;
-  --pref-accent-border: #9fe870;
-  --pref-accent-text: #163300;
+  /* 品牌强调：深绿 (#189a58)，只出现在状态点、微徽章与浅色强调底上 */
+  --pref-accent: #189a58;
+  --pref-accent-light: #e8f4ed;
+  --pref-accent-border: #c3e2d1;
+  /* 实心强调底上的文字（白） */
+  --pref-accent-text: #ffffff;
+  /* 浅色强调底上的文字（深绿） */
+  --pref-accent-ink: #0f6b3d;
 
-  /* 选项卡 Tab：9999px 满圆角药丸 */
-  --pref-tab-bg: #e8ebe6;
-  --pref-tab-border: transparent;
-  --pref-tab-text: #454745;
-  --pref-tab-hover-bg: #e2f6d5;
-  --pref-tab-active-bg: #9fe870;
-  --pref-tab-active-border: #9fe870;
-  --pref-tab-active-text: #163300;
-  --pref-tab-active-shadow: none;
+  /* 拨动开关轨道：关闭浅灰、开启近黑（与"保存"按钮同色），绿色只留给状态点 */
+  --pref-switch-off-bg: #e3e3e8;
+  --pref-switch-on-bg: #1c1c21;
+
+  /* 主行动按钮（保存）：近黑实心 + 白字，把最亮的视觉权重从绿色手里收回来 */
+  --pref-btn-primary-bg: #1c1c21;
+  --pref-btn-primary-bg-hover: #33333a;
+  --pref-btn-primary-border: #1c1c21;
+  --pref-btn-primary-text: #ffffff;
 
   /* 微型操作按钮：9999px 满圆角 */
   --pref-field-btn-bg: #ffffff;
-  --pref-field-btn-border: #868685;
-  --pref-field-btn-text: #163300;
-  --pref-field-btn-hover-bg: #e2f6d5;
+  --pref-field-btn-border: #e3e3e8;
+  --pref-field-btn-text: #1c1c21;
+  --pref-field-btn-hover-bg: #f4f4f6;
 
   /* 模型胶囊：9999px 药丸 */
   --pref-pill-bg: #ffffff;
-  --pref-pill-border: #d6dbd2;
-  --pref-pill-text: #454745;
-  --pref-pill-hover-bg: #e2f6d5;
-  --pref-pill-active-bg: #9fe870;
-  --pref-pill-active-border: #9fe870;
-  --pref-pill-active-text: #163300;
+  --pref-pill-border: #e3e3e8;
+  --pref-pill-text: #4b4b53;
+  --pref-pill-hover-bg: #f4f4f6;
+  /* 默认模型胶囊：白底 + 1px 深绿描边，用"描边"表达选中，不用大面积填色 */
+  --pref-pill-active-bg: #ffffff;
+  --pref-pill-active-border: #189a58;
+  --pref-pill-active-text: #1c1c21;
 
   /* 底栏与操作按键 */
   --pref-footer-bg: #ffffff;
-  --pref-footer-border: #e8ebe6;
+  --pref-footer-border: #e3e3e8;
   --pref-btn-sec-bg: #ffffff;
-  --pref-btn-sec-border: #163300;
-  --pref-btn-sec-text: #163300;
-  --pref-btn-sec-hover: #f0f3ee;
+  --pref-btn-sec-border: #e0e0e6;
+  --pref-btn-sec-text: #1c1c21;
+  --pref-btn-sec-hover: #f4f4f6;
 
   /* 弹窗表面 */
   --pref-modal-bg: #ffffff;
-  --pref-modal-header-bg: #f4f6f3;
-  --pref-modal-border: #e2e6df;
-  --pref-modal-inner-bg: #f8faf7;
+  --pref-modal-header-bg: #f4f4f6;
+  --pref-modal-border: #e3e3e8;
+  --pref-modal-inner-bg: #f8f8fa;
   --pref-modal-item-bg: #ffffff;
-  --pref-modal-item-border: #e2e6df;
+  --pref-modal-item-border: #e3e3e8;
 
   /* 几何规范 */
   --pref-radius-card: 10px;
@@ -1837,23 +1845,35 @@ body {
 
 
 /* ==========================================================================
-   Wise 专有排版声浪与组件交互细节 (Wise Signature Styling Enhancements)
+   偏好设置窗口的组件级样式特征 (Preferences Signature Styling)
+   设计约束：一个界面只留一个强调色（深绿），红只给危险操作；
+   选中状态一律用描边表达，绿色只落在状态点与微徽章上。
    ========================================================================== */
 
-
-.pref-root[data-pref-theme='wise'] .pref-card-title {
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: #163300;
+/*
+ * 表单控件字体继承（修复"按钮字形和标签不一样"的根因）：
+ * 浏览器 UA 样式给 <button> 的默认字体是 Arial（font: 400 13.3333px Arial），
+ * 只要某个按钮类没写 font-family，它就会脱离容器字体，和旁边的标签、tab 变成两套字形。
+ * 这里用 :where() 把特异性压到 0，任何显式声明（如等宽输入框）都能正常覆盖它。
+ */
+:where(.pref-root) :where(button, input, textarea, select) {
+  font-family: inherit;
 }
 
-/* Wise 主行动按钮 (Primary CTA): Lime Voltage 满药丸 + Forest Ink 粗体字，无边框与投影 */
-/* 底色与文字色已由 --pref-accent 系列变量接管，这里只保留 Wise 的形状与字重特征 */
+
+/* 区块标题：近黑锚点 + 600 字重，字号层级之外不再叠加其他强调手段 */
+.pref-root[data-pref-theme='wise'] .pref-card-title {
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--pref-text-primary);
+}
+
+/* 主行动按钮（保存）：近黑实心满药丸，形状不变，只把最亮权重让给内容 */
 .pref-root[data-pref-theme='wise'] .pref-btn-save {
-  border: none;
-  font-weight: 800;
+  border: 1px solid var(--pref-btn-primary-border);
+  font-weight: 600;
   box-shadow: none;
-  letter-spacing: 0.1px;
+  letter-spacing: 0;
 }
 
 .pref-root[data-pref-theme='wise'] .pref-btn-save:hover:not(:disabled) {
@@ -1861,50 +1881,49 @@ body {
 }
 
 .pref-root[data-pref-theme='wise'] .pref-btn-save:active:not(:disabled) {
-  background: #8cdb5b;
+  background: var(--pref-btn-primary-bg-hover);
   transform: translateY(1px);
 }
 
-/* Wise 次要药丸按钮：白底 + 1px Forest Ink 边框 */
+/* 次要药丸按钮（取消 / 测试连接）：白底 + 1px 浅灰描边 + 近黑字 */
 .pref-root[data-pref-theme='wise'] .pref-btn-secondary,
 .pref-root[data-pref-theme='wise'] .pref-btn-test,
 .pref-root[data-pref-theme='wise'] .pref-btn-cancel {
-  border: 1px solid #163300;
-  color: #163300;
-  font-weight: 600;
-  background: #ffffff;
+  border: 1px solid var(--pref-btn-sec-border);
+  color: var(--pref-text-primary);
+  background: var(--pref-btn-sec-bg);
 }
 
 .pref-root[data-pref-theme='wise'] .pref-btn-secondary:hover:not(:disabled),
 .pref-root[data-pref-theme='wise'] .pref-btn-test:hover:not(:disabled),
 .pref-root[data-pref-theme='wise'] .pref-btn-cancel:hover {
-  background: #e2f6d5;
-  color: #163300;
-  border-color: #163300;
+  background: var(--pref-btn-sec-hover);
+  color: var(--pref-text-primary);
+  border-color: var(--pref-border-strong);
 }
 
 
-/* Wise 拨动开关：开启态 Lime Voltage 轨道 + Forest Ink 墨绿滑块 */
+/* 拨动开关：开启态近黑轨道 + 白滑块，绿色只留给状态点 */
 .pref-root[data-pref-theme='wise'] .pref-switch-on {
-  background: #9fe870;
+  background: var(--pref-switch-on-bg);
 }
 
 .pref-root[data-pref-theme='wise'] .pref-switch-on .pref-switch-thumb {
-  background: #163300;
+  background: #ffffff;
 }
 
-/* Wise 状态微徽章：Linen Mist 亚麻浅绿底 + Forest Ink 墨绿字 */
+/* 状态微徽章：浅绿底 + 深绿字，是页面上唯一允许出现的彩色文字 */
 .pref-root[data-pref-theme='wise'] .pref-badge-primary,
 .pref-root[data-pref-theme='wise'] .pref-primary-indicator,
 .pref-root[data-pref-theme='wise'] .pref-test-status-ok {
-  background: #e2f6d5;
-  color: #163300;
-  border: 1px solid #9fe870;
-  font-weight: 700;
+  background: var(--pref-accent-light);
+  color: var(--pref-accent-ink);
+  border: 1px solid var(--pref-accent-border);
+  font-weight: 600;
 }
 
 .pref-root[data-pref-theme='wise'] .pref-test-status-ok .pref-status-dot {
-  background: #163300;
+  background: var(--pref-accent);
 }
 
 
@@ -1915,7 +1934,23 @@ body {
   flex-direction: column;
   background: var(--pref-bg);
   color: var(--pref-text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', sans-serif;
+  font-family: var(--pref-font);
+  /*
+   * 字形渲染路径必须显式统一：base.css 给 body 设了 text-rendering: optimizeLegibility，
+   * 它是继承属性，会让文字走另一条 shaping/hinting 路径（中文字形更细、更"花"）；
+   * 而 <button> 的 UA 样式是 auto，不受继承影响 —— 同一行里顶栏 tab 和字段标签
+   * 于是呈现两种字形。这里统一回浏览器默认，和 tab 一致。
+   */
+  text-rendering: auto;
+  /*
+   * 字距基准：全页一律 0，和顶栏 tab 完全一致。
+   * 中文小字号上任何一点正值字距都会被读成"另一种字体"（字形被拉开、笔画发虚），
+   * 所以这里把基准定在容器上，任何新增元素默认都跟随，不再逐处声明。
+   */
+  letter-spacing: 0;
+  /* macOS 默认会把小字号渲染得偏重，显式平滑后 400/500 的档差才读得准 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
   user-select: none;
   transition:
@@ -1956,8 +1991,8 @@ body {
   background: transparent;
   color: var(--pref-text-secondary);
   font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -1974,6 +2009,8 @@ body {
   background: var(--pref-topnav-tab-active-bg);
   color: var(--pref-topnav-tab-active-text);
   border-color: var(--pref-topnav-tab-active-border);
+  /* 未选中态 400，选中态只加半档字重，主要靠白药丸 + 近黑字表达选中 */
+  font-weight: 500;
   box-shadow: var(--pref-topnav-tab-active-shadow);
 }
 
@@ -1999,7 +2036,8 @@ body {
   background: var(--pref-btn-sec-bg);
   color: var(--pref-text-secondary);
   font-size: 12px;
-  font-weight: 700;
+  line-height: 1;
+  font-weight: 500;
   cursor: pointer;
   transition: all 120ms ease;
 }
@@ -2043,13 +2081,13 @@ body {
 
 .pref-card-title {
   margin: 0;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--pref-text-primary);
-  letter-spacing: 0.2px;
 }
 
 .pref-card-subtitle {
+  font-weight: 400;
   font-size: 12px;
   color: var(--pref-text-muted);
 }
@@ -2066,7 +2104,7 @@ body {
 .pref-seg-btn {
   padding: 4px 12px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--pref-text-secondary);
   border: none;
   background: transparent;
@@ -2091,7 +2129,8 @@ body {
 }
 
 .pref-preset-tip {
-  font-size: 11.5px;
+  font-weight: 400;
+  font-size: 12px;
   color: var(--pref-text-muted);
 }
 
@@ -2103,8 +2142,8 @@ body {
 
 .pref-preset-chip {
   padding: 1px 8px;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--pref-text-secondary);
   background: var(--pref-field-btn-bg);
   border: 1px solid var(--pref-field-btn-border);
@@ -2114,9 +2153,9 @@ body {
 }
 
 .pref-preset-chip:hover {
-  background: var(--pref-accent);
-  color: #ffffff;
-  border-color: var(--pref-accent);
+  background: var(--pref-field-btn-hover-bg);
+  color: var(--pref-text-primary);
+  border-color: var(--pref-border-strong);
 }
 
 .pref-preset-chip:active {
@@ -2124,6 +2163,7 @@ body {
 }
 
 .pref-mock-hint {
+  font-weight: 400;
   margin: 0;
   font-size: 12px;
   color: var(--pref-text-muted);
@@ -2151,16 +2191,17 @@ body {
 
 .pref-label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--pref-text-secondary);
 }
 
 .pref-text-btn {
+  font-weight: 400;
   background: none;
   border: none;
   padding: 0;
   font-size: 12px;
-  color: var(--pref-accent-text);
+  color: var(--pref-accent-ink);
   cursor: pointer;
   text-decoration: underline;
 }
@@ -2168,7 +2209,7 @@ body {
 .pref-input {
   height: 34px;
   padding: 0 10px;
-  font-family: var(--font-display);
+  font-family: inherit;
   font-size: 12px;
   color: var(--pref-input-text);
   background: var(--pref-input-bg);
@@ -2215,7 +2256,7 @@ body {
 }
 
 .pref-switch-row:hover {
-  background: var(--pref-field-btn-hover-bg);
+  background: var(--pref-card-hover-bg);
 }
 
 .pref-switch-desc {
@@ -2228,19 +2269,20 @@ body {
 
 .pref-switch-name {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--pref-text-primary);
 }
 
 .pref-switch-sub {
-  font-size: 11px;
+  font-weight: 400;
+  font-size: 12px;
   color: var(--pref-text-muted);
 }
 
 .pref-switch {
   width: 38px;
   height: 20px;
-  background: var(--pref-btn-sec-border);
+  background: var(--pref-switch-off-bg);
   border-radius: 10px;
   padding: 2px;
   transition: background 160ms ease;
@@ -2249,7 +2291,8 @@ body {
 }
 
 .pref-switch-on {
-  background: var(--pref-accent);
+  /* 开启态统一走墨色轨道变量，避免任何主题下再漏出绿色 */
+  background: var(--pref-switch-on-bg);
 }
 
 .pref-switch-thumb {
@@ -2286,10 +2329,10 @@ body {
 }
 
 .pref-provider-bar-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--pref-text-muted);
+  /* 区块引导语：档位对齐顶栏 tab（12px / 500 / 字距 0 / 二级灰），不再做加宽字距 */
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pref-text-secondary);
   white-space: nowrap;
 }
 
@@ -2300,7 +2343,8 @@ body {
 }
 
 .pref-provider-count {
-  font-size: 11.5px;
+  font-weight: 400;
+  font-size: 12px;
   color: var(--pref-text-muted);
   white-space: nowrap;
 }
@@ -2313,6 +2357,7 @@ body {
 }
 
 .pref-provider-nav-btn {
+  font-weight: 400;
   width: 22px;
   height: 22px;
   padding: 0;
@@ -2320,7 +2365,7 @@ body {
   align-items: center;
   justify-content: center;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
   color: var(--pref-text-secondary);
   background: #ffffff;
@@ -2333,7 +2378,7 @@ body {
 .pref-provider-nav-btn:hover {
   color: var(--pref-text-primary);
   border-color: var(--pref-text-primary);
-  background: var(--pref-accent-light);
+  background: var(--pref-card-bg);
 }
 
 .pref-provider-nav-btn:active {
@@ -2406,8 +2451,8 @@ body {
 }
 
 .pref-provider-card:hover {
-  background: #eef1ec;
-  border-color: #cdd6c7;
+  background: var(--pref-card-hover-bg);
+  border-color: var(--pref-border-strong);
 }
 
 /*
@@ -2446,9 +2491,9 @@ body {
 }
 
 .pref-provider-card-name-text {
-  font-size: 12.5px;
-  font-weight: 700;
-  line-height: 1.15;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
   color: var(--pref-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -2456,11 +2501,12 @@ body {
 }
 
 .pref-provider-card-state {
+  font-weight: 400;
   display: flex;
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.2;
   color: var(--pref-text-muted);
 }
@@ -2470,17 +2516,16 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #c4cbc0;
+  background: var(--pref-text-disabled);
 }
 
 .pref-provider-card-dot.is-on {
-  background: #37b24d;
+  background: var(--pref-accent);
 }
 
 .pref-provider-card-model {
   flex: 0 1 auto;
   min-width: 0;
-  font-family: var(--font-display);
   color: var(--pref-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -2488,8 +2533,9 @@ body {
 }
 
 .pref-provider-card-meta {
+  font-weight: 400;
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -2532,7 +2578,7 @@ body {
   padding: 0 12px;
   font-family: inherit;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
   box-sizing: border-box;
   color: var(--pref-text-secondary);
@@ -2558,7 +2604,8 @@ body {
 }
 
 .pref-dropdown-arrow {
-  font-size: 10px;
+  font-weight: 400;
+  font-size: 12px;
   color: var(--pref-text-muted);
   line-height: 1;
 }
@@ -2600,7 +2647,7 @@ body {
   padding: 5px 8px;
   font-family: inherit;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--pref-text-primary);
   background: none;
   border: none;
@@ -2612,16 +2659,17 @@ body {
 }
 
 .pref-add-menu-item:hover {
-  background: var(--pref-accent-light);
-  color: var(--pref-accent-text);
+  background: var(--pref-field-btn-hover-bg);
+  color: var(--pref-text-primary);
 }
 
 .pref-menu-item-icon {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--pref-accent);
 }
 
 .pref-menu-item-bullet {
+  font-weight: 400;
   color: var(--pref-text-muted);
   font-size: 12px;
 }
@@ -2634,8 +2682,8 @@ body {
 
 .pref-add-menu-label {
   padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--pref-text-muted);
   user-select: none;
 }
@@ -2660,6 +2708,7 @@ body {
 
 /* 启用状态文字标签：跟随主题次级文字色，不再写死暖棕内联色 */
 .pref-switch-label {
+  font-weight: 400;
   font-size: 12px;
   color: var(--pref-text-secondary);
   margin-right: 6px;
@@ -2698,9 +2747,8 @@ body {
   gap: 5px;
   height: 25px;
   padding: 0 6px 0 8px;
-  font-family: var(--font-display);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--pref-pill-text);
   background: var(--pref-pill-bg);
   border: 1px solid var(--pref-pill-border);
@@ -2731,14 +2779,15 @@ body {
 /* 默认模型微徽章 (DEF) */
 .pref-pill-default-badge {
   font-family: inherit;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
+  /* 深绿实心 + 白字：全页最小的绿色实心块，把"默认"语义钉在模型名左侧 */
   color: var(--pref-accent-text);
-  background: var(--pref-accent-light);
-  border: 1px solid var(--pref-accent-border);
+  background: var(--pref-accent);
+  border: 1px solid var(--pref-accent);
   padding: 0 3px;
   height: 14px;
-  line-height: 11px;
+  line-height: 1;
   border-radius: 2px;
   display: inline-flex;
   align-items: center;
@@ -2757,7 +2806,8 @@ body {
 }
 
 .pref-pill-prefix {
-  font-size: 11px;
+  font-weight: 400;
+  font-size: 12px;
   color: var(--pref-text-muted);
   user-select: none;
   flex-shrink: 0;
@@ -2774,8 +2824,9 @@ body {
   height: 25px;
   padding: 0 8px;
   font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
+  line-height: 1;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--pref-text-secondary);
   background: transparent;
   border: 1px solid var(--pref-field-btn-border);
@@ -2790,8 +2841,8 @@ body {
 }
 
 .pref-pill-btn-add:hover {
-  background: var(--pref-field-btn-hover-bg);
-  border-color: var(--pref-accent);
+  background: #ffffff;
+  border-color: var(--pref-border-strong);
   color: var(--pref-text-primary);
 }
 
@@ -2808,9 +2859,10 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--pref-text-muted);
+  font-size: 12px;
+  line-height: 1;
   cursor: pointer;
   transition: all 120ms ease;
-  line-height: 1;
 }
 
 .pref-pill-remove:hover {
@@ -2874,8 +2926,8 @@ body {
   justify-content: center;
   height: 32px;
   padding: 0 15px;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   border-radius: var(--pref-radius-btn);
   cursor: pointer;
   white-space: nowrap !important;
@@ -2922,16 +2974,16 @@ body {
 }
 
 .pref-btn-save {
-  background: var(--pref-accent);
-  border: 1px solid var(--pref-accent-border);
-  color: var(--pref-accent-text);
-  font-weight: 700;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  background: var(--pref-btn-primary-bg);
+  border: 1px solid var(--pref-btn-primary-border);
+  color: var(--pref-btn-primary-text);
+  font-weight: 600;
+  box-shadow: none;
 }
 
 .pref-btn-save:hover:not(:disabled) {
-  background: var(--pref-accent-hover);
-  border-color: var(--pref-accent-hover);
+  background: var(--pref-btn-primary-bg-hover);
+  border-color: var(--pref-btn-primary-bg-hover);
 }
 
 .pref-btn-save:active:not(:disabled) {
@@ -2973,6 +3025,7 @@ body {
 
 /* 测试状态胶囊指示徽标 */
 .pref-test-status {
+  font-weight: 400;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3003,14 +3056,14 @@ body {
 }
 
 .pref-test-status-ok {
-  color: #1e7e34;
-  border: 1px solid rgba(39, 174, 96, 0.35);
-  background: rgba(39, 174, 96, 0.1);
+  color: var(--pref-accent-ink);
+  border: 1px solid var(--pref-accent-border);
+  background: var(--pref-accent-light);
 }
 
 .pref-test-status-ok .pref-status-dot {
-  background: #27ae60;
-  box-shadow: 0 0 4px rgba(39, 174, 96, 0.5);
+  background: var(--pref-accent);
+  box-shadow: none;
 }
 
 .pref-test-status-fail {
@@ -3026,8 +3079,8 @@ body {
 
 .pref-feedback-text {
   font-size: 12px;
-  font-weight: 600;
-  color: #27ae60;
+  font-weight: 500;
+  color: var(--pref-accent-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3043,18 +3096,19 @@ body {
 
 /* 主用服务商 Tab 指示标签 */
 .pref-primary-indicator {
-  font-size: 10px;
+  font-size: 12px;
   background: var(--pref-accent);
   color: var(--pref-accent-text);
   padding: 1px 4px;
   border-radius: 3px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.2;
 }
 
 /* 全部模板添加完成后的弱提示 */
 .pref-preset-tip-dim {
-  font-size: 11.5px;
+  font-weight: 400;
+  font-size: 12px;
   color: var(--pref-text-muted);
 }
 
@@ -3066,8 +3120,8 @@ body {
 }
 
 .pref-badge-primary {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--pref-accent-text);
   background: var(--pref-accent-light);
   border: 1px solid var(--pref-accent-border);
@@ -3079,8 +3133,8 @@ body {
   background: var(--pref-btn-sec-bg);
   border: 1px solid var(--pref-btn-sec-border);
   color: var(--pref-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   padding: 2px 7px;
   border-radius: var(--pref-radius-btn);
   cursor: pointer;
@@ -3110,6 +3164,7 @@ body {
   font-size: 12px;
   font-weight: 500;
   font-family: inherit;
+  line-height: 1;
   border-radius: var(--pref-radius-btn);
   box-sizing: border-box;
   display: inline-flex;
@@ -3126,7 +3181,7 @@ body {
 
 .pref-field-btn:hover:not(:disabled) {
   background: var(--pref-field-btn-hover-bg);
-  border-color: var(--pref-accent);
+  border-color: var(--pref-border-strong);
   color: var(--pref-text-primary);
 }
 
@@ -3143,17 +3198,17 @@ body {
 /* 激活态（例如显示密码明文时） */
 .pref-field-btn-active {
   background: var(--pref-accent-light);
-  border-color: var(--pref-accent);
-  color: var(--pref-accent-text);
+  border-color: var(--pref-accent-border);
+  color: var(--pref-accent-ink);
   font-weight: 600;
 }
 
 /* 主色强调款：自动获取模型列表等 */
 .pref-field-btn-primary {
   background: var(--pref-accent-light);
-  border-color: var(--pref-accent);
-  color: var(--pref-accent-text);
-  font-weight: 600;
+  border-color: var(--pref-accent-border);
+  color: var(--pref-accent-ink);
+  font-weight: 500;
 }
 
 .pref-field-btn-primary:hover:not(:disabled) {
@@ -3170,7 +3225,7 @@ body {
   background: #fdf2f1;
   border-color: rgba(216, 92, 92, 0.5);
   color: #b93f3f;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .pref-field-btn-danger:hover:not(:disabled) {
@@ -3189,8 +3244,9 @@ body {
   height: 24px;
   padding: 0 8px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   font-family: inherit;
+  line-height: 1;
   border-radius: var(--pref-radius-btn);
   box-sizing: border-box;
   display: inline-flex;
@@ -3199,8 +3255,8 @@ body {
   white-space: nowrap;
   cursor: pointer;
   background: var(--pref-accent-light);
-  border: 1px solid var(--pref-accent);
-  color: var(--pref-accent-text);
+  border: 1px solid var(--pref-accent-border);
+  color: var(--pref-accent-ink);
   transition: all 120ms ease;
 }
 
@@ -3226,16 +3282,16 @@ body {
 .pref-test-detail-btn {
   height: 26px;
   padding: 0 8px;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   flex-shrink: 0;
 }
 
 .pref-btn-error-detail {
   height: 26px;
   padding: 0 8px;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   border-radius: var(--pref-radius-btn);
   background: #fdf2f1;
   border: 1px solid rgba(216, 92, 92, 0.45);
@@ -3308,8 +3364,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--pref-text-primary);
 }
 
@@ -3322,8 +3378,7 @@ body {
 }
 
 .pref-modal-badge {
-  font-family: var(--font-display);
-  font-size: 10.5px;
+  font-size: 12px;
   background: var(--pref-field-btn-bg);
   color: var(--pref-text-secondary);
   padding: 1px 6px;
@@ -3393,8 +3448,7 @@ body {
   border-radius: var(--pref-radius-btn);
   cursor: pointer;
   transition: all 100ms ease;
-  font-family: var(--font-display);
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--pref-text-primary);
   background: var(--pref-modal-item-bg);
   border: 1px solid var(--pref-modal-item-border);
@@ -3403,7 +3457,7 @@ body {
 
 .pref-modal-model-item:hover {
   background: var(--pref-field-btn-hover-bg);
-  border-color: var(--pref-accent);
+  border-color: var(--pref-border-strong);
 }
 
 .pref-modal-checkbox {
@@ -3416,8 +3470,8 @@ body {
 
 .item-selected {
   background: var(--pref-accent-light);
-  border-color: var(--pref-accent);
-  color: var(--pref-accent-text);
+  border-color: var(--pref-accent-border);
+  color: var(--pref-accent-ink);
   font-weight: 600;
 }
 
@@ -3434,11 +3488,11 @@ body {
 }
 
 .pref-modal-item-tag {
-  font-size: 10.5px;
+  font-size: 12px;
   padding: 1px 6px;
   border-radius: 3px;
   flex-shrink: 0;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .tag-added {
@@ -3448,7 +3502,7 @@ body {
 }
 
 .tag-new {
-  color: var(--pref-accent-text);
+  color: var(--pref-accent-ink);
   background: var(--pref-accent-light);
   border: 1px solid var(--pref-accent-border);
 }
@@ -3457,7 +3511,7 @@ body {
   padding: 36px 20px;
   text-align: center;
   color: var(--pref-text-muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .pref-modal-footer {
@@ -3487,10 +3541,10 @@ body {
 }
 
 .selected-badge-active {
-  color: var(--pref-accent-text);
+  color: var(--pref-accent-ink);
   background: var(--pref-accent-light);
   border: 1px solid var(--pref-accent-border);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pref-modal-footer-btns {
@@ -3510,7 +3564,7 @@ body {
   align-items: center;
   gap: 8px;
   color: #a83232;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pref-diagnostic-indicator {
@@ -3560,7 +3614,6 @@ body {
 .pref-error-meta-val {
   color: var(--pref-text-primary);
   word-break: break-all;
-  font-family: var(--font-display);
   font-size: 12px;
   flex: 1;
 }
@@ -3572,7 +3625,7 @@ body {
 
 .pref-error-body-title {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--pref-text-secondary);
   margin-top: 2px;
 }
@@ -3580,11 +3633,10 @@ body {
 .pref-error-body-pre {
   margin: 0;
   padding: 12px;
-  background: #181c22;
-  color: #cbd5e1;
-  border: 1px solid #2d3540;
-  font-family: var(--font-display);
-  font-size: 11px;
+  background: #1c1c21;
+  color: #c9c9d1;
+  border: 1px solid #2f2f36;
+  font-size: 12px;
   line-height: 1.5;
   border-radius: var(--pref-radius-btn);
   max-height: 220px;
@@ -3637,9 +3689,9 @@ body {
 
 /* 快捷键设置专属样式 */
 .pref-shortcut-tip {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--pref-text-muted);
-  font-family: var(--font-display);
+  font-family: var(--pref-font);
 }
 
 .pref-shortcut-input-group {
@@ -3669,7 +3721,7 @@ body {
 /* 大段提示词输入框 */
 .pref-textarea {
   padding: 9px 11px;
-  font-family: var(--font-display);
+  font-family: var(--pref-font);
   font-size: 12px;
   line-height: 1.45;
   color: var(--pref-input-text);
@@ -3710,10 +3762,11 @@ body {
 }
 
 .pref-radio-item {
+  font-weight: 400;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--pref-text-primary);
   cursor: pointer;
   user-select: none;
