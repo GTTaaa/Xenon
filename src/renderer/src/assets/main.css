@@ -574,6 +574,16 @@ body {
   font-family: var(--font-display);
 }
 
+/* 引擎面板空状态：一个启用的服务商都没有时占满分栏区域并居中 */
+.terminal-engine-empty-hint-deck {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  line-height: 1.8;
+}
+
 /* 单个引擎模型选项按钮 */
 .terminal-engine-option {
   width: 100%;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import menuIcon from './assets/menu-icon.svg'
 import pinIcon from './assets/pin-icon.svg'
-import type { ModelOptionItem, ProviderItem } from '../../shared/config'
+import type { ProviderItem } from '../../shared/config'
 import {
   detectLanguage,
   getLanguageInfo,
@@ -14,24 +14,6 @@ import {
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
 const INITIAL_SOURCE_TEXT = ''
-const INITIAL_MODEL_OPTIONS: ModelOptionItem[] = [
-  {
-    value: 'step-3.5-flash',
-    code: 'A1',
-    profile: 'FAST RESPONSE'
-  },
-  {
-    value: 'gpt-4o-mini',
-    code: 'B2',
-    profile: 'BALANCED MODE'
-  },
-  {
-    value: 'claude-3.5-haiku',
-    code: 'C3',
-    profile: 'LOW COST'
-  }
-]
-
 const STATUS_TEXT_MAP: Record<TranslateStatus, string> = {
   idle: 'READY_V1.1',
   translating: 'TRANSLATING',
@@ -71,6 +53,25 @@ const getUserFriendlyErrorMessage = (code: string): string => {
 }
 
 /**
+ * 挑选主界面当前使用的服务商。
+ * 只在"已启用"的渠道里找：按候选 ID 顺序命中第一个匹配项，都没命中就取第一个启用的。
+ * 一个启用的渠道都没有时返回 undefined，调用方据此清空选择 ——
+ * 否则界面会继续显示一个已经停用的渠道和它的模型，点下去还会真的发请求。
+ */
+const pickActiveProvider = (
+  list: ProviderItem[],
+  preferredIds: Array<string | null | undefined>
+): ProviderItem | undefined => {
+  const enabled = list.filter((p) => p.enabled)
+  for (const id of preferredIds) {
+    if (!id) continue
+    const hit = enabled.find((p) => p.id === id)
+    if (hit) return hit
+  }
+  return enabled[0]
+}
+
+/**
  * 格式化界面显示的语言名称，去除多余繁杂括号
  */
 function formatLanguageDisplay(code: SupportedLanguage): string {
@@ -92,15 +93,16 @@ function App(): React.JSX.Element {
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const requestIdRef = useRef(0)
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
-  const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>(INITIAL_MODEL_OPTIONS)
   const [providers, setProviders] = useState<ProviderItem[]>([])
+  // 渠道与模型的初始值只认本地记忆值，读不到就留空 ——
+  // 这里不再写 'deepseek' / 'deepseek-chat' 这类硬编码兜底：
+  // 用户配置里未必有 deepseek 渠道，先显示一个不存在的模型名会误导人。
+  // 真实取值由下面加载配置的 effect 补齐。
   const [selectedProviderId, setSelectedProviderId] = useState<string>(() => {
-    return localStorage.getItem('selectedProviderId') || 'deepseek'
+    return localStorage.getItem('selectedProviderId') || ''
   })
   const [selectedModel, setSelectedModel] = useState(() => {
-    const savedModel = localStorage.getItem('selectedModel')
-    if (savedModel) return savedModel
-    return 'deepseek-chat'
+    return localStorage.getItem('selectedModel') || ''
   })
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   // 控制深色掌机面板真实 DOM 挂载生命周期（支持退出淡出动画，避免瞬间闪退）
@@ -115,23 +117,17 @@ function App(): React.JSX.Element {
     return providers.filter((p) => p.enabled)
   }, [providers])
 
-  // 当前生效的服务商对象
-  const activeProvider = useMemo(() => {
-    return (
-      enabledProviders.find((p) => p.id === selectedProviderId) ||
-      providers.find((p) => p.id === selectedProviderId) ||
-      enabledProviders[0] ||
-      providers[0]
-    )
-  }, [enabledProviders, providers, selectedProviderId])
+  // 当前生效的服务商对象：只认已启用的渠道，一个都没启用时为 undefined
+  const activeProvider = useMemo(
+    () => enabledProviders.find((p) => p.id === selectedProviderId) || enabledProviders[0],
+    [enabledProviders, selectedProviderId]
+  )
 
-  // 可选模型总单元数
-  const totalEngineUnits = useMemo(() => {
-    if (enabledProviders.length > 0) {
-      return enabledProviders.reduce((acc, p) => acc + p.models.length, 0)
-    }
-    return modelOptions.length
-  }, [enabledProviders, modelOptions])
+  // 可选模型总单元数：只统计已启用服务商下的模型，没有启用的服务商就是 0
+  const totalEngineUnits = useMemo(
+    () => enabledProviders.reduce((acc, p) => acc + p.models.length, 0),
+    [enabledProviders]
+  )
 
   // 引擎面板当前局部聚焦的服务商 ID（为 null 时自动联动当前全局生效的服务商）
   const [deckFocusedProviderId, setDeckFocusedProviderId] = useState<string | null>(null)
@@ -142,12 +138,20 @@ function App(): React.JSX.Element {
       const found = enabledProviders.find((p) => p.id === deckFocusedProviderId)
       if (found) return found
     }
-    return (
-      enabledProviders.find((p) => p.id === selectedProviderId) ||
-      enabledProviders[0] ||
-      activeProvider
-    )
-  }, [enabledProviders, deckFocusedProviderId, selectedProviderId, activeProvider])
+    // 没有局部聚焦时跟随当前生效的渠道，两者都只认已启用的服务商
+    return activeProvider
+  }, [enabledProviders, deckFocusedProviderId, activeProvider])
+
+  /**
+   * 清空渠道与模型选择，并同步清掉本地记忆值。
+   * 停在"没有任何启用渠道"的状态时用它，避免界面继续显示已经不可用的旧渠道。
+   */
+  const clearActiveProviderSelection = useCallback((): void => {
+    setSelectedProviderId('')
+    setSelectedModel('')
+    localStorage.removeItem('selectedProviderId')
+    localStorage.removeItem('selectedModel')
+  }, [])
 
   // 用户指定的源语言（'auto' 表示自动识别）
   const [sourceLanguage, setSourceLanguage] = useState<SupportedLanguage>(() => {
@@ -334,26 +338,23 @@ function App(): React.JSX.Element {
         if (Array.isArray(cfg.providers) && cfg.providers.length > 0) {
           setProviders(cfg.providers)
           const savedProvId = localStorage.getItem('selectedProviderId')
-          const prov =
-            (savedProvId && cfg.providers.find((p) => p.id === savedProvId && p.enabled)) ||
-            (cfg.activeProviderId &&
-              cfg.providers.find((p) => p.id === cfg.activeProviderId && p.enabled)) ||
-            cfg.providers.find((p) => p.enabled) ||
-            cfg.providers[0]
+          const prov = pickActiveProvider(cfg.providers, [savedProvId, cfg.activeProviderId])
 
-          setSelectedProviderId(prov.id)
-          localStorage.setItem('selectedProviderId', prov.id)
+          if (!prov) {
+            clearActiveProviderSelection()
+          } else {
+            setSelectedProviderId(prov.id)
+            localStorage.setItem('selectedProviderId', prov.id)
 
-          const savedModel = localStorage.getItem('selectedModel')
-          const hasSavedModel = prov.models.some((m) => m.id === savedModel)
-          const finalModel = hasSavedModel
-            ? (savedModel as string)
-            : cfg.activeModelId || prov.defaultModel || prov.models[0]?.id || 'deepseek-chat'
+            const savedModel = localStorage.getItem('selectedModel')
+            const hasSavedModel = prov.models.some((m) => m.id === savedModel)
+            const finalModel = hasSavedModel
+              ? (savedModel as string)
+              : cfg.activeModelId || prov.defaultModel || prov.models[0]?.id || ''
 
-          setSelectedModel(finalModel)
-          localStorage.setItem('selectedModel', finalModel)
-        } else if (Array.isArray(cfg.modelOptions) && cfg.modelOptions.length > 0) {
-          setModelOptions(cfg.modelOptions)
+            setSelectedModel(finalModel)
+            localStorage.setItem('selectedModel', finalModel)
+          }
         }
 
         if (cfg.translation) {
@@ -366,25 +367,26 @@ function App(): React.JSX.Element {
       .catch((err) => {
         console.error('[renderer] 初始化加载配置失败', err)
       })
-  }, [])
+  }, [clearActiveProviderSelection])
 
   // 监听偏好设置保存更新
   useEffect(() => {
     return window.api.onConfigUpdated((newCfg) => {
       if (Array.isArray(newCfg.providers) && newCfg.providers.length > 0) {
         setProviders(newCfg.providers)
-        const prov =
-          newCfg.providers.find((p) => p.id === newCfg.activeProviderId && p.enabled) ||
-          newCfg.providers.find((p) => p.enabled) ||
-          newCfg.providers[0]
+        const prov = pickActiveProvider(newCfg.providers, [newCfg.activeProviderId])
 
-        setSelectedProviderId(prov.id)
-        localStorage.setItem('selectedProviderId', prov.id)
+        if (!prov) {
+          // 设置页把所有渠道都停用了：清空选择，别让主界面继续挂着旧渠道和旧模型名
+          clearActiveProviderSelection()
+        } else {
+          setSelectedProviderId(prov.id)
+          localStorage.setItem('selectedProviderId', prov.id)
 
-        const finalModel =
-          newCfg.activeModelId || prov.defaultModel || prov.models[0]?.id || 'deepseek-chat'
-        setSelectedModel(finalModel)
-        localStorage.setItem('selectedModel', finalModel)
+          const finalModel = newCfg.activeModelId || prov.defaultModel || prov.models[0]?.id || ''
+          setSelectedModel(finalModel)
+          localStorage.setItem('selectedModel', finalModel)
+        }
       }
 
       if (newCfg.translation) {
@@ -394,7 +396,7 @@ function App(): React.JSX.Element {
         setIsPinned(newCfg.general.alwaysOnTop)
       }
     })
-  }, [])
+  }, [clearActiveProviderSelection])
 
   const resetTranslationState = (): void => {
     setTargetText('')
@@ -499,6 +501,15 @@ function App(): React.JSX.Element {
 
     // 防抖处理，避免频繁调用翻译接口
     const timer = window.setTimeout(async () => {
+      // 没有启用的渠道就直接给反馈：空 providerId 会在主进程里回落到配置里的默认渠道，
+      // 那可能正是用户刚停用的那个，等于"停用了却还在用"
+      if (!selectedProviderId || !selectedModel) {
+        setTargetText('')
+        setErrorMessage('还没有启用任何服务商，请先在偏好设置里启用一个')
+        setStatus('error')
+        return
+      }
+
       const response = await window.api.translateText({
         text: sourceText,
         sourceLanguage: effectiveSourcePrompt,
@@ -554,8 +565,13 @@ function App(): React.JSX.Element {
     })
   }, [])
 
+  // 模型选择持久化：没有可用模型时清掉记忆值，避免下次启动读到一个已经失效的模型名
   useEffect(() => {
-    localStorage.setItem('selectedModel', selectedModel)
+    if (selectedModel) {
+      localStorage.setItem('selectedModel', selectedModel)
+    } else {
+      localStorage.removeItem('selectedModel')
+    }
   }, [selectedModel])
 
   useEffect(() => {
@@ -902,11 +918,15 @@ function App(): React.JSX.Element {
                     type="button"
                     aria-haspopup="listbox"
                     aria-expanded={isModelMenuOpen}
-                    aria-label={`当前服务商: ${activeProvider?.name || '默认'}，模型: ${selectedModel}，点击在下方屏幕展开选择`}
+                    aria-label={
+                      activeProvider
+                        ? `当前服务商: ${activeProvider.name}，模型: ${selectedModel}，点击在下方屏幕展开选择`
+                        : '当前没有启用任何服务商，点击在下方屏幕查看'
+                    }
                     title={
                       activeProvider
                         ? `服务商: ${activeProvider.name}\n模型: ${selectedModel}\n地址: ${activeProvider.baseUrl}`
-                        : selectedModel
+                        : '当前没有启用任何服务商，请在偏好设置里启用一个'
                     }
                     onClick={() => {
                       setIsSourceLangMenuOpen(false)
@@ -919,7 +939,7 @@ function App(): React.JSX.Element {
                     }}
                   >
                     <span className="section-header-label">MODEL:</span>
-                    <span className="section-header-value">{selectedModel}</span>
+                    <span className="section-header-value">{selectedModel || '--'}</span>
                   </button>
                 </div>
               </>
@@ -1113,45 +1133,9 @@ function App(): React.JSX.Element {
                       </div>
                     </>
                   ) : (
-                    /* 兜底单列列表 (Fallback) */
-                    <div
-                      className="terminal-engine-models-list"
-                      role="listbox"
-                      aria-label="可用引擎列表"
-                    >
-                      {modelOptions.map((option) => {
-                        const isSelected = option.value === selectedModel
-
-                        return (
-                          <button
-                            key={option.value}
-                            className={`terminal-engine-option ${isSelected ? 'terminal-engine-option-selected' : ''}`}
-                            type="button"
-                            role="option"
-                            aria-selected={isSelected}
-                            onClick={() => handleModelSelect('deepseek', option.value)}
-                          >
-                            <span className="terminal-engine-code">{option.code}</span>
-                            <span className="terminal-engine-body">
-                              <span className="terminal-engine-name">{option.value}</span>
-                              <span className="terminal-engine-profile">
-                                {option.profile &&
-                                option.profile !== 'CUSTOM' &&
-                                option.profile !== 'CUSTOM MODEL'
-                                  ? option.profile
-                                  : option.baseUrl
-                                    ? option.baseUrl.replace(/^https?:\/\//, '').split('/')[0]
-                                    : option.profile}
-                              </span>
-                            </span>
-                            {isSelected ? (
-                              <span className="terminal-engine-active-tag">ACTIVE</span>
-                            ) : (
-                              <span className="terminal-engine-dot-standby" aria-hidden="true" />
-                            )}
-                          </button>
-                        )
-                      })}
+                    /* 一个启用的服务商都没有：这里以前兜底列出写死的示例模型，会把人引到不存在的渠道上 */
+                    <div className="terminal-engine-empty-hint terminal-engine-empty-hint-deck">
+                      还没有启用任何服务商，点下方设置按钮去启用
                     </div>
                   )}
                 </div>

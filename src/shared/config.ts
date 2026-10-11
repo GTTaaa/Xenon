@@ -38,7 +38,10 @@ export interface ProviderItem {
 }
 
 /**
- * 模型选项单项配置（保留用于向下兼容老版本模型池）
+ * 模型选项单项配置。
+ * 早期版本用它承载主窗口的模型池，如今模型全部由 providers 承担；
+ * 这里只保留结构定义，供 configManager 从老配置文件里捞出遗留的 API Key 做迁移，
+ * 界面不再读写它。
  */
 export interface ModelOptionItem {
   /** 模型调用标识符，如 gpt-4o-mini、deepseek-chat、cline-pass/deepseek-v4.1-flash */
@@ -75,7 +78,7 @@ export interface LLMConfig {
   apiKey?: string
   /** 默认使用的模型名称 */
   model?: string
-  /** 用户配置的快捷模型备选池 */
+  /** 用户配置的快捷模型备选池（仅用于老配置迁移，界面不再使用） */
   modelOptions?: ModelOptionItem[]
 }
 
