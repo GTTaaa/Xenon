@@ -7,11 +7,19 @@
  *   两个键都不再被读写。
  * - targetChipStyle：
  *   目标语言 Chip 选中样式的双方案切换（vernier / inset），已随方案收敛移除。
+ * - enableThinking：
+ *   「深度思考推理」开关的本地记忆值。该功能已整体移除（推理只会拖慢翻译，
+ *   且开与不开在翻译质量上没有可感知差异），主窗口按钮与偏好设置开关一并删除。
  *
  * 这些键不会再被任何代码访问，但会永久留在老用户的磁盘上，
  * 因此在渲染层启动时统一清理一次。
  */
-const LEGACY_STORAGE_KEYS = ['xenon_pref_theme', 'xenon_pref_theme_v2', 'targetChipStyle'] as const
+const LEGACY_STORAGE_KEYS = [
+  'xenon_pref_theme',
+  'xenon_pref_theme_v2',
+  'targetChipStyle',
+  'enableThinking'
+] as const
 
 /**
  * 清理已废弃的 localStorage 键。

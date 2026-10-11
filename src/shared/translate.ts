@@ -23,6 +23,4 @@ export interface TranslateOptions {
   providerId?: string
   /** 指定模型 ID，如 'deepseek-chat' 或 'cline-pass/deepseek-v4.1-flash' */
   model?: string
-  /** 是否开启大模型深度思考/推理模式 */
-  enableThinking?: boolean
 }

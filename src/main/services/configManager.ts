@@ -41,7 +41,7 @@ export const DEFAULT_PROVIDERS: ProviderItem[] = [
     enabled: true,
     models: [
       { id: 'deepseek-chat', label: 'DeepSeek-V3 对话模型' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek-R1 深度推理', enableThinking: true }
+      { id: 'deepseek-reasoner', label: 'DeepSeek-R1 深度推理' }
     ],
     defaultModel: 'deepseek-chat'
   },
@@ -134,10 +134,6 @@ export const sanitizeTranslationSettings = (
       typeof raw?.autoCopyResult === 'boolean'
         ? raw.autoCopyResult
         : DEFAULT_TRANSLATION_SETTINGS.autoCopyResult,
-    defaultEnableThinking:
-      typeof raw?.defaultEnableThinking === 'boolean'
-        ? raw.defaultEnableThinking
-        : DEFAULT_TRANSLATION_SETTINGS.defaultEnableThinking,
     customSystemPrompt: typeof raw?.customSystemPrompt === 'string' ? raw.customSystemPrompt : ''
   }
 }
@@ -186,12 +182,10 @@ const sanitizeProviders = (
               .map((m: unknown) => {
                 if (typeof m === 'string' && m.trim()) return { id: m.trim() }
                 if (m && typeof m === 'object' && typeof (m as { id?: string }).id === 'string') {
-                  const obj = m as { id: string; label?: string; enableThinking?: boolean }
+                  const obj = m as { id: string; label?: string }
                   return {
                     id: obj.id.trim(),
-                    label: typeof obj.label === 'string' ? obj.label.trim() : undefined,
-                    enableThinking:
-                      typeof obj.enableThinking === 'boolean' ? obj.enableThinking : undefined
+                    label: typeof obj.label === 'string' ? obj.label.trim() : undefined
                   }
                 }
                 return null
@@ -299,8 +293,7 @@ export const getLLMConfig = (): AppSettings => {
         provider: 'openai-compatible',
         baseUrl: currentProvider.baseUrl,
         apiKey: currentProvider.apiKey,
-        model: activeModelId,
-        enableThinking: Boolean(parsed.enableThinking)
+        model: activeModelId
       }
       return cachedConfig
     }
@@ -319,8 +312,7 @@ export const getLLMConfig = (): AppSettings => {
     provider: 'openai-compatible',
     baseUrl: defaultProviders[0].baseUrl,
     apiKey: '',
-    model: 'deepseek-chat',
-    enableThinking: false
+    model: 'deepseek-chat'
   }
   return cachedConfig
 }
@@ -356,8 +348,7 @@ export const saveLLMConfig = async (
       provider: 'openai-compatible',
       baseUrl: activeProvider.baseUrl,
       apiKey: activeProvider.apiKey,
-      model: activeModelId,
-      enableThinking: Boolean(newConfig.enableThinking)
+      model: activeModelId
     }
 
     writeFileSync(filePath, JSON.stringify(sanitizedConfig, null, 2), 'utf-8')

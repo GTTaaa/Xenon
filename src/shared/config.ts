@@ -13,8 +13,6 @@ export interface ProviderModelItem {
   id: string
   /** 显示名称或说明，如 'DeepSeek V3', 'Qwen 3.7 Max' */
   label?: string
-  /** 是否默认开启深度思考 */
-  enableThinking?: boolean
 }
 
 /**
@@ -55,8 +53,6 @@ export interface ModelOptionItem {
   baseUrl?: string
   /** 该模型专属的访问密钥（可选，未设置时继承全局 apiKey） */
   apiKey?: string
-  /** 该模型是否默认启用深度思考（可选） */
-  enableThinking?: boolean
 }
 
 /**
@@ -79,8 +75,6 @@ export interface LLMConfig {
   apiKey?: string
   /** 默认使用的模型名称 */
   model?: string
-  /** 默认是否启用大模型深度思考/推理模式 */
-  enableThinking?: boolean
   /** 用户配置的快捷模型备选池 */
   modelOptions?: ModelOptionItem[]
 }
@@ -133,8 +127,6 @@ export interface TranslationSettings {
   defaultTargetLanguage: string
   /** 翻译成功后是否自动写入系统剪贴板 */
   autoCopyResult: boolean
-  /** 默认是否开启深度思考推理模式 */
-  defaultEnableThinking: boolean
   /** 自定义翻译系统提示词（留空使用系统内置精准提示词） */
   customSystemPrompt?: string
 }
@@ -178,7 +170,6 @@ export const DEFAULT_SHORTCUTS: ShortcutSettings = {
 export const DEFAULT_TRANSLATION_SETTINGS: TranslationSettings = {
   defaultTargetLanguage: 'zh-CN',
   autoCopyResult: false,
-  defaultEnableThinking: false,
   customSystemPrompt: ''
 }
 

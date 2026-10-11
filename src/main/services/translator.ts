@@ -50,28 +50,12 @@ const translateWithOpenAICompatible = async (
     .replace(/\/$/, '')
   const endpoint = `${cleanBaseUrl}/chat/completions`
   const model = request.options?.model || config.model || 'gpt-4o-mini'
-  const enableThinking =
-    request.options?.enableThinking ??
-    config.enableThinking ??
-    config.translation?.defaultEnableThinking ??
-    false
 
   const customPrompt = config.translation?.customSystemPrompt?.trim()
   let systemContent = ''
 
   if (customPrompt) {
     systemContent = customPrompt
-  } else if (enableThinking) {
-    systemContent = [
-      'You are a translation engine with deep reasoning enabled.',
-      'Translate the user text accurately.',
-      'Preserve the original structure exactly:',
-      '- keep the same line breaks and paragraph breaks',
-      '- do not merge or split lines',
-      '- keep URLs, list structure, headings, dates, and separators in their original positions',
-      '- translate only the text content; do not rewrite, summarize, or reformat',
-      'Output only the translated text.'
-    ].join('\n')
   } else {
     systemContent = [
       'You are a translation engine.',
@@ -101,13 +85,6 @@ const translateWithOpenAICompatible = async (
       ]
     }
 
-    // 仅当用户明确开启深度思考时传递 thinking 扩展参数，避免标准 OpenAI 兼容代理网关报 400 校验错误
-    if (enableThinking) {
-      requestBody.thinking = {
-        type: 'enabled'
-      }
-    }
-
     console.log('[main] translateWithOpenAICompatible 发起请求 ->', endpoint, '模型:', model)
 
     // 使用 Electron 的 net.fetch，自动继承 macOS 操作系统代理配置（支持 VPN、Clash 等网络环境）
@@ -128,7 +105,6 @@ const translateWithOpenAICompatible = async (
       choices?: Array<{
         message?: {
           content?: string | Array<{ text?: string; content?: string }>
-          reasoning_content?: string
         }
         text?: string
       }>
@@ -168,8 +144,6 @@ const translateWithOpenAICompatible = async (
         .map((item) => (typeof item === 'object' ? item.text || item.content || '' : String(item)))
         .join('')
         .trim()
-    } else if (firstChoice?.message?.reasoning_content) {
-      text = firstChoice.message.reasoning_content.trim()
     } else if (typeof firstChoice?.text === 'string') {
       text = firstChoice.text.trim()
     }
@@ -179,12 +153,10 @@ const translateWithOpenAICompatible = async (
       throw new TranslateServiceError('EMPTY_RESPONSE', '模型返回内容为空')
     }
 
-    // 关闭思考模式时，若模型仍然返回了 <think> 标签内容，自动将其剥离保持译文纯净
-    if (!enableThinking) {
-      const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
-      // 若模型将所有内容均包裹在 think 标签内，剥离后为空时兜底使用原始内容，防止抛出空响应异常
-      text = stripped || text
-    }
+    // 译文区只放翻译结果：模型若把推理过程包在 <think> 标签里返回，一律剥离
+    const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+    // 若模型将所有内容均包裹在 think 标签内，剥离后为空时兜底使用原始内容，防止抛出空响应异常
+    text = stripped || text
 
     console.log('[main] 翻译提取成功，结果长度:', text.length)
 
@@ -243,21 +215,12 @@ export const translateText = async (request: TranslateRequest): Promise<Translat
     const effectiveProviderType =
       targetProvider?.providerType || config.provider || 'openai-compatible'
 
-    // 检查模型本身是否配置了默认思考开关
-    const matchedModelObj = targetProvider?.models?.find((m) => m.id === targetModel)
-    const effectiveThinking =
-      request.options?.enableThinking ??
-      matchedModelObj?.enableThinking ??
-      config.enableThinking ??
-      false
-
     console.log('[main] translateText 厂商隔离路由分发:', {
       providerName: targetProvider?.name ?? '未知服务商',
       providerId: targetProvider?.id,
       targetModel,
       endpoint: effectiveBaseUrl,
-      hasApiKey: Boolean(effectiveApiKey),
-      enableThinking: effectiveThinking
+      hasApiKey: Boolean(effectiveApiKey)
     })
 
     if (!effectiveApiKey) {
@@ -285,8 +248,7 @@ export const translateText = async (request: TranslateRequest): Promise<Translat
       provider: effectiveProviderType,
       baseUrl: effectiveBaseUrl,
       apiKey: effectiveApiKey,
-      model: targetModel,
-      enableThinking: effectiveThinking
+      model: targetModel
     }
 
     if (effectiveProviderType === 'mock') {

@@ -93,10 +93,6 @@ function App(): React.JSX.Element {
   const requestIdRef = useRef(0)
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [modelOptions, setModelOptions] = useState<ModelOptionItem[]>(INITIAL_MODEL_OPTIONS)
-  const [enableThinking, setEnableThinking] = useState<boolean>(() => {
-    const saved = localStorage.getItem('enableThinking')
-    return saved === 'true'
-  })
   const [providers, setProviders] = useState<ProviderItem[]>([])
   const [selectedProviderId, setSelectedProviderId] = useState<string>(() => {
     return localStorage.getItem('selectedProviderId') || 'deepseek'
@@ -360,13 +356,6 @@ function App(): React.JSX.Element {
           setModelOptions(cfg.modelOptions)
         }
 
-        if (
-          localStorage.getItem('enableThinking') === null &&
-          typeof cfg.enableThinking === 'boolean'
-        ) {
-          setEnableThinking(cfg.enableThinking)
-        }
-
         if (cfg.translation) {
           autoCopyRef.current = Boolean(cfg.translation.autoCopyResult)
         }
@@ -446,18 +435,6 @@ function App(): React.JSX.Element {
     }
   }
 
-  // 切换大模型思考模式
-  const handleToggleThinking = (): void => {
-    setEnableThinking((prev) => {
-      const next = !prev
-      localStorage.setItem('enableThinking', String(next))
-      return next
-    })
-    if (sourceText.trim()) {
-      markTranslationPending()
-    }
-  }
-
   // 监听多浮层外部点击与 Esc 按键关闭
   useEffect(() => {
     if (!isModelMenuOpen && !isSourceLangMenuOpen && !isTargetLangMenuOpen) return
@@ -528,8 +505,7 @@ function App(): React.JSX.Element {
         targetLanguage: effectiveTargetPrompt,
         options: {
           providerId: selectedProviderId,
-          model: selectedModel,
-          enableThinking
+          model: selectedModel
         }
       })
       if (currentRequestId !== requestIdRef.current) return
@@ -565,7 +541,6 @@ function App(): React.JSX.Element {
     selectedProviderId,
     selectedModel,
     sourceText,
-    enableThinking,
     sourceLanguage,
     effectiveTargetLang,
     detectedInfo.detected,
@@ -616,14 +591,6 @@ function App(): React.JSX.Element {
     localStorage.setItem('selectedModel', nextModel)
     closeModelMenu()
     setDeckFocusedProviderId(null)
-
-    // 若该模型有默认思考配置，自动调整
-    const prov = providers.find((p) => p.id === providerId)
-    const m = prov?.models.find((item) => item.id === nextModel)
-    if (typeof m?.enableThinking === 'boolean') {
-      setEnableThinking(m.enableThinking)
-      localStorage.setItem('enableThinking', String(m.enableThinking))
-    }
 
     if (sourceText.trim()) {
       markTranslationPending()
@@ -798,68 +765,6 @@ function App(): React.JSX.Element {
               <div className="display-screen-actions">
                 <span className="display-screen-actions-label">INPUT ACTIONS</span>
                 <div className="display-screen-actions-list">
-                  <button
-                    className={`display-screen-action-button display-screen-action-button-think ${
-                      enableThinking ? 'display-screen-action-button-think-active' : ''
-                    }`}
-                    type="button"
-                    onClick={handleToggleThinking}
-                    aria-label={
-                      enableThinking
-                        ? '深度思考模式: 已开启 (点击关闭)'
-                        : '深度思考模式: 已关闭 (点击开启)'
-                    }
-                    title={
-                      enableThinking
-                        ? '深度思考模式: 已开启 (点击关闭)'
-                        : '深度思考模式: 已关闭 (点击开启)'
-                    }
-                  >
-                    {enableThinking ? (
-                      <svg
-                        className="display-screen-action-icon display-screen-action-icon-toggle"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        aria-hidden="true"
-                      >
-                        {/* 开启态：通透亮绿线框胶囊 + 微弱通电底色 + 右侧实心亮绿滑块 */}
-                        <rect
-                          x="2.5"
-                          y="5.5"
-                          width="19"
-                          height="13"
-                          rx="6.5"
-                          stroke="currentColor"
-                          strokeWidth="1.4"
-                          fill="currentColor"
-                          fillOpacity="0.14"
-                        />
-                        <circle cx="15.5" cy="12" r="4" fill="currentColor" />
-                      </svg>
-                    ) : (
-                      <svg
-                        className="display-screen-action-icon display-screen-action-icon-toggle"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        aria-hidden="true"
-                      >
-                        {/* 关闭态：暗线空心胶囊 + 左侧暗淡滑块 */}
-                        <rect
-                          x="2.5"
-                          y="5.5"
-                          width="19"
-                          height="13"
-                          rx="6.5"
-                          stroke="currentColor"
-                          strokeWidth="1.4"
-                          fill="none"
-                        />
-                        <circle cx="8.5" cy="12" r="3.4" fill="currentColor" fillOpacity="0.7" />
-                      </svg>
-                    )}
-                  </button>
                   <button
                     className="display-screen-action-button display-screen-action-button-capture"
                     type="button"

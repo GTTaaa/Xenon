@@ -122,7 +122,7 @@ const PRESET_TEMPLATES: ProviderTemplate[] = [
     defaultModel: 'deepseek-chat',
     models: [
       { id: 'deepseek-chat', label: 'DeepSeek-V3 对话' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek-R1 深度推理', enableThinking: true }
+      { id: 'deepseek-reasoner', label: 'DeepSeek-R1 深度推理' }
     ]
   },
   {
@@ -1119,30 +1119,6 @@ export const ConfigPage = (): React.JSX.Element => {
                     </div>
                     <div
                       className={`pref-switch ${translation.autoCopyResult ? 'pref-switch-on' : ''}`}
-                    >
-                      <div className="pref-switch-thumb" />
-                    </div>
-                  </div>
-
-                  {/* 默认启用深度思考推理 */}
-                  <div
-                    className="pref-switch-row"
-                    onClick={() =>
-                      setTranslation((prev) => ({
-                        ...prev,
-                        defaultEnableThinking: !prev.defaultEnableThinking
-                      }))
-                    }
-                  >
-                    <div className="pref-switch-desc">
-                      <span className="pref-switch-name">默认开启深度思考推理模式 (Thinking)</span>
-                      <span className="pref-switch-sub">
-                        若模型支持（如 DeepSeek-R1 /
-                        QwQ），将开启深度逻辑链思考，译文更考究但在响应上略有延迟
-                      </span>
-                    </div>
-                    <div
-                      className={`pref-switch ${translation.defaultEnableThinking ? 'pref-switch-on' : ''}`}
                     >
                       <div className="pref-switch-thumb" />
                     </div>

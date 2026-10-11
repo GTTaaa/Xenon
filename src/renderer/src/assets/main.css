@@ -905,42 +905,6 @@ body {
   border-bottom-color: rgba(0, 240, 90, 0.18);
 }
 
-/* 深度思考模式屏幕动作按钮 (谷歌 Material Toggle) */
-.display-screen-action-button-think {
-  width: 28px;
-  height: 22px;
-  border: 0;
-  background: transparent;
-  color: rgba(0, 240, 90, 0.62);
-  transition: color 120ms ease;
-}
-
-.display-screen-action-button-think:hover:not(:disabled) {
-  color: rgba(0, 240, 90, 0.9);
-}
-
-.display-screen-action-button-think-active {
-  color: #00f05a;
-  opacity: 1;
-}
-
-.display-screen-action-button-think-active:hover:not(:disabled) {
-  opacity: 1;
-  filter: brightness(1.15);
-}
-
-.display-screen-action-icon-toggle {
-  width: 24px;
-  height: 18px;
-  display: block;
-  overflow: visible;
-  transition: transform 120ms ease;
-}
-
-.display-screen-action-button-think:active .display-screen-action-icon-toggle {
-  transform: scale(0.94);
-}
-
 .display-screen-action-button-copy {
   border-bottom-color: rgba(0, 240, 90, 0.18);
 }
@@ -1405,16 +1369,6 @@ body {
   .display-screen-action-icon {
     width: 12px;
     height: 12px;
-  }
-
-  .display-screen-action-button-think {
-    width: 25px;
-    height: 20px;
-  }
-
-  .display-screen-action-icon-toggle {
-    width: 21px;
-    height: 16px;
   }
 
   .display-screen-action-icon-crop {
@@ -2133,7 +2087,7 @@ body {
   color: var(--pref-input-placeholder, var(--pref-text-muted));
 }
 
-/* 深度思考 Switch 拨动开关 */
+/* 设置项开关行（左侧名称与说明 + 右侧拨动开关） */
 .pref-switch-row {
   display: flex;
   align-items: center;
