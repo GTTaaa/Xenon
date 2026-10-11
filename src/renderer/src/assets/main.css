@@ -1762,8 +1762,9 @@ body {
   /* 浅色强调底上的文字（深绿） */
   --pref-accent-ink: #0f6b3d;
 
-  /* 拨动开关轨道：关闭浅灰、开启近黑（与"保存"按钮同色），绿色只留给状态点 */
-  --pref-switch-off-bg: #e3e3e8;
+  /* 拨动开关轨道：关闭浅灰、开启近黑（与"保存"按钮同色），绿色只留给状态点。
+     关闭态靠滑块描边与阴影勾出圆点，不靠把轨道压深 */
+  --pref-switch-off-bg: #dcdce2;
   --pref-switch-on-bg: #1c1c21;
 
   /* 主行动按钮（保存）：近黑实心 + 白字，把最亮的视觉权重从绿色手里收回来 */
@@ -2178,6 +2179,14 @@ body {
   background: var(--pref-switch-off-bg);
   border-radius: 10px;
   padding: 2px;
+  /*
+   * 开关在列表行里是 <button>、在设置项里是 <div>。
+   * 按钮的浏览器默认外观会带一条近黑描边（关闭态浅轨道上尤其明显，像"黑框空心胶囊"），
+   * 所以这里必须显式清掉，两种标签才长得完全一样。
+   */
+  border: none;
+  appearance: none;
+  -webkit-appearance: none;
   transition: background 160ms ease;
   position: relative;
   flex-shrink: 0;
@@ -2195,7 +2204,10 @@ body {
   height: 16px;
   background: #ffffff;
   border-radius: 50%;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  /* 描边负责勾轮廓（关闭态的浅轨道上也看得见），阴影负责"浮起"的机械感 */
+  box-shadow:
+    0 0 0 1px rgba(28, 28, 33, 0.08),
+    0 1px 2px rgba(28, 28, 33, 0.28);
   transition: transform 160ms ease;
 }
 
@@ -3033,7 +3045,6 @@ body {
   max-height: 85vh;
   background: var(--pref-modal-bg);
   border: 1px solid var(--pref-modal-border);
-  border-top: 3px solid var(--pref-accent);
   border-radius: var(--pref-radius-card);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
   display: flex;
