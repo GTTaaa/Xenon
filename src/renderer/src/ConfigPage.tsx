@@ -172,6 +172,13 @@ const PRESET_TEMPLATES: ProviderTemplate[] = [
   }
 ]
 
+/**
+ * 挑选接手默认渠道的服务商：优先仍然启用的，全都被停用时才退回首项。
+ * 直接取列表首项会挑到"未启用"分组里的渠道，导致主界面翻译不可用。
+ */
+const pickNextPrimaryProvider = (list: ProviderItem[]): ProviderItem | undefined =>
+  list.find((p) => p.enabled) ?? list[0]
+
 export const ConfigPage = (): React.JSX.Element => {
   // 当前处于的左侧分类
   const [activeCategory, setActiveCategory] = useState<PrefNavCategory>('providers')
@@ -213,6 +220,8 @@ export const ConfigPage = (): React.JSX.Element => {
   const dirtyBaselineRef = useRef<string | null>(null)
   // 有未保存改动时点关闭/取消，先弹确认而不是静默丢弃
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  // 待确认删除的服务商 ID：非 null 即弹出删除二次确认层
+  const [pendingDeleteProviderId, setPendingDeleteProviderId] = useState<string | null>(null)
 
   // 当前厂商新加单模型输入框
   const [newModelId, setNewModelId] = useState('')
@@ -332,6 +341,10 @@ export const ConfigPage = (): React.JSX.Element => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        if (pendingDeleteProviderId !== null) {
+          setPendingDeleteProviderId(null)
+          return
+        }
         if (showFetchModal) {
           setShowFetchModal(false)
           return
@@ -360,10 +373,24 @@ export const ConfigPage = (): React.JSX.Element => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [showFetchModal, showErrorModal, showCloseConfirm, isProviderDialogOpen, isDirty])
+  }, [
+    pendingDeleteProviderId,
+    showFetchModal,
+    showErrorModal,
+    showCloseConfirm,
+    isProviderDialogOpen,
+    isDirty
+  ])
 
   // 当前正在查看编辑的厂商
   const activeProvider = providers.find((p) => p.id === selectedTabId) || providers[0]
+
+  // 删除确认弹窗的目标服务商
+  const pendingDeleteProvider = providers.find((p) => p.id === pendingDeleteProviderId)
+  // 删除后接手默认渠道的候选：与 handleDeleteProvider 共用同一套挑选策略
+  const nextPrimaryProvider = pickNextPrimaryProvider(
+    pendingDeleteProvider ? providers.filter((p) => p.id !== pendingDeleteProvider.id) : []
+  )
 
   /**
    * 自动清洗 Base URL
@@ -480,21 +507,41 @@ export const ConfigPage = (): React.JSX.Element => {
       return
     }
 
+    const removedName = providers.find((p) => p.id === providerIdToDelete)?.name ?? '该服务商'
     const nextList = providers.filter((p) => p.id !== providerIdToDelete)
+    const wasPrimary = activeProviderId === providerIdToDelete
     setProviders(nextList)
 
     if (selectedTabId === providerIdToDelete) {
       setSelectedTabId(nextList[0].id)
     }
 
-    // 若删除的是主用服务商，自动将首项设为主用
-    if (activeProviderId === providerIdToDelete) {
-      setActiveProviderId(nextList[0].id)
+    // 删除后接手默认渠道的候选
+    const nextPrimary = pickNextPrimaryProvider(nextList)
+
+    // 若删除的是主用服务商，把默认渠道交给候选者
+    if (wasPrimary && nextPrimary) {
+      setActiveProviderId(nextPrimary.id)
     }
 
     // 详情弹窗还停在被删掉的服务商上会跳到别的渠道，直接收起更符合预期
     setIsProviderDialogOpen(false)
-    showFeedback('已移除该服务商')
+    showFeedback(
+      wasPrimary && nextPrimary
+        ? `已删除【${removedName}】，主界面默认渠道已切到【${nextPrimary.name}】`
+        : `已删除【${removedName}】`
+    )
+  }
+
+  /**
+   * 确认删除待删服务商。
+   * 先收起确认层再执行删除，避免删除后残留一个指向已消失服务商的弹窗状态。
+   */
+  const confirmPendingDelete = (): void => {
+    const targetId = pendingDeleteProviderId
+    setPendingDeleteProviderId(null)
+    if (!targetId) return
+    handleDeleteProvider(targetId)
   }
 
   /**
@@ -1355,7 +1402,7 @@ export const ConfigPage = (): React.JSX.Element => {
                         <button
                           type="button"
                           className="pref-field-btn pref-field-btn-danger"
-                          onClick={() => handleDeleteProvider(activeProvider.id)}
+                          onClick={() => setPendingDeleteProviderId(activeProvider.id)}
                         >
                           删除该服务商
                         </button>
@@ -1886,6 +1933,50 @@ export const ConfigPage = (): React.JSX.Element => {
               >
                 关闭
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 删除服务商确认：删除不可逆，且可能顺带改掉主界面默认渠道，必须先确认 */}
+      {pendingDeleteProvider ? (
+        <div className="pref-modal-mask" onClick={() => setPendingDeleteProviderId(null)}>
+          <div className="pref-modal-card pref-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="pref-modal-header">
+              <div className="pref-modal-title">
+                <span>删除服务商</span>
+              </div>
+            </div>
+
+            <div className="pref-modal-body pref-confirm-body">
+              <p className="pref-confirm-text">
+                {`确定删除【${pendingDeleteProvider.name}】吗？该服务商下的 ${pendingDeleteProvider.models.length} 个模型配置会一并移除，此操作不可撤销。`}
+              </p>
+              {nextPrimaryProvider && pendingDeleteProviderId === activeProviderId ? (
+                <p className="pref-confirm-text pref-confirm-warn">
+                  {`它当前是主界面默认渠道，删除后默认渠道会自动切到【${nextPrimaryProvider.name}】。`}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="pref-modal-footer">
+              <div className="pref-modal-footer-left" />
+              <div className="pref-modal-footer-btns">
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-cancel"
+                  onClick={() => setPendingDeleteProviderId(null)}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-danger"
+                  onClick={confirmPendingDelete}
+                >
+                  删除服务商
+                </button>
+              </div>
             </div>
           </div>
         </div>

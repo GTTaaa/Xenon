@@ -1691,7 +1691,8 @@ body {
   /* 文本系统：近黑标题锚点 + 三级灰阶拉开层级（层级靠灰度，不靠加粗） */
   --pref-text-primary: #1c1c21;
   --pref-text-secondary: #4b4b53;
-  --pref-text-muted: #85858d;
+  /* 说明文字：白卡片上 4.50:1、米白底上 4.10:1，过 AA 正文线 */
+  --pref-text-muted: #76767e;
 
   /* 中性强调描边：悬停与"按下"状态共用的深一档灰 */
   --pref-border-strong: #b9b9c2;
@@ -2781,6 +2782,25 @@ body {
   transform: translateY(1px);
 }
 
+/* 危险动作主按钮（删除服务商等不可逆操作）：红底白字，和"保存"的黑色实心区分开 */
+.pref-btn-danger {
+  background: #b93f3f;
+  border: 1px solid #b93f3f;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.pref-btn-danger:hover:not(:disabled) {
+  background: #a53131;
+  border-color: #a53131;
+}
+
+.pref-btn-danger:active:not(:disabled) {
+  background: #8f2727;
+  transform: translateY(1px);
+}
+
 .pref-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -3079,6 +3099,12 @@ body {
   font-size: 12px;
   line-height: 1.7;
   color: var(--pref-text-secondary);
+}
+
+/* 确认弹窗里的连带影响提示：说明本次操作还会改动什么，避免"确认完才发现" */
+.pref-confirm-warn {
+  margin-top: 8px;
+  color: #b93f3f;
 }
 
 /* 弹窗主体通用区：吃满剩余高度并内部滚动，内容再多也不会把底部动作条顶出视野 */
