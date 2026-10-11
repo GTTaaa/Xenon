@@ -237,8 +237,7 @@ body {
 }
 
 /* 贴边元素改用内缩焦点环，避免轮廓被 overflow 裁掉 */
-.terminal-engine-models-list .terminal-engine-option:focus-visible,
-.terminal-engine-sidebar .terminal-engine-provider-item:focus-visible {
+.terminal-engine-models-list .terminal-engine-option:focus-visible {
   outline-offset: -2px;
 }
 
@@ -302,8 +301,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
-  padding-bottom: 5px;
+  margin-bottom: 5px;
+  padding-bottom: 4px;
   border-bottom: 1px solid rgba(0, 240, 90, 0.14);
   flex-shrink: 0;
 }
@@ -323,7 +322,7 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #00f05a;
+  background: var(--screen-green);
   box-shadow: 0 0 6px rgba(0, 240, 90, 0.95);
   animation: terminalPulse 2s infinite ease-in-out;
 }
@@ -341,24 +340,17 @@ body {
   }
 }
 
-.terminal-engine-deck-count {
-  display: inline-flex;
+/* 头部右侧动作区：设置入口 + 关闭 */
+.terminal-engine-deck-actions {
+  display: flex;
   align-items: center;
-  font-size: 7.5px;
-  font-weight: 700;
-  font-family: var(--font-display);
-  color: #00f05a;
-  background: rgba(0, 240, 90, 0.1);
-  border: 1px solid rgba(0, 240, 90, 0.24);
-  border-radius: 999px;
-  padding: 1px 6px;
-  margin-left: 4px;
-  letter-spacing: 0.5px;
+  gap: 5px;
+  flex-shrink: 0;
 }
 
 .terminal-engine-deck-close {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -366,10 +358,35 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 3px;
   color: #7b8898;
-  font-size: 9px;
+  font-size: 8px;
   cursor: pointer;
   transition: all 120ms ease;
   -webkit-app-region: no-drag;
+}
+
+/* 设置入口写成文字胶囊：这个尺寸下图标认不出来，文字不用猜 */
+.terminal-engine-deck-config {
+  height: 16px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  background: rgba(0, 240, 90, 0.1);
+  border: 1px solid rgba(0, 240, 90, 0.45);
+  border-radius: 3px;
+  color: rgba(0, 240, 90, 0.95);
+  font-family: var(--font-display);
+  font-size: 6.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  transition: all 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.terminal-engine-deck-config:hover {
+  background: rgba(0, 240, 90, 0.2);
+  border-color: rgba(0, 240, 90, 0.75);
+  color: var(--screen-green);
 }
 
 .terminal-engine-deck-close:hover {
@@ -378,168 +395,14 @@ body {
   color: #ff6b6b;
 }
 
-/* 引擎选择面板左右分栏容器 */
-.terminal-engine-deck-split {
-  flex: 1 1 auto;
-  display: flex;
-  gap: 8px;
-  min-height: 0;
-  margin-bottom: 6px;
-  overflow: hidden;
-}
-
-/* 左侧服务商切换边栏 */
-.terminal-engine-sidebar {
-  flex: 0 0 106px;
-  width: 106px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
-  min-height: 0;
-  border-right: 1px solid rgba(0, 240, 90, 0.12);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 240, 90, 0.3) transparent;
-}
-
-.terminal-engine-sidebar::-webkit-scrollbar {
-  width: 3px;
-}
-
-.terminal-engine-sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.terminal-engine-sidebar::-webkit-scrollbar-thumb {
-  background: rgba(0, 240, 90, 0.2);
-  border-radius: 3px;
-}
-
-.terminal-engine-sidebar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 240, 90, 0.5);
-}
-
-.terminal-engine-provider-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 5px 7px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: #8fa3b7;
-  font-family: var(--font-display);
-  font-size: 8.5px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 120ms ease;
-  text-align: left;
-  -webkit-app-region: no-drag;
-  box-sizing: border-box;
-}
-
-.terminal-engine-provider-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #dce5ef;
-}
-
-.terminal-engine-provider-item-active {
-  background: rgba(0, 240, 90, 0.12) !important;
-  border-color: rgba(0, 240, 90, 0.4) !important;
-  color: #ffffff !important;
-  box-shadow: 0 0 8px rgba(0, 240, 90, 0.08);
-}
-
-.terminal-engine-provider-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.terminal-engine-provider-dot.dot-active {
-  background: #00f05a;
-  box-shadow: 0 0 5px rgba(0, 240, 90, 0.9);
-}
-
-.terminal-engine-provider-dot.dot-idle {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.terminal-engine-provider-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.terminal-engine-provider-count {
-  font-size: 7px;
-  color: #5d6d7e;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.terminal-engine-provider-item-active .terminal-engine-provider-count {
-  color: #00f05a;
-  background: rgba(0, 240, 90, 0.18);
-}
-
-/* 右侧模型列表面板 */
-.terminal-engine-models-pane {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 0;
-}
-
-.terminal-engine-pane-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 3px 6px;
-  background: rgba(255, 255, 255, 0.02);
-  border-left: 2px solid #00f05a;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.terminal-engine-pane-badge {
-  font-family: var(--font-display);
-  font-size: 8px;
-  font-weight: 700;
-  color: #c4d1de;
-  letter-spacing: 0.6px;
-}
-
-.terminal-engine-pane-endpoint {
-  font-family: var(--font-display);
-  font-size: 7.5px;
-  color: #556270;
-  letter-spacing: 0.4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 140px;
-}
-
+/* 模型平铺列表：所有渠道一列排开，一次点击直达 */
 .terminal-engine-models-list {
   flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   padding-right: 4px;
   min-height: 0;
   scrollbar-width: thin;
@@ -566,6 +429,14 @@ body {
   box-shadow: 0 0 6px rgba(0, 240, 90, 0.4);
 }
 
+/* 渠道分隔线：只占 1px，不额外占一行高度 */
+.terminal-engine-group-sep {
+  height: 1px;
+  flex: 0 0 auto;
+  margin: 0 4px;
+  background: rgba(0, 240, 90, 0.13);
+}
+
 .terminal-engine-empty-hint {
   padding: 16px;
   text-align: center;
@@ -574,7 +445,7 @@ body {
   font-family: var(--font-display);
 }
 
-/* 引擎面板空状态：一个启用的服务商都没有时占满分栏区域并居中 */
+/* 引擎面板空状态：一个启用的服务商都没有时占满列表区域并居中 */
 .terminal-engine-empty-hint-deck {
   flex: 1 1 auto;
   display: flex;
@@ -584,62 +455,46 @@ body {
   line-height: 1.8;
 }
 
-/* 单个引擎模型选项按钮 */
+/* 单个模型行：左侧模型 id，右侧完整渠道名 */
 .terminal-engine-option {
   width: 100%;
+  height: 21px;
   display: grid;
-  grid-template-columns: 20px 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 4px;
-  color: #9aa7b8;
+  gap: 6px;
+  padding: 0 7px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: #c9d5e3;
   text-align: left;
   cursor: pointer;
-  transition: all 120ms ease;
+  position: relative;
+  overflow: hidden;
+  transition: background 120ms ease;
   -webkit-app-region: no-drag;
   box-sizing: border-box;
 }
 
 .terminal-engine-option:hover {
-  background: rgba(0, 240, 90, 0.06);
-  border-color: rgba(0, 240, 90, 0.3);
-  color: #dce5ef;
-  transform: translateX(1px);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .terminal-engine-option-selected {
-  background: linear-gradient(
-    90deg,
-    rgba(0, 240, 90, 0.12) 0%,
-    rgba(0, 240, 90, 0.04) 100%
-  ) !important;
-  border-color: rgba(0, 240, 90, 0.55) !important;
-  box-shadow:
-    0 0 10px rgba(0, 240, 90, 0.1),
-    inset 0 0 6px rgba(0, 240, 90, 0.04);
+  background: rgba(0, 240, 90, 0.12) !important;
 }
 
-.terminal-engine-code {
-  font-family: var(--font-display);
-  font-size: 8px;
-  color: #5d6d7e;
-  letter-spacing: 0.5px;
-  font-weight: 600;
-}
-
-.terminal-engine-option-selected .terminal-engine-code {
-  color: #00f05a;
-  font-weight: 700;
-}
-
-.terminal-engine-body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+/* 选中标记走伪元素，不占用行内宽度 */
+.terminal-engine-option-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--screen-green);
 }
 
 .terminal-engine-name {
@@ -656,77 +511,18 @@ body {
   color: #ffffff;
 }
 
-.terminal-engine-profile {
+/* 行尾渠道名：比模型名暗两级，只做归属提示 */
+.terminal-engine-provider {
   font-family: var(--font-display);
-  font-size: 7px;
-  color: #5d6d7e;
-  letter-spacing: 0.6px;
+  font-size: 6.5px;
+  letter-spacing: 0.3px;
+  color: #4d5a68;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
 }
 
-.terminal-engine-active-tag {
-  font-family: var(--font-display);
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  color: #00f05a;
-  background: rgba(0, 240, 90, 0.16);
-  border: 1px solid rgba(0, 240, 90, 0.45);
-  border-radius: 2px;
-  padding: 1px 5px;
-  line-height: 1;
-  box-shadow: 0 0 6px rgba(0, 240, 90, 0.2);
-}
-
-.terminal-engine-dot-standby {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  transition: all 120ms ease;
-}
-
-.terminal-engine-option:hover .terminal-engine-dot-standby {
-  background: rgba(0, 240, 90, 0.6);
-  box-shadow: 0 0 4px rgba(0, 240, 90, 0.6);
-}
-
-/* 底部配置按钮栏 */
-.terminal-engine-deck-footer {
-  margin-top: 5px;
-  padding-top: 5px;
-  border-top: 1px solid rgba(0, 240, 90, 0.12);
-  flex-shrink: 0;
-}
-
-.terminal-engine-config-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 24px;
-  padding: 0 8px;
-  background: rgba(0, 240, 90, 0.05);
-  border: 1px solid rgba(0, 240, 90, 0.24);
-  border-radius: 3px;
-  color: rgba(0, 240, 90, 0.9);
-  font-family: var(--font-display);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  cursor: pointer;
-  transition: all 120ms ease;
-  -webkit-app-region: no-drag;
-  box-sizing: border-box;
-}
-
-.terminal-engine-config-btn:hover {
-  background: rgba(0, 240, 90, 0.14);
-  border-color: rgba(0, 240, 90, 0.6);
-  color: #00f05a;
-  box-shadow: 0 0 8px rgba(0, 240, 90, 0.15);
+.terminal-engine-option-selected .terminal-engine-provider {
+  color: rgba(0, 240, 90, 0.7);
 }
 
 .status-value {

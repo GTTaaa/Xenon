@@ -123,25 +123,6 @@ function App(): React.JSX.Element {
     [enabledProviders, selectedProviderId]
   )
 
-  // 可选模型总单元数：只统计已启用服务商下的模型，没有启用的服务商就是 0
-  const totalEngineUnits = useMemo(
-    () => enabledProviders.reduce((acc, p) => acc + p.models.length, 0),
-    [enabledProviders]
-  )
-
-  // 引擎面板当前局部聚焦的服务商 ID（为 null 时自动联动当前全局生效的服务商）
-  const [deckFocusedProviderId, setDeckFocusedProviderId] = useState<string | null>(null)
-
-  // 引擎面板当前聚焦展示的服务商对象（计算派生，无需 useEffect 避免瀑布式重渲染）
-  const focusedDeckProvider = useMemo(() => {
-    if (deckFocusedProviderId) {
-      const found = enabledProviders.find((p) => p.id === deckFocusedProviderId)
-      if (found) return found
-    }
-    // 没有局部聚焦时跟随当前生效的渠道，两者都只认已启用的服务商
-    return activeProvider
-  }, [enabledProviders, deckFocusedProviderId, activeProvider])
-
   /**
    * 清空渠道与模型选择，并同步清掉本地记忆值。
    * 停在"没有任何启用渠道"的状态时用它，避免界面继续显示已经不可用的旧渠道。
@@ -606,7 +587,6 @@ function App(): React.JSX.Element {
     localStorage.setItem('selectedProviderId', providerId)
     localStorage.setItem('selectedModel', nextModel)
     closeModelMenu()
-    setDeckFocusedProviderId(null)
 
     if (sourceText.trim()) {
       markTranslationPending()
@@ -1006,166 +986,77 @@ function App(): React.JSX.Element {
                 <div className="terminal-engine-deck-header">
                   <div className="terminal-engine-deck-title">
                     <span className="terminal-engine-deck-dot" aria-hidden="true" />
-                    <span>SELECT ENGINE</span>
-                    <span className="terminal-engine-deck-count">
-                      {totalEngineUnits.toString().padStart(2, '0')} UNITS
-                    </span>
+                    <span>ENGINE</span>
                   </div>
-                  <button
-                    type="button"
-                    className="terminal-engine-deck-close"
-                    onClick={() => closeModelMenu()}
-                    aria-label="关闭引擎面板"
-                    title="关闭面板"
-                  >
-                    ✕
-                  </button>
-                </div>
-                {/* 左右分栏引擎选择容器 */}
-                <div
-                  className="terminal-engine-deck-split"
-                  role="region"
-                  aria-label="服务商与模型分栏"
-                >
-                  {enabledProviders.length > 0 ? (
-                    <>
-                      {/* 左侧：服务商切换栏 (Provider Sidebar) */}
-                      <div
-                        className="terminal-engine-sidebar"
-                        role="tablist"
-                        aria-label="服务商列表"
-                      >
-                        {enabledProviders.map((prov) => {
-                          const isFocused = prov.id === focusedDeckProvider?.id
-                          const isCurrentActive = prov.id === selectedProviderId
-                          return (
-                            <button
-                              key={prov.id}
-                              type="button"
-                              role="tab"
-                              aria-selected={isFocused}
-                              className={`terminal-engine-provider-item ${
-                                isFocused ? 'terminal-engine-provider-item-active' : ''
-                              }`}
-                              onClick={() => setDeckFocusedProviderId(prov.id)}
-                              title={`查看 ${prov.name} 的模型列表`}
-                            >
-                              <span
-                                className={`terminal-engine-provider-dot ${
-                                  isCurrentActive ? 'dot-active' : 'dot-idle'
-                                }`}
-                                aria-hidden="true"
-                              />
-                              <span className="terminal-engine-provider-name">{prov.name}</span>
-                              <span className="terminal-engine-provider-count">
-                                {prov.models.length}
-                              </span>
-                            </button>
-                          )
-                        })}
-                      </div>
-
-                      {/* 右侧：所选服务商下的模型列表 (Models Pane) */}
-                      <div
-                        className="terminal-engine-models-pane"
-                        role="tabpanel"
-                        aria-label="模型列表"
-                      >
-                        {focusedDeckProvider ? (
-                          <div className="terminal-engine-pane-header">
-                            <span className="terminal-engine-pane-badge">
-                              {focusedDeckProvider.name.toUpperCase()}
-                            </span>
-                            <span
-                              className="terminal-engine-pane-endpoint"
-                              title={focusedDeckProvider.baseUrl}
-                            >
-                              {
-                                focusedDeckProvider.baseUrl
-                                  .replace(/^https?:\/\//, '')
-                                  .split('/')[0]
-                              }
-                            </span>
-                          </div>
-                        ) : null}
-
-                        <div className="terminal-engine-models-list" role="listbox">
-                          {focusedDeckProvider && focusedDeckProvider.models.length > 0 ? (
-                            focusedDeckProvider.models.map((item, idx) => {
-                              const isSelected =
-                                focusedDeckProvider.id === selectedProviderId &&
-                                item.id === selectedModel
-                              const modelCode = (idx + 1).toString().padStart(2, '0')
-
-                              return (
-                                <button
-                                  key={`${focusedDeckProvider.id}-${item.id}`}
-                                  className={`terminal-engine-option ${
-                                    isSelected ? 'terminal-engine-option-selected' : ''
-                                  }`}
-                                  type="button"
-                                  role="option"
-                                  aria-selected={isSelected}
-                                  onClick={() => handleModelSelect(focusedDeckProvider.id, item.id)}
-                                >
-                                  <span className="terminal-engine-code">{modelCode}</span>
-                                  <span className="terminal-engine-body">
-                                    <span className="terminal-engine-name">{item.id}</span>
-                                    <span className="terminal-engine-profile">
-                                      {item.label || focusedDeckProvider.name}
-                                    </span>
-                                  </span>
-                                  {isSelected ? (
-                                    <span className="terminal-engine-active-tag">ACTIVE</span>
-                                  ) : (
-                                    <span
-                                      className="terminal-engine-dot-standby"
-                                      aria-hidden="true"
-                                    />
-                                  )}
-                                </button>
-                              )
-                            })
-                          ) : (
-                            <div className="terminal-engine-empty-hint">该服务商暂未配置模型</div>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    /* 一个启用的服务商都没有：这里以前兜底列出写死的示例模型，会把人引到不存在的渠道上 */
-                    <div className="terminal-engine-empty-hint terminal-engine-empty-hint-deck">
-                      还没有启用任何服务商，点下方设置按钮去启用
-                    </div>
-                  )}
-                </div>
-                <div className="terminal-engine-deck-footer">
-                  <button
-                    type="button"
-                    className="terminal-engine-config-btn"
-                    onClick={() => {
-                      closeModelMenu()
-                      void window.api.openConfigWindow()
-                    }}
-                  >
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{ marginRight: '5px', verticalAlign: 'middle' }}
-                      aria-hidden="true"
+                  {/* 设置入口从底部整条按钮收进头部，把高度还给模型列表 */}
+                  <div className="terminal-engine-deck-actions">
+                    <button
+                      type="button"
+                      className="terminal-engine-deck-config"
+                      onClick={() => {
+                        closeModelMenu()
+                        void window.api.openConfigWindow()
+                      }}
+                      aria-label="打开偏好设置"
+                      title="配置服务商（Cmd+,）"
                     >
-                      <circle cx="12" cy="12" r="3" />
-                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                    </svg>
-                    <span>CONFIGURE ENGINES</span>
-                  </button>
+                      CONFIG
+                    </button>
+                    <button
+                      type="button"
+                      className="terminal-engine-deck-close"
+                      onClick={() => closeModelMenu()}
+                      aria-label="关闭引擎面板"
+                      title="关闭面板"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
+
+                {enabledProviders.length > 0 ? (
+                  /* 所有渠道的模型平铺成一列：一次点击直达，渠道之间只用一条细线分隔 */
+                  <div className="terminal-engine-models-list" role="listbox" aria-label="模型列表">
+                    {enabledProviders.flatMap((prov, provIndex) => {
+                      const rows = prov.models.map((item) => {
+                        const isSelected =
+                          prov.id === selectedProviderId && item.id === selectedModel
+                        return (
+                          <button
+                            key={`${prov.id}-${item.id}`}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            className={`terminal-engine-option ${
+                              isSelected ? 'terminal-engine-option-selected' : ''
+                            }`}
+                            onClick={() => handleModelSelect(prov.id, item.id)}
+                            title={`${item.id} · ${prov.name}`}
+                          >
+                            <span className="terminal-engine-name">{item.id}</span>
+                            <span className="terminal-engine-provider">{prov.name}</span>
+                          </button>
+                        )
+                      })
+
+                      // 第一个渠道前面不加分隔线，避免顶部多出一条悬空的线
+                      if (provIndex === 0) return rows
+                      return [
+                        <div
+                          key={`sep-${prov.id}`}
+                          className="terminal-engine-group-sep"
+                          aria-hidden="true"
+                        />,
+                        ...rows
+                      ]
+                    })}
+                  </div>
+                ) : (
+                  /* 一个启用的服务商都没有：这里以前兜底列出写死的示例模型，会把人引到不存在的渠道上 */
+                  <div className="terminal-engine-empty-hint terminal-engine-empty-hint-deck">
+                    还没有启用任何服务商，点右上角齿轮去启用
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
