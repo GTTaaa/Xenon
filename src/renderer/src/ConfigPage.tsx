@@ -196,6 +196,13 @@ export const ConfigPage = (): React.JSX.Element => {
   const [isSaving, setIsSaving] = useState(false)
   const [feedbackMessage, setFeedbackMessage] = useState('')
 
+  // 是否存在未保存改动（由数据快照比对得出，用于页脚提示与关窗二次确认）
+  const [isDirty, setIsDirty] = useState(false)
+  // 上次落盘（或初始加载）时的数据快照，null 表示配置尚未加载完成
+  const dirtyBaselineRef = useRef<string | null>(null)
+  // 有未保存改动时点关闭/取消，先弹确认而不是静默丢弃
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+
   // 当前厂商新加单模型输入框
   const [newModelId, setNewModelId] = useState('')
 
@@ -264,6 +271,37 @@ export const ConfigPage = (): React.JSX.Element => {
     }
   }, [])
 
+  /**
+   * 关闭设置窗口。
+   * 存在未保存改动时先弹确认，避免"点取消/按 ESC"静默丢掉刚才编辑的内容。
+   */
+  const requestCloseConfigWindow = (): void => {
+    if (isDirty) {
+      setShowCloseConfirm(true)
+      return
+    }
+    void window.api.closeConfigWindow()
+  }
+
+  // 快照比对得出"是否有未保存改动"：不依赖逐个改动手动标记，避免漏点。
+  // 只比对真正写进配置文件的那几个字段，弹窗开合、密钥显隐这类纯界面状态不参与。
+  useEffect(() => {
+    const snapshot = JSON.stringify({
+      providers,
+      activeProviderId,
+      shortcuts,
+      translation,
+      general
+    })
+    if (dirtyBaselineRef.current === null) {
+      // 首次加载完成前没有可比对的基线，等拿到服务商数据再建立
+      if (providers.length === 0) return
+      dirtyBaselineRef.current = snapshot
+      return
+    }
+    setIsDirty(snapshot !== dirtyBaselineRef.current)
+  }, [providers, activeProviderId, shortcuts, translation, general])
+
   // 监听 ESC 键关闭窗口或弹窗
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -276,8 +314,17 @@ export const ConfigPage = (): React.JSX.Element => {
           setShowErrorModal(false)
           return
         }
+        // 确认弹窗上的 ESC 等同于"继续编辑"，只是把确认收起来
+        if (showCloseConfirm) {
+          setShowCloseConfirm(false)
+          return
+        }
         if (isProviderDialogOpen) {
           setIsProviderDialogOpen(false)
+          return
+        }
+        if (isDirty) {
+          setShowCloseConfirm(true)
           return
         }
         void window.api.closeConfigWindow()
@@ -287,7 +334,7 @@ export const ConfigPage = (): React.JSX.Element => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [showFetchModal, showErrorModal, isProviderDialogOpen])
+  }, [showFetchModal, showErrorModal, showCloseConfirm, isProviderDialogOpen, isDirty])
 
   // 当前正在查看编辑的厂商
   const activeProvider = providers.find((p) => p.id === selectedTabId) || providers[0]
@@ -637,6 +684,17 @@ export const ConfigPage = (): React.JSX.Element => {
 
       const result = await window.api.saveConfig(payload)
       if (result.ok) {
+        // 已落盘：把当前数据记为新的基线，页脚的未保存提示随之消失
+        dirtyBaselineRef.current = JSON.stringify({
+          providers: sanitizedProviders,
+          activeProviderId,
+          shortcuts,
+          translation,
+          general
+        })
+        setIsDirty(false)
+        // state 收敛为落盘时清洗过的数据，避免"基线是清洗值、state 是原始值"导致脏标记反复
+        setProviders(sanitizedProviders)
         setFeedbackMessage('系统偏好设置已保存并生效')
         setTimeout(() => {
           void window.api.closeConfigWindow()
@@ -693,7 +751,7 @@ export const ConfigPage = (): React.JSX.Element => {
             className="pref-close-btn"
             aria-label="关闭设置窗口"
             title="关闭设置 (ESC)"
-            onClick={() => void window.api.closeConfigWindow()}
+            onClick={requestCloseConfigWindow}
           >
             ×
           </button>
@@ -785,7 +843,6 @@ export const ConfigPage = (): React.JSX.Element => {
                           {group.title} · {items.length}
                         </div>
                         {items.map((p) => {
-                          const isSelected = p.id === selectedTabId
                           const isPrimary = p.id === activeProviderId
                           const modelText =
                             p.models.length > 0 ? p.defaultModel || p.models[0]?.id || '' : ''
@@ -794,7 +851,7 @@ export const ConfigPage = (): React.JSX.Element => {
                               key={p.id}
                               role="button"
                               tabIndex={0}
-                              className={`pref-provider-row ${isSelected ? 'is-selected' : ''}`}
+                              className="pref-provider-row"
                               onClick={() => openProviderDialog(p.id)}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
@@ -1186,59 +1243,6 @@ export const ConfigPage = (): React.JSX.Element => {
       {/* 底部操作工具栏 */}
       <footer className="pref-footer">
         <div className="pref-footer-left">
-          {/* 只有在 AI 模型面板才展示连通性测试按钮 */}
-          {activeCategory === 'providers' && activeProvider ? (
-            <button
-              type="button"
-              className="pref-btn pref-btn-test"
-              onClick={handleTestCurrentProvider}
-              disabled={isTesting || !activeProvider.baseUrl}
-              title={`测试【${activeProvider.name}】的连通性 (${activeProvider.baseUrl})`}
-            >
-              {isTesting ? (
-                <span className="pref-btn-testing-wrap">
-                  <span className="pref-loading-pulse" />
-                  <span>正在检测...</span>
-                </span>
-              ) : (
-                '测试当前连接'
-              )}
-            </button>
-          ) : null}
-
-          {/* 测试连通性结果反馈 */}
-          {activeCategory === 'providers' && testResult ? (
-            <div className="pref-test-result-group">
-              <span
-                className={`pref-test-status ${
-                  testResult.ok ? 'pref-test-status-ok' : 'pref-test-status-fail'
-                }`}
-                title={testResult.message}
-              >
-                <span className="pref-status-dot" />
-                <span className="pref-test-status-text">
-                  {testResult.message}
-                  {testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}
-                </span>
-              </span>
-
-              {/* 报错详情入口 */}
-              {!testResult.ok && testResult.errorDetail ? (
-                <button
-                  type="button"
-                  className="pref-field-btn pref-field-btn-danger pref-test-detail-btn"
-                  onClick={() => {
-                    setCopiedErrorLog(false)
-                    setShowErrorModal(true)
-                  }}
-                  title="查看详细错误信息与原始响应"
-                >
-                  诊断报告
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
           {feedbackMessage ? (
             <span className="pref-feedback-text" title={feedbackMessage}>
               {feedbackMessage}
@@ -1247,10 +1251,16 @@ export const ConfigPage = (): React.JSX.Element => {
         </div>
 
         <div className="pref-footer-right">
+          {isDirty ? (
+            <span className="pref-dirty-hint" title="本次修改还没有写入配置，点击右侧保存才会生效">
+              <span className="pref-dirty-dot" />
+              有未保存的改动
+            </span>
+          ) : null}
           <button
             type="button"
             className="pref-btn pref-btn-cancel"
-            onClick={() => void window.api.closeConfigWindow()}
+            onClick={requestCloseConfigWindow}
           >
             取消
           </button>
@@ -1571,15 +1581,65 @@ export const ConfigPage = (): React.JSX.Element => {
 
             <div className="pref-modal-footer">
               <div className="pref-modal-footer-left">
+                {/* 连通性测试跟着当前编辑的服务商走：刚改完地址就能原地验证，不用先关弹窗 */}
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-test"
+                  onClick={handleTestCurrentProvider}
+                  disabled={isTesting || !activeProvider.baseUrl}
+                  title={`测试【${activeProvider.name}】的连通性 (${activeProvider.baseUrl})`}
+                >
+                  {isTesting ? (
+                    <span className="pref-btn-testing-wrap">
+                      <span className="pref-loading-pulse" />
+                      <span>正在检测...</span>
+                    </span>
+                  ) : (
+                    '测试当前连接'
+                  )}
+                </button>
+
+                {testResult ? (
+                  <div className="pref-test-result-group">
+                    <span
+                      className={`pref-test-status ${
+                        testResult.ok ? 'pref-test-status-ok' : 'pref-test-status-fail'
+                      }`}
+                      title={testResult.message}
+                    >
+                      <span className="pref-status-dot" />
+                      <span className="pref-test-status-text">
+                        {testResult.message}
+                        {testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}
+                      </span>
+                    </span>
+
+                    {/* 报错详情入口 */}
+                    {!testResult.ok && testResult.errorDetail ? (
+                      <button
+                        type="button"
+                        className="pref-field-btn pref-field-btn-danger pref-test-detail-btn"
+                        onClick={() => {
+                          setCopiedErrorLog(false)
+                          setShowErrorModal(true)
+                        }}
+                        title="查看详细错误信息与原始响应"
+                      >
+                        诊断报告
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="pref-modal-footer-btns">
                 <button
                   type="button"
                   className="pref-btn pref-btn-cancel"
                   onClick={() => setIsProviderDialogOpen(false)}
                 >
-                  关闭
+                  完成
                 </button>
-              </div>
-              <div className="pref-modal-footer-btns">
                 <button
                   type="button"
                   className="pref-btn pref-btn-save"
@@ -1821,6 +1881,45 @@ export const ConfigPage = (): React.JSX.Element => {
               >
                 关闭
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 未保存改动确认弹窗：拦住"点关闭/取消"造成的静默丢弃 */}
+      {showCloseConfirm ? (
+        <div className="pref-modal-mask" onClick={() => setShowCloseConfirm(false)}>
+          <div className="pref-modal-card pref-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="pref-modal-header">
+              <div className="pref-modal-title">
+                <span>有未保存的改动</span>
+              </div>
+            </div>
+
+            <div className="pref-modal-body pref-confirm-body">
+              <p className="pref-confirm-text">
+                本次对服务商、快捷键或翻译偏好的修改还没有写入配置，现在关闭设置窗口会丢失这些改动。
+              </p>
+            </div>
+
+            <div className="pref-modal-footer">
+              <div className="pref-modal-footer-left" />
+              <div className="pref-modal-footer-btns">
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-cancel"
+                  onClick={() => void window.api.closeConfigWindow()}
+                >
+                  放弃改动并关闭
+                </button>
+                <button
+                  type="button"
+                  className="pref-btn pref-btn-save"
+                  onClick={() => setShowCloseConfirm(false)}
+                >
+                  继续编辑
+                </button>
+              </div>
             </div>
           </div>
         </div>

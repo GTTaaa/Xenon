@@ -2336,13 +2336,6 @@ body {
   outline-offset: 1px;
 }
 
-/* 正在编辑的行：白底 + 墨色描边，读作"按下的机械键"，不填色 */
-.pref-provider-row.is-selected {
-  background: #ffffff;
-  border-color: var(--pref-text-primary);
-  box-shadow: inset 0 0 0 1px var(--pref-text-primary);
-}
-
 .pref-provider-row-name {
   display: flex;
   align-items: center;
@@ -2742,6 +2735,28 @@ body {
   flex-shrink: 0;
 }
 
+/*
+ * 未保存提示：只在存在改动时出现，用近黑小圆点 + 三级灰文字，
+ * 不使用绿色（绿色在本产品里表示"正常/正向状态"，这里表达的是待办）
+ */
+.pref-dirty-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--pref-text-muted);
+  white-space: nowrap;
+}
+
+.pref-dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pref-text-primary);
+  flex-shrink: 0;
+}
+
 .pref-btn {
   display: inline-flex;
   align-items: center;
@@ -2909,7 +2924,7 @@ body {
   max-width: 200px;
 }
 
-/* 字段右侧操作按键组 */ /* 字段右侧操作按键组 */
+/* 字段右侧操作按键组 */
 .pref-field-actions {
   display: inline-flex;
   align-items: center;
@@ -2999,12 +3014,13 @@ body {
 }
 
 /* 测试结果组与错误详情入口 */
+/* 测试结果组：跟在测试按钮之后，长消息靠省略号收尾，页脚与详情弹窗共用 */
 .pref-test-result-group {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  max-width: calc(100% - 130px);
+  flex: 0 1 auto;
 }
 
 .pref-test-detail-btn {
@@ -3077,6 +3093,23 @@ body {
   gap: 10px;
   flex-shrink: 0;
   margin-left: 12px;
+}
+
+/* 未保存改动确认弹窗：文案短，宽度收到 400px 以内 */
+.pref-confirm-dialog {
+  max-width: 400px;
+}
+
+.pref-confirm-body {
+  padding: 16px 14px;
+}
+
+.pref-confirm-text {
+  margin: 0;
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--pref-text-secondary);
 }
 
 /* 弹窗主体通用区：吃满剩余高度并内部滚动，内容再多也不会把底部动作条顶出视野 */
@@ -3270,9 +3303,14 @@ body {
   flex-shrink: 0;
 }
 
+/* 弹窗底部左区：需要能收缩，否则"测试按钮 + 长错误提示 + 诊断报告"会顶破 560px 弹窗 */
 .pref-modal-footer-left {
   display: flex;
   align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .pref-modal-selected-badge {
