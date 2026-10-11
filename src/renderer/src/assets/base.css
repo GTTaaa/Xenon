@@ -24,7 +24,12 @@ body {
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans',
     'Droid Sans', 'Helvetica Neue', sans-serif;
-  text-rendering: optimizeLegibility;
+  /*
+   * 保持浏览器默认值：optimizeLegibility 在 Chromium 上只影响连字与字距对的开关，
+   * 而 <button>/<input> 的 UA 样式固定为 auto —— 写在 body 上会让表单元素与普通文本
+   * 走两条字形路径。两种取值在本应用的等宽字体与系统字体上实测渲染完全一致。
+   */
+  text-rendering: auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

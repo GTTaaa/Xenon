@@ -1854,13 +1854,6 @@ body {
   color: var(--pref-text-primary);
   font-family: var(--pref-font);
   /*
-   * 字形渲染路径必须显式统一：base.css 给 body 设了 text-rendering: optimizeLegibility，
-   * 它是继承属性，会让文字走另一条 shaping/hinting 路径（中文字形更细、更"花"）；
-   * 而 <button> 的 UA 样式是 auto，不受继承影响 —— 同一行里顶栏 tab 和字段标签
-   * 于是呈现两种字形。这里统一回浏览器默认，和 tab 一致。
-   */
-  text-rendering: auto;
-  /*
    * 字距基准：全页一律 0，和顶栏 tab 完全一致。
    * 中文小字号上任何一点正值字距都会被读成"另一种字体"（字形被拉开、笔画发虚），
    * 所以这里把基准定在容器上，任何新增元素默认都跟随，不再逐处声明。
