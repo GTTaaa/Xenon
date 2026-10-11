@@ -41,6 +41,17 @@ const NAV_ITEMS: NavItem[] = [
  */
 type PrefTheme = 'wise' | 'classic'
 
+/**
+ * 页脚反馈消息的语义分档：
+ * success 走绿色并在 3 秒后自动退场；error 走红色、neutral 走灰色，两者常驻到下一次操作。
+ */
+type FeedbackTone = 'success' | 'error' | 'neutral'
+
+interface FeedbackMessage {
+  text: string
+  tone: FeedbackTone
+}
+
 const PREF_THEME: PrefTheme = 'wise'
 
 /**
@@ -194,7 +205,7 @@ export const ConfigPage = (): React.JSX.Element => {
 
   // 保存状态与消息提示
   const [isSaving, setIsSaving] = useState(false)
-  const [feedbackMessage, setFeedbackMessage] = useState('')
+  const [feedbackMessage, setFeedbackMessage] = useState<FeedbackMessage | null>(null)
 
   // 是否存在未保存改动（由数据快照比对得出，用于页脚提示与关窗二次确认）
   const [isDirty, setIsDirty] = useState(false)
@@ -223,6 +234,21 @@ export const ConfigPage = (): React.JSX.Element => {
 
   // 手动录入单模型展开状态（默认收起以释放纵向空间）
   const [showManualAdd, setShowManualAdd] = useState(false)
+
+  /**
+   * 写入页脚反馈消息。
+   * 默认按"成功"处理；错误与警告必须显式传 tone，避免失败信息被当成绿色成功态。
+   */
+  const showFeedback = (text: string, tone: FeedbackTone = 'success'): void => {
+    setFeedbackMessage({ text, tone })
+  }
+
+  // 成功类消息看一眼就够，3 秒后自行退场；错误与中性提示常驻，避免用户没看清就消失
+  useEffect(() => {
+    if (feedbackMessage?.tone !== 'success') return
+    const timer = window.setTimeout(() => setFeedbackMessage(null), 3000)
+    return () => window.clearTimeout(timer)
+  }, [feedbackMessage])
 
   // 点击外部自动收起添加服务商下拉菜单
   useEffect(() => {
@@ -381,7 +407,7 @@ export const ConfigPage = (): React.JSX.Element => {
       prev.map((item) => (item.id === providerId ? { ...item, enabled: true } : item))
     )
     setActiveProviderId(providerId)
-    setFeedbackMessage(`已将【${target.name}】设为默认服务商`)
+    showFeedback(`已将【${target.name}】设为默认服务商`)
   }
 
   /**
@@ -404,7 +430,7 @@ export const ConfigPage = (): React.JSX.Element => {
     const exists = providers.some((p) => p.id === template.id)
     if (exists) {
       setSelectedTabId(template.id)
-      setFeedbackMessage(`已定位至【${template.name}】`)
+      showFeedback(`已定位至【${template.name}】`)
       return
     }
 
@@ -421,7 +447,7 @@ export const ConfigPage = (): React.JSX.Element => {
 
     setProviders((prev) => [...prev, newProvider])
     setSelectedTabId(newProvider.id)
-    setFeedbackMessage(`已添加服务商【${template.name}】，请配置对应 API Key`)
+    showFeedback(`已添加【${template.name}】，请配置 API Key`)
   }
 
   /**
@@ -442,7 +468,7 @@ export const ConfigPage = (): React.JSX.Element => {
 
     setProviders((prev) => [...prev, newProvider])
     setSelectedTabId(customId)
-    setFeedbackMessage('已创建新服务商，请填写其名称、Base URL 与 API Key')
+    showFeedback('已创建服务商，请填写名称与 API Key')
   }
 
   /**
@@ -450,7 +476,7 @@ export const ConfigPage = (): React.JSX.Element => {
    */
   const handleDeleteProvider = (providerIdToDelete: string): void => {
     if (providers.length <= 1) {
-      setFeedbackMessage('至少需要保留一个服务商')
+      showFeedback('至少需要保留一个服务商', 'error')
       return
     }
 
@@ -468,7 +494,7 @@ export const ConfigPage = (): React.JSX.Element => {
 
     // 详情弹窗还停在被删掉的服务商上会跳到别的渠道，直接收起更符合预期
     setIsProviderDialogOpen(false)
-    setFeedbackMessage('已移除该服务商')
+    showFeedback('已移除该服务商')
   }
 
   /**
@@ -480,7 +506,7 @@ export const ConfigPage = (): React.JSX.Element => {
     if (!trimmed) return
 
     if (activeProvider.models.some((m) => m.id === trimmed)) {
-      setFeedbackMessage(`模型 ${trimmed} 已在列表中`)
+      showFeedback(`模型 ${trimmed} 已在列表中`, 'neutral')
       setNewModelId('')
       return
     }
@@ -491,7 +517,7 @@ export const ConfigPage = (): React.JSX.Element => {
       defaultModel: activeProvider.defaultModel || trimmed
     })
     setNewModelId('')
-    setFeedbackMessage(`已为【${activeProvider.name}】添加模型 ${trimmed}`)
+    showFeedback(`已为【${activeProvider.name}】添加模型 ${trimmed}`)
   }
 
   /**
@@ -514,7 +540,7 @@ export const ConfigPage = (): React.JSX.Element => {
   const handleRemoveModelFromActive = (modelIdToRemove: string): void => {
     if (!activeProvider) return
     if (activeProvider.models.length <= 1) {
-      setFeedbackMessage('每个服务商至少保留一个可用模型')
+      showFeedback('每个服务商至少保留一个可用模型', 'error')
       return
     }
 
@@ -537,12 +563,12 @@ export const ConfigPage = (): React.JSX.Element => {
     if (!activeProvider) return
     const targetUrl = cleanBaseUrl(activeProvider.baseUrl)
     if (!targetUrl) {
-      setFeedbackMessage('请先输入有效的服务地址 (Base URL)')
+      showFeedback('请先输入有效的服务地址 (Base URL)', 'error')
       return
     }
 
     setIsFetchingModels(true)
-    setFeedbackMessage('正在从服务商接口拉取模型列表...')
+    showFeedback('正在从服务商接口拉取模型列表...', 'neutral')
 
     try {
       const result = await window.api.fetchModels({
@@ -562,9 +588,9 @@ export const ConfigPage = (): React.JSX.Element => {
         setSelectedModelsToAdd(initialSelection)
         setModelSearchQuery('')
         setShowFetchModal(true)
-        setFeedbackMessage(`成功获取到 ${result.models.length} 个模型`)
+        showFeedback(`成功获取到 ${result.models.length} 个模型`)
       } else {
-        setFeedbackMessage(`拉取模型失败: ${result.error || '未返回有效模型'}`)
+        showFeedback(`拉取模型失败: ${result.error || '未返回有效模型'}`, 'error')
         if (result.errorDetail) {
           setTestResult({
             ok: false,
@@ -574,7 +600,7 @@ export const ConfigPage = (): React.JSX.Element => {
         }
       }
     } catch (err) {
-      setFeedbackMessage(`拉取异常: ${err instanceof Error ? err.message : '网络错误'}`)
+      showFeedback(`拉取异常: ${err instanceof Error ? err.message : '网络错误'}`, 'error')
     } finally {
       setIsFetchingModels(false)
     }
@@ -598,7 +624,7 @@ export const ConfigPage = (): React.JSX.Element => {
 
     if (newItems.length === 0) {
       setShowFetchModal(false)
-      setFeedbackMessage('所选模型已全部存在于列表中')
+      showFeedback('所选模型已全部存在于列表中', 'neutral')
       return
     }
 
@@ -608,7 +634,7 @@ export const ConfigPage = (): React.JSX.Element => {
       defaultModel: activeProvider.defaultModel || newItems[0].id
     })
     setShowFetchModal(false)
-    setFeedbackMessage(`已成功为【${activeProvider.name}】添加 ${newItems.length} 个模型`)
+    showFeedback(`已成功为【${activeProvider.name}】添加 ${newItems.length} 个模型`)
   }
 
   /**
@@ -616,14 +642,14 @@ export const ConfigPage = (): React.JSX.Element => {
    */
   const handleCopyApiKey = async (): Promise<void> => {
     if (!activeProvider?.apiKey) {
-      setFeedbackMessage('当前 API Key 为空，无需复制')
+      showFeedback('当前 API Key 为空，无需复制', 'neutral')
       return
     }
     try {
       await navigator.clipboard.writeText(activeProvider.apiKey)
-      setFeedbackMessage('API Key 已复制到剪贴板')
+      showFeedback('API Key 已复制到剪贴板')
     } catch {
-      setFeedbackMessage('复制失败，请手动选取复制')
+      showFeedback('复制失败，请手动选取复制', 'error')
     }
   }
 
@@ -634,7 +660,7 @@ export const ConfigPage = (): React.JSX.Element => {
     if (!activeProvider) return
     setIsTesting(true)
     setTestResult(null)
-    setFeedbackMessage('')
+    setFeedbackMessage(null)
 
     try {
       const result = await window.api.testConfig({
@@ -661,7 +687,7 @@ export const ConfigPage = (): React.JSX.Element => {
    */
   const handleSaveAll = async (): Promise<void> => {
     setIsSaving(true)
-    setFeedbackMessage('')
+    setFeedbackMessage(null)
 
     try {
       // 智能清洗当前厂商地址与密钥
@@ -695,15 +721,15 @@ export const ConfigPage = (): React.JSX.Element => {
         setIsDirty(false)
         // state 收敛为落盘时清洗过的数据，避免"基线是清洗值、state 是原始值"导致脏标记反复
         setProviders(sanitizedProviders)
-        setFeedbackMessage('系统偏好设置已保存并生效')
+        showFeedback('系统偏好设置已保存并生效')
         setTimeout(() => {
           void window.api.closeConfigWindow()
         }, 400)
       } else {
-        setFeedbackMessage(`保存失败: ${result.error || '未知错误'}`)
+        showFeedback(`保存失败: ${result.error || '未知错误'}`, 'error')
       }
     } catch (error) {
-      setFeedbackMessage(`保存异常: ${error instanceof Error ? error.message : '未知错误'}`)
+      showFeedback(`保存异常: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
     } finally {
       setIsSaving(false)
     }
@@ -927,7 +953,7 @@ export const ConfigPage = (): React.JSX.Element => {
                     style={{ fontSize: '12px', padding: '4px 10px' }}
                     onClick={() => {
                       setShortcuts({ ...DEFAULT_SHORTCUTS })
-                      setFeedbackMessage('快捷键已重置为默认值')
+                      showFeedback('快捷键已重置为默认值')
                     }}
                   >
                     恢复默认快捷键
@@ -1244,8 +1270,11 @@ export const ConfigPage = (): React.JSX.Element => {
       <footer className="pref-footer">
         <div className="pref-footer-left">
           {feedbackMessage ? (
-            <span className="pref-feedback-text" title={feedbackMessage}>
-              {feedbackMessage}
+            <span
+              className={`pref-feedback-text pref-feedback-${feedbackMessage.tone}`}
+              title={feedbackMessage.text}
+            >
+              {feedbackMessage.text}
             </span>
           ) : null}
         </div>

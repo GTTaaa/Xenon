@@ -2914,14 +2914,29 @@ body {
   box-shadow: 0 0 4px rgba(216, 92, 92, 0.5);
 }
 
+/*
+ * 页脚反馈消息：占用左区剩余的弹性宽度，超长时单行省略、悬停 title 看全文。
+ * 颜色按语义分档，避免"保存失败"这类信息也顶着绿色显示。
+ */
 .pref-feedback-text {
+  min-width: 0;
   font-size: 12px;
   font-weight: 500;
-  color: var(--pref-accent-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+}
+
+.pref-feedback-success {
+  color: var(--pref-accent-ink);
+}
+
+.pref-feedback-error {
+  color: #a83232;
+}
+
+.pref-feedback-neutral {
+  color: var(--pref-text-secondary);
 }
 
 /* 字段右侧操作按键组 */
