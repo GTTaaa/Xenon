@@ -124,8 +124,9 @@ function createWindow(): void {
   const { workArea } = primaryDisplay
 
   const windowWidth = 358
-  // 主窗口只有上下两档：330 是"一行输入"的紧凑机身，430 是"三行输入"的封顶高度
-  const windowHeight = 330
+  // 主窗口高度浮动：330 是"一行输入"的紧凑机身，530 是"五行输入"的封顶高度
+  // 初始高度按空态算：1 行输入 + 译文区保底 4 行，渲染进程挂载后会再校准一次
+  const windowHeight = 240
 
   // 计算屏幕右上角坐标（完全贴合在屏幕工作区右上角，无缝紧贴右侧与顶部）
   const x = Math.max(workArea.x, Math.round(workArea.x + workArea.width - windowWidth))
@@ -139,8 +140,8 @@ function createWindow(): void {
     height: windowHeight,
     minWidth: 358,
     maxWidth: 358,
-    minHeight: 330,
-    maxHeight: 430,
+    minHeight: 240,
+    maxHeight: 530,
     resizable: false,
     frame: false,
     show: false,
@@ -396,11 +397,11 @@ app.whenReady().then(async () => {
     return mainWindow.isAlwaysOnTop()
   })
 
-  // 窗口高度实时同步设置（下限 330px 紧凑机身，上限 430px 后交给译文区内部滚动）
+  // 窗口高度实时同步设置（下限 240px 紧凑机身，上限 530px 后交给译文区内部滚动）
   ipcMain.handle('window:set-height', (_, targetHeight: number) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     const [width, currentHeight] = mainWindow.getContentSize()
-    const clampedTargetHeight = Math.max(330, Math.min(Math.round(targetHeight), 430))
+    const clampedTargetHeight = Math.max(240, Math.min(Math.round(targetHeight), 530))
     if (Math.abs(currentHeight - clampedTargetHeight) >= 2) {
       mainWindow.setContentSize(width, clampedTargetHeight, false)
     }

@@ -15,13 +15,13 @@ type TranslateStatus = 'idle' | 'translating' | 'error'
 const INITIAL_SOURCE_TEXT = ''
 // 输入区字号 13px × 行高 1.5，用来把输入框内容高度换算成行数（与 .compose-input 保持一致）
 const INPUT_LINE_HEIGHT = 19.5
-// 输入区最多长到 3 行，再多交给输入框自己滚动
-const MAX_INPUT_LINES = 3
-// 窗口高度只在这两档之间浮动：1 行输入 330px 紧凑机身，3 行输入 430px 封顶
-const WINDOW_HEIGHT_MIN = 330
-const WINDOW_HEIGHT_MAX = 430
-// 每多一行输入窗口加 50px：多出来的空间留给译文区，而不是把译文区压扁
-const WINDOW_HEIGHT_PER_INPUT_LINE = 50
+// 输入区最多长到 5 行，再多交给输入框自己滚动
+const MAX_INPUT_LINES = 5
+// 译文区最少铺 4 行（译文 18px 字号 × 1.6 行高）：空态和短内容靠它撑住，窗口才不会空一大截
+const RESULT_MIN_HEIGHT = 18 * 1.6 * 4
+// 窗口高度只在这两档之间浮动：240px 紧凑机身，530px 封顶
+const WINDOW_HEIGHT_MIN = 240
+const WINDOW_HEIGHT_MAX = 530
 
 const getUserFriendlyErrorMessage = (code: string): string => {
   switch (code) {
@@ -221,22 +221,33 @@ function App(): React.JSX.Element {
   )
 
   const deviceRef = useRef<HTMLElement | null>(null)
+  // 译文区滚动容器与底部工具行：量两者高度，窗口才能按"内容实际需要多高"来收放
+  const resultScrollRef = useRef<HTMLDivElement | null>(null)
+  const resultToolbarRef = useRef<HTMLDivElement | null>(null)
 
   // 缓存上一次同步给 Electron 主进程的窗口高度，避免高频冗余触发
   const lastSentHeightRef = useRef<number>(0)
 
   /**
    * 输入区高度与窗口高度联动。
-   * 窗口高度由"输入行数"算出，而不是读 DOM 实测高度 ——
-   * 译文区是 flex:1 撑满剩余空间的，用实测高度会形成"测量 → 改窗口 → 再测量"的自激循环。
+   *
+   * 窗口高度按"内容真正需要多高"来算：头部到译文区的固定距离 + 输入区实际高度 + 译文实际高度。
+   * 早先是按输入行数线性加高（每行 +50px），多出来的空间全归译文区，
+   * 于是"输入 5 行、译文只有 4 行"时底部会空出一大片。
+   *
+   * 这样算不会自激：译文区已经不再是 flex:1 撑满窗口，它的高度只由内容决定，
+   * 改窗口高度不会反过来改变 scrollHeight。
    */
-  const syncInputHeight = useCallback((): void => {
+  const syncWindowHeight = useCallback((): void => {
     const textarea = sourceInputRef.current
-    if (!textarea) return
+    const scroll = resultScrollRef.current
+    const toolbar = resultToolbarRef.current
+    const panel = deviceRef.current
+    if (!textarea || !scroll || !toolbar || !panel) return
 
+    // 输入框先按内容长高，最多 5 行，再多交给它自己滚动
     textarea.style.height = 'auto'
     const contentHeight = textarea.scrollHeight
-    // 行数只取 1–3 行：再多也只让输入框自己滚动，不继续顶窗口
     const lineCount = Math.max(
       1,
       Math.min(MAX_INPUT_LINES, Math.round(contentHeight / INPUT_LINE_HEIGHT))
@@ -244,9 +255,30 @@ function App(): React.JSX.Element {
     // 高度按整行取整，避免内容高度里的小数点让输入框每次输入都抖动 1px
     textarea.style.height = `${Math.min(lineCount * INPUT_LINE_HEIGHT, contentHeight)}px`
 
-    const nextWindowHeight = Math.min(
-      WINDOW_HEIGHT_MAX,
-      WINDOW_HEIGHT_MIN + (lineCount - 1) * WINDOW_HEIGHT_PER_INPUT_LINE
+    // 译文区顶部到窗口顶部的距离（头部 + 输入区 + 分隔线），不受窗口高度影响
+    const lead = scroll.getBoundingClientRect().top - panel.getBoundingClientRect().top
+    const scrollStyle = getComputedStyle(scroll)
+    const scrollPadding =
+      parseFloat(scrollStyle.paddingTop || '0') + parseFloat(scrollStyle.paddingBottom || '0')
+    // scrollHeight 把上下内边距也算在内，减掉之后才是译文本身的字面高度；
+    // 再套一层保底，空态和短译文才不会把窗口压成一条
+    const resultHeight = Math.max(RESULT_MIN_HEIGHT, scroll.scrollHeight - scrollPadding)
+    // 工具行到窗口底边的这点留白写在 .device-body 的 padding-bottom 上，从样式里读，避免两处硬编码
+    const body = panel.querySelector('.device-body')
+    const bottomPadding = body ? parseFloat(getComputedStyle(body).paddingBottom || '0') : 0
+
+    const nextWindowHeight = Math.round(
+      Math.min(
+        WINDOW_HEIGHT_MAX,
+        Math.max(
+          WINDOW_HEIGHT_MIN,
+          lead +
+            scrollPadding +
+            resultHeight +
+            toolbar.getBoundingClientRect().height +
+            bottomPadding
+        )
+      )
     )
 
     // 仅当高度发生有效变化（>= 2px）时才派发 IPC，杜绝微小晃动与性能浪费
@@ -257,8 +289,8 @@ function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    syncInputHeight()
-  }, [sourceText, syncInputHeight])
+    syncWindowHeight()
+  }, [sourceText, targetText, status, errorMessage, syncWindowHeight])
 
   // 组件卸载时清理退出定时器
   useEffect(() => {
@@ -712,6 +744,33 @@ function App(): React.JSX.Element {
           </div>
 
           <button
+            className="icon-btn settings-btn"
+            type="button"
+            aria-label="打开偏好设置"
+            title="偏好设置（Cmd+,）"
+            onClick={() => {
+              setIsSourceLangMenuOpen(false)
+              setIsTargetLangMenuOpen(false)
+              closeModelMenu()
+              void window.api.openConfigWindow()
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M7.37506 3.98898C7.25044 4.06093 7.18813 4.0969 7.13585 4.1315C6.34815 4.65274 6.01706 5.6437 6.33322 6.53376C6.3542 6.59284 6.38237 6.65904 6.43871 6.79145L6.62174 7.2216C5.98033 7.94301 5.48186 8.79434 5.17077 9.73116L4.70884 9.78747C4.566 9.80488 4.49458 9.81359 4.43292 9.82495C3.50404 9.99618 2.81138 10.7784 2.75382 11.7212C2.75 11.7838 2.75 11.8557 2.75 11.9996C2.75 12.1435 2.75 12.2155 2.75382 12.278C2.81138 13.2208 3.50404 14.003 4.43292 14.1743C4.49458 14.1856 4.566 14.1943 4.70884 14.2117L5.1704 14.268C5.48144 15.2052 5.97999 16.0568 6.62157 16.7785L6.43873 17.2082C6.38239 17.3406 6.35422 17.4068 6.33324 17.4659C6.01708 18.3559 6.34817 19.3469 7.13587 19.8681C7.18815 19.9027 7.25046 19.9387 7.37508 20.0107C7.4997 20.0826 7.56201 20.1186 7.61811 20.1466C8.46337 20.5681 9.48712 20.3594 10.0998 19.6405C10.1405 19.5928 10.1838 19.5353 10.2703 19.4203L10.55 19.0484C11.0184 19.1442 11.5034 19.1946 12.0001 19.1946C12.4969 19.1946 12.9818 19.1442 13.4503 19.0484L13.7299 19.4201C13.8164 19.5351 13.8596 19.5926 13.9003 19.6403C14.513 20.3591 15.5368 20.5679 16.382 20.1463C16.4381 20.1184 16.5004 20.0824 16.6251 20.0104C16.7497 19.9385 16.812 19.9025 16.8643 19.8679C17.652 19.3467 17.9831 18.3557 17.6669 17.4657C17.6459 17.4066 17.6177 17.3404 17.5614 17.208L17.3786 16.7785C18.0202 16.0568 18.5188 15.2052 18.8298 14.268L19.2912 14.2117C19.434 14.1943 19.5054 14.1856 19.5671 14.1743C20.496 14.003 21.1886 13.2208 21.2462 12.278C21.25 12.2155 21.25 12.1435 21.25 11.9996C21.25 11.8557 21.25 11.7838 21.2462 11.7212C21.1886 10.7784 20.496 9.99618 19.5671 9.82495C19.5054 9.81359 19.434 9.80488 19.2912 9.78747L18.8294 9.73118C18.7517 9.49698 18.6622 9.26811 18.5617 9.04528C18.2601 8.37679 17.8594 7.76261 17.3784 7.22156L17.5613 6.7916C17.6176 6.65919 17.6458 6.59299 17.6668 6.53391C17.983 5.64385 17.6519 4.65289 16.8642 4.13165C16.8119 4.09705 16.7496 4.06107 16.625 3.98912C16.5003 3.91718 16.438 3.8812 16.3819 3.85322C15.5367 3.43168 14.5129 3.64043 13.9002 4.35925C13.8595 4.40697 13.8163 4.46447 13.7298 4.57946L13.4497 4.95176C12.9815 4.85594 12.4967 4.80569 12.0001 4.80569C11.5035 4.80569 11.0187 4.856 10.5504 4.95181L10.2702 4.57932C10.1837 4.46432 10.1405 4.40682 10.0998 4.35911C9.4871 3.64028 8.46335 3.43153 7.61809 3.85307C7.56199 3.88105 7.49968 3.91703 7.37506 3.98898Z" />
+            </svg>
+          </button>
+
+          <button
             className={`icon-btn pin-btn${isPinned ? ' pin-btn-on' : ''}`}
             type="button"
             aria-label={isPinned ? '取消固定窗口' : '固定窗口置顶'}
@@ -749,7 +808,7 @@ function App(): React.JSX.Element {
           </div>
 
           <section className="result">
-            <div className="result-scroll">
+            <div className="result-scroll" ref={resultScrollRef}>
               {errorMessage ? (
                 <p className="result-error" role="status" aria-live="polite">
                   {errorMessage}
@@ -769,7 +828,7 @@ function App(): React.JSX.Element {
               )}
             </div>
 
-            <div className="result-toolbar">
+            <div className="result-toolbar" ref={resultToolbarRef}>
               <div className="toolbar-left">
                 <button
                   className="icon-btn"
