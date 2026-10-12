@@ -9,7 +9,6 @@ interface AppAPI {
   saveConfig: (config: AppSettings) => Promise<{ ok: boolean; error?: string }>
   testConfig: (config: AppSettings) => Promise<TestConnectionResult>
   fetchModels: (params: { baseUrl: string; apiKey: string }) => Promise<FetchModelsResult>
-  captureScreen: () => Promise<{ ok: boolean; message?: string }>
   onApplySourceText: (callback: (text: string) => void) => () => void
   setWindowHeight: (height: number) => Promise<void>
   openConfigWindow: () => Promise<void>

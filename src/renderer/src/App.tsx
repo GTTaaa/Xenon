@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import menuIcon from './assets/menu-icon.svg'
-import pinIcon from './assets/pin-icon.svg'
-import type { ProviderItem } from '../../shared/config'
+import type { ProviderItem, ShortcutSettings } from '../../shared/config'
+
 import {
   detectLanguage,
   getLanguageInfo,
@@ -14,22 +13,15 @@ import {
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
 const INITIAL_SOURCE_TEXT = ''
-const STATUS_TEXT_MAP: Record<TranslateStatus, string> = {
-  idle: 'READY_V1.1',
-  translating: 'TRANSLATING',
-  error: 'ERROR'
-}
-const STATUS_DOT_CLASS_MAP: Record<TranslateStatus, string> = {
-  idle: 'status-dot status-dot-idle',
-  translating: 'status-dot status-dot-translating',
-  error: 'status-dot status-dot-error'
-}
-
-const STATUS_VALUE_CLASS_MAP: Record<TranslateStatus, string> = {
-  idle: 'status-value status-value-idle',
-  translating: 'status-value status-value-translating',
-  error: 'status-value status-value-error'
-}
+// 输入区字号 13px × 行高 1.5，用来把输入框内容高度换算成行数（与 .compose-input 保持一致）
+const INPUT_LINE_HEIGHT = 19.5
+// 输入区最多长到 3 行，再多交给输入框自己滚动
+const MAX_INPUT_LINES = 3
+// 窗口高度只在这两档之间浮动：1 行输入 330px 紧凑机身，3 行输入 430px 封顶
+const WINDOW_HEIGHT_MIN = 330
+const WINDOW_HEIGHT_MAX = 430
+// 每多一行输入窗口加 50px：多出来的空间留给译文区，而不是把译文区压扁
+const WINDOW_HEIGHT_PER_INPUT_LINE = 50
 
 const getUserFriendlyErrorMessage = (code: string): string => {
   switch (code) {
@@ -72,12 +64,12 @@ const pickActiveProvider = (
 }
 
 /**
- * 格式化界面显示的语言名称，去除多余繁杂括号
+ * 语言名的极短中文显示：列表标签去掉括号里的原文，例如「英语 (English)」→「英语」。
+ * 头部一行要同时放下两种语言，用不了「CHINESE (SIM)」这种长写法。
  */
-function formatLanguageDisplay(code: SupportedLanguage): string {
-  if (code === 'auto') return 'AUTO'
-  if (code === 'zh') return 'CHINESE'
-  return getLanguageInfo(code).promptName
+function getShortLanguageLabel(code: SupportedLanguage): string {
+  if (code === 'auto') return '自动'
+  return getLanguageInfo(code).label.split(' (')[0]
 }
 
 function App(): React.JSX.Element {
@@ -109,7 +101,7 @@ function App(): React.JSX.Element {
   const [isDeckMounted, setIsDeckMounted] = useState(false)
   // 控制面板是否处于退出淡出状态
   const [isDeckClosing, setIsDeckClosing] = useState(false)
-  const modelSelectorRef = useRef<HTMLDivElement | null>(null)
+  const modelSelectorRef = useRef<HTMLButtonElement | null>(null)
   const engineDeckRef = useRef<HTMLDivElement | null>(null)
 
   // 启用的服务商列表
@@ -170,8 +162,6 @@ function App(): React.JSX.Element {
   const [isTargetLangMenuOpen, setIsTargetLangMenuOpen] = useState(false)
   const sourceLangSelectorRef = useRef<HTMLDivElement | null>(null)
   const targetLangSelectorRef = useRef<HTMLDivElement | null>(null)
-  const sourceRibbonTrackRef = useRef<HTMLDivElement | null>(null)
-  const targetRibbonTrackRef = useRef<HTMLDivElement | null>(null)
 
   // 记录深色面板退出动画定时器
   const deckClosingTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -203,30 +193,6 @@ function App(): React.JSX.Element {
     }, 100)
   }, [])
 
-  // 磁带滑轨展开时，自动平滑滚动使当前选中语言进入视窗中心
-  useEffect(() => {
-    if (!isSourceLangMenuOpen && !isTargetLangMenuOpen) return undefined
-    const track = isSourceLangMenuOpen ? sourceRibbonTrackRef.current : targetRibbonTrackRef.current
-    const timer = window.setTimeout(() => {
-      const selectedEl = track?.querySelector('.tape-chip-selected')
-      if (selectedEl) {
-        selectedEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-      }
-    }, 50)
-    return () => window.clearTimeout(timer)
-  }, [isSourceLangMenuOpen, isTargetLangMenuOpen])
-
-  // 横向滑轨鼠标滚轮自适应水平滚动（触控板横滑原生放行，纵向滚轮驱动横移）
-  const handleRibbonWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
-    // 若横向位移占主导（触控板双指横滑），完全交由系统原生 120Hz 硬件加速物理管线处理
-    if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) {
-      return
-    }
-    if (event.deltaY !== 0) {
-      event.currentTarget.scrollLeft += event.deltaY
-    }
-  }
-
   // 毫秒级根据输入文本自动检测语言
   const detectedInfo = useMemo(() => {
     return detectLanguage(sourceText)
@@ -242,33 +208,57 @@ function App(): React.JSX.Element {
     return autoTarget
   }, [manualTargetLang, detectedInfo.detected, sourceLanguage])
 
-  // 源语言标签的单行规范化显示文本
-  const sourceDisplayPrompt = useMemo(() => {
-    if (sourceLanguage === 'auto') {
-      return sourceText.trim() ? formatLanguageDisplay(detectedInfo.detected) : 'AUTO'
-    }
-    return formatLanguageDisplay(sourceLanguage)
+  // 头部语言行：源语言名（自动模式下显示当前识别出的语言，识别不出就写"自动"）
+  const sourceLanguageName = useMemo(() => {
+    if (sourceLanguage !== 'auto') return getShortLanguageLabel(sourceLanguage)
+    return sourceText.trim() ? getShortLanguageLabel(detectedInfo.detected) : '自动'
   }, [sourceLanguage, sourceText, detectedInfo.detected])
+
+  // 头部语言行：目标语言名（自动匹配时显示匹配结果）
+  const targetLanguageName = useMemo(
+    () => getShortLanguageLabel(effectiveTargetLang),
+    [effectiveTargetLang]
+  )
 
   const deviceRef = useRef<HTMLElement | null>(null)
 
-  // 动态根据输入内容自适应调整 textarea 高度
-  const adjustTextareaHeight = (): void => {
-    const textarea = sourceInputRef.current
-    if (!textarea) return
-    textarea.style.height = 'auto'
-    const nextHeight = Math.min(textarea.scrollHeight, 180)
-    textarea.style.height = `${Math.max(nextHeight, 36)}px`
-  }
-
-  useEffect(() => {
-    adjustTextareaHeight()
-  }, [sourceText])
-
   // 缓存上一次同步给 Electron 主进程的窗口高度，避免高频冗余触发
   const lastSentHeightRef = useRef<number>(0)
-  // 目标输出屏幕 DOM 引用
-  const targetScreenRef = useRef<HTMLDivElement | null>(null)
+
+  /**
+   * 输入区高度与窗口高度联动。
+   * 窗口高度由"输入行数"算出，而不是读 DOM 实测高度 ——
+   * 译文区是 flex:1 撑满剩余空间的，用实测高度会形成"测量 → 改窗口 → 再测量"的自激循环。
+   */
+  const syncInputHeight = useCallback((): void => {
+    const textarea = sourceInputRef.current
+    if (!textarea) return
+
+    textarea.style.height = 'auto'
+    const contentHeight = textarea.scrollHeight
+    // 行数只取 1–3 行：再多也只让输入框自己滚动，不继续顶窗口
+    const lineCount = Math.max(
+      1,
+      Math.min(MAX_INPUT_LINES, Math.round(contentHeight / INPUT_LINE_HEIGHT))
+    )
+    // 高度按整行取整，避免内容高度里的小数点让输入框每次输入都抖动 1px
+    textarea.style.height = `${Math.min(lineCount * INPUT_LINE_HEIGHT, contentHeight)}px`
+
+    const nextWindowHeight = Math.min(
+      WINDOW_HEIGHT_MAX,
+      WINDOW_HEIGHT_MIN + (lineCount - 1) * WINDOW_HEIGHT_PER_INPUT_LINE
+    )
+
+    // 仅当高度发生有效变化（>= 2px）时才派发 IPC，杜绝微小晃动与性能浪费
+    if (Math.abs(lastSentHeightRef.current - nextWindowHeight) >= 2) {
+      lastSentHeightRef.current = nextWindowHeight
+      void window.api.setWindowHeight(nextWindowHeight)
+    }
+  }, [])
+
+  useEffect(() => {
+    syncInputHeight()
+  }, [sourceText, syncInputHeight])
 
   // 组件卸载时清理退出定时器
   useEffect(() => {
@@ -278,38 +268,6 @@ function App(): React.JSX.Element {
       }
     }
   }, [])
-
-  // 监听组件真实渲染尺寸，确保在超长文本输入时能适度自适应扩展窗口高度（基准下限为 280px 紧凑小巧机身）
-  useEffect(() => {
-    if (!deviceRef.current) return
-
-    const updateWindowHeight = (): void => {
-      if (!deviceRef.current) return
-      const rect = deviceRef.current.getBoundingClientRect()
-      // 基础内容高度加上上下安全裕量，紧凑自然贴合，杜绝死板大面积空白
-      const targetHeight = Math.max(280, Math.ceil(rect.height + 24))
-
-      // 仅当高度发生有效变化（>= 2px）时才派发 IPC，杜绝微小晃动与性能浪费
-      if (Math.abs(lastSentHeightRef.current - targetHeight) >= 2) {
-        lastSentHeightRef.current = targetHeight
-        void window.api.setWindowHeight(targetHeight)
-      }
-    }
-
-    const observer = new ResizeObserver(() => {
-      window.requestAnimationFrame(updateWindowHeight)
-    })
-
-    observer.observe(deviceRef.current)
-
-    // 在每一轮渲染或菜单开关切换后触发一次高度测量与同步
-    const frameId = window.requestAnimationFrame(updateWindowHeight)
-
-    return () => {
-      window.cancelAnimationFrame(frameId)
-      observer.disconnect()
-    }
-  }, [isSourceLangMenuOpen, isTargetLangMenuOpen, isModelMenuOpen])
 
   // 初始加载后端持久化的大模型配置与多服务商列表
   useEffect(() => {
@@ -410,14 +368,21 @@ function App(): React.JSX.Element {
     })
   }, [])
 
-  const handleTriggerCapture = async (): Promise<void> => {
-    try {
-      await window.api.captureScreen()
-    } catch (error) {
-      console.error('[renderer] 触发截图翻译失败', error)
-    }
-  }
+  // 空态提示里的截图快捷键：跟随用户在设置里自定义的键位，读不到就退回默认值
+  const [screenshotShortcut, setScreenshotShortcut] = useState('Alt+S')
 
+  useEffect(() => {
+    const applyShortcut = (next: ShortcutSettings | undefined): void => {
+      setScreenshotShortcut(next?.screenshot || 'Alt+S')
+    }
+
+    window.api
+      .getConfig()
+      .then((cfg) => applyShortcut(cfg.shortcuts))
+      .catch((err) => console.error('[renderer] 读取截图快捷键失败', err))
+
+    return window.api.onConfigUpdated((cfg) => applyShortcut(cfg.shortcuts))
+  }, [])
   // 监听多浮层外部点击与 Esc 按键关闭
   useEffect(() => {
     if (!isModelMenuOpen && !isSourceLangMenuOpen && !isTargetLangMenuOpen) return
@@ -614,460 +579,375 @@ function App(): React.JSX.Element {
 
   const hasSourceText = sourceText.trim().length > 0
   const hasTargetText = targetText.trim().length > 0
-  const screenActionButtonClassName = [
-    'display-screen-action-button',
-    'display-screen-action-button-copy',
-    copyState === 'done' ? 'display-screen-action-button-done' : '',
-    copyState === 'error' ? 'display-screen-action-button-error' : ''
-  ]
-    .filter(Boolean)
-    .join(' ')
 
   return (
     <main className="translator-device" ref={deviceRef}>
-      <section className={`device-panel ${errorMessage ? 'device-panel-error' : ''}`}>
-        <header className="device-header">
-          <button
-            className="panel-button"
-            type="button"
-            aria-label="打开系统偏好设置"
-            title="偏好设置 (Cmd+,)"
-            onClick={() => void window.api.openConfigWindow()}
-          >
-            <img className="panel-icon" src={menuIcon} alt="" />
-          </button>
+      <section className="device-panel">
+        <header className="lang-bar">
+          <div className="lang-slot" ref={sourceLangSelectorRef}>
+            <button
+              type="button"
+              className="lang-trigger"
+              aria-haspopup="listbox"
+              aria-expanded={isSourceLangMenuOpen}
+              title="切换源语言"
+              onClick={() => {
+                setIsSourceLangMenuOpen((open) => !open)
+                setIsTargetLangMenuOpen(false)
+                closeModelMenu()
+              }}
+            >
+              <span className="lang-name">{sourceLanguageName}</span>
+              {sourceLanguage === 'auto' && hasSourceText ? (
+                <span className="lang-sub">自动</span>
+              ) : null}
+            </button>
 
-          <div className="status-panel">
-            <p className="status-label">SYSTEM STATUS</p>
-            <div className={STATUS_VALUE_CLASS_MAP[status]}>
-              <span className={STATUS_DOT_CLASS_MAP[status]} />
-              <span>{STATUS_TEXT_MAP[status]}</span>
-            </div>
+            {isSourceLangMenuOpen ? (
+              <div className="lang-menu" role="listbox" aria-label="源语言选择">
+                {SUPPORTED_LANGUAGES.map((lang) => {
+                  const isSelected = lang.code === sourceLanguage
+
+                  return (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={`lang-option${isSelected ? ' lang-option-on' : ''}`}
+                      onClick={() => {
+                        setIsSourceLangMenuOpen(false)
+                        if (sourceLanguage === lang.code) return
+                        setSourceLanguage(lang.code)
+                        if (sourceText.trim()) {
+                          markTranslationPending()
+                        }
+                      }}
+                    >
+                      {lang.label}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
+
+          <span className="flow-swap" aria-hidden="true">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 8h13M14 5l3 3-3 3" />
+              <path d="M20 16H7M10 13l-3 3 3 3" />
+            </svg>
+          </span>
+
+          <div className="lang-slot lang-slot-target" ref={targetLangSelectorRef}>
+            <button
+              type="button"
+              className="lang-trigger"
+              aria-haspopup="listbox"
+              aria-expanded={isTargetLangMenuOpen}
+              title="切换目标语言"
+              onClick={() => {
+                setIsTargetLangMenuOpen((open) => !open)
+                setIsSourceLangMenuOpen(false)
+                closeModelMenu()
+              }}
+            >
+              <span className="lang-name">{targetLanguageName}</span>
+            </button>
+
+            {isTargetLangMenuOpen ? (
+              <div className="lang-menu" role="listbox" aria-label="目标语言选择">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={manualTargetLang === null}
+                  className={`lang-option${manualTargetLang === null ? ' lang-option-on' : ''}`}
+                  title="跟随源语言自动匹配"
+                  onClick={() => {
+                    setIsTargetLangMenuOpen(false)
+                    if (manualTargetLang === null) return
+                    setManualTargetLang(null)
+                    if (sourceText.trim()) {
+                      markTranslationPending()
+                    }
+                  }}
+                >
+                  自动匹配
+                </button>
+
+                {SUPPORTED_LANGUAGES.filter((lang) => lang.code !== 'auto').map((lang) => {
+                  const isSelected = manualTargetLang === lang.code
+
+                  return (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={`lang-option${isSelected ? ' lang-option-on' : ''}`}
+                      onClick={() => {
+                        setIsTargetLangMenuOpen(false)
+                        if (manualTargetLang === lang.code) return
+                        setManualTargetLang(lang.code)
+                        if (sourceText.trim()) {
+                          markTranslationPending()
+                        }
+                      }}
+                    >
+                      {lang.label}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
           </div>
 
           <button
-            className={`panel-button pin-button ${isPinned ? 'panel-button-pinned' : ''}`}
+            className={`icon-btn pin-btn${isPinned ? ' pin-btn-on' : ''}`}
             type="button"
             aria-label={isPinned ? '取消固定窗口' : '固定窗口置顶'}
             title={isPinned ? '当前已置顶（点击取消）' : '点击置顶窗口'}
             onClick={() => void handleTogglePin()}
           >
-            <img className="panel-icon" src={pinIcon} alt="" />
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 17v5" />
+              <path d="M9 3h6l-.8 5.2 2.8 2.6V13H7v-2.2l2.8-2.6L9 3z" />
+            </svg>
           </button>
         </header>
 
-        <section className="display-section">
-          <div className="display-section-header display-section-header-target">
-            {isSourceLangMenuOpen ? (
-              <div
-                className="tape-ribbon"
-                ref={sourceLangSelectorRef}
-                role="region"
-                aria-label="源语言磁带滑轨"
-              >
-                <div className="tape-ribbon-label">
-                  <span className="section-header-label">SOURCE:</span>
-                </div>
-                <div
-                  className="tape-ribbon-track"
-                  ref={sourceRibbonTrackRef}
-                  onWheel={handleRibbonWheel}
-                  role="listbox"
-                  aria-label="源语言选择"
-                >
-                  {SUPPORTED_LANGUAGES.map((lang) => {
-                    const isSelected = lang.code === sourceLanguage
+        <div className="device-body">
+          <div className="compose">
+            <textarea
+              ref={sourceInputRef}
+              className="compose-input"
+              value={sourceText}
+              onChange={handleSourceTextChange}
+              placeholder={`截图 ${screenshotShortcut}，或直接输入 / 粘贴文字`}
+              rows={1}
+              spellCheck={false}
+              aria-label="源文本输入框"
+            />
+          </div>
 
-                    return (
-                      <button
-                        key={lang.code}
-                        className={`tape-chip ${isSelected ? 'tape-chip-selected' : ''}`}
-                        type="button"
-                        role="option"
-                        aria-selected={isSelected}
-                        title={
-                          lang.code === 'auto'
-                            ? `自动检测${sourceText.trim() ? ` (当前识别: ${detectedInfo.languageInfo.label})` : ''}`
-                            : lang.label
-                        }
-                        onClick={() => {
-                          setIsSourceLangMenuOpen(false)
-                          if (sourceLanguage !== lang.code) {
-                            setSourceLanguage(lang.code)
-                            if (sourceText.trim()) {
-                              markTranslationPending()
-                            }
-                          }
-                        }}
-                      >
-                        {lang.shortLabel}
-                      </button>
-                    )
-                  })}
+          <section className="result">
+            <div className="result-scroll">
+              {errorMessage ? (
+                <p className="result-error" role="status" aria-live="polite">
+                  {errorMessage}
+                </p>
+              ) : null}
+
+              {status === 'translating' ? (
+                <div className="result-loader" aria-live="polite" aria-label="正在翻译">
+                  <span />
+                  <span />
+                  <span />
                 </div>
-                <div className="tape-ribbon-controls">
-                  <button
-                    type="button"
-                    className="tape-close-btn"
-                    onClick={() => setIsSourceLangMenuOpen(false)}
-                    title="收起滑轨"
-                    aria-label="收起滑轨"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="lang-header-item" ref={sourceLangSelectorRef}>
+              ) : (
+                <p className={`result-text${targetText ? '' : ' result-placeholder'}`}>
+                  {targetText || '译文会显示在这里'}
+                </p>
+              )}
+            </div>
+
+            <div className="result-toolbar">
+              <div className="toolbar-left">
                 <button
-                  className="lang-badge-button"
+                  className="icon-btn"
+                  type="button"
+                  onClick={handleClearSource}
+                  disabled={!hasSourceText}
+                  aria-label="清空输入"
+                  title="清空输入"
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+
+                <button
+                  ref={modelSelectorRef}
+                  className="model-entry"
                   type="button"
                   aria-haspopup="listbox"
-                  aria-expanded={false}
-                  aria-label={`当前源语言: ${sourceLanguage === 'auto' ? `自动检测 (当前识别: ${detectedInfo.languageInfo.label})` : getLanguageInfo(sourceLanguage).label}，点击展开语言滑轨`}
+                  aria-expanded={isModelMenuOpen}
+                  aria-label={
+                    activeProvider
+                      ? `当前服务商: ${activeProvider.name}，模型: ${selectedModel}，点击打开模型面板`
+                      : '当前没有启用任何服务商，点击打开模型面板查看'
+                  }
+                  title={
+                    activeProvider
+                      ? `服务商: ${activeProvider.name}\n模型: ${selectedModel}\n地址: ${activeProvider.baseUrl}`
+                      : '当前没有启用任何服务商，请在偏好设置里启用一个'
+                  }
                   onClick={() => {
-                    setIsSourceLangMenuOpen((open) => !open)
+                    setIsSourceLangMenuOpen(false)
                     setIsTargetLangMenuOpen(false)
-                    closeModelMenu()
+                    if (isModelMenuOpen) {
+                      closeModelMenu()
+                    } else {
+                      openModelMenu()
+                    }
                   }}
                 >
-                  <span className="section-header-label">SOURCE:</span>
-                  <span className="section-header-value">{sourceDisplayPrompt}</span>
-                  {sourceLanguage === 'auto' && sourceText.trim() ? (
-                    <span
-                      className="lang-pill"
-                      title={`已自动识别: ${detectedInfo.languageInfo.label} (置信度: ${Math.round(detectedInfo.confidence * 100)}%)`}
-                    >
-                      AUTO
-                    </span>
-                  ) : null}
+                  {selectedModel || '未配置模型'}
                 </button>
               </div>
-            )}
-          </div>
-          <div className="display-screen display-screen-source">
-            <div className="display-screen-body">
-              <div className="display-scroll">
-                <textarea
-                  ref={sourceInputRef}
-                  className="display-input"
-                  value={sourceText}
-                  onChange={handleSourceTextChange}
-                  placeholder="Type text here..."
-                  spellCheck={false}
-                  aria-label="源文本输入框"
-                />
-              </div>
-              <div className="display-screen-actions">
-                <span className="display-screen-actions-label">INPUT ACTIONS</span>
-                <div className="display-screen-actions-list">
-                  <button
-                    className="display-screen-action-button display-screen-action-button-capture"
-                    type="button"
-                    onClick={() => void handleTriggerCapture()}
-                    aria-label="截图翻译 (Alt+S)"
-                    title="截图翻译 (Alt+S)"
+
+              <button
+                className={`icon-btn${copyState === 'done' ? ' icon-btn-done' : ''}${
+                  copyState === 'error' ? ' icon-btn-error' : ''
+                }`}
+                type="button"
+                onClick={() => void handleCopyTarget()}
+                disabled={!hasTargetText || status === 'translating'}
+                aria-label={copyState === 'done' ? '复制完成' : '复制输出'}
+                title={copyState === 'done' ? '复制完成' : '复制输出'}
+              >
+                {copyState === 'done' ? (
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
                   >
-                    <span
-                      className="display-screen-action-icon display-screen-action-icon-crop"
-                      aria-hidden="true"
-                    />
-                  </button>
-                  <button
-                    className="display-screen-action-button display-screen-action-button-clear"
-                    type="button"
-                    onClick={handleClearSource}
-                    disabled={!hasSourceText}
-                    aria-label="清空输入"
-                    title="清空输入"
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
                   >
-                    <span
-                      className="display-screen-action-icon display-screen-action-icon-clear"
-                      aria-hidden="true"
-                    />
-                  </button>
-                </div>
+                    <rect x="9" y="9" width="11" height="11" rx="2" />
+                    <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </section>
+        </div>
+
+        {/* 模型面板：结构与交互沿用原实现，配色并入中性极简体系 */}
+        {isDeckMounted ? (
+          <div
+            className={`terminal-engine-deck ${isDeckClosing ? 'terminal-engine-deck-closing' : ''}`}
+            ref={engineDeckRef}
+            role="dialog"
+            aria-label="翻译引擎选择面板"
+          >
+            <div className="terminal-engine-deck-header">
+              <div className="terminal-engine-deck-title">模型</div>
+              <div className="terminal-engine-deck-actions">
+                <button
+                  type="button"
+                  className="terminal-engine-deck-config"
+                  onClick={() => {
+                    closeModelMenu()
+                    void window.api.openConfigWindow()
+                  }}
+                  aria-label="打开偏好设置"
+                  title="配置服务商（Cmd+,）"
+                >
+                  设置
+                </button>
+                <button
+                  type="button"
+                  className="terminal-engine-deck-close"
+                  onClick={() => closeModelMenu()}
+                  aria-label="关闭模型面板"
+                  title="关闭面板"
+                >
+                  ✕
+                </button>
               </div>
             </div>
-          </div>
-        </section>
 
-        <section className="display-section display-section-target-wrap">
-          <div className="display-section-header display-section-header-target">
-            {isTargetLangMenuOpen ? (
-              <div
-                className="tape-ribbon"
-                ref={targetLangSelectorRef}
-                role="region"
-                aria-label="目标语言磁带滑轨"
-              >
-                <div className="tape-ribbon-label">
-                  <span className="section-header-label">TARGET:</span>
-                </div>
-                <div
-                  className="tape-ribbon-track"
-                  ref={targetRibbonTrackRef}
-                  onWheel={handleRibbonWheel}
-                  role="listbox"
-                  aria-label="目标语言选择"
-                >
-                  <button
-                    className={`tape-chip ${manualTargetLang === null ? 'tape-chip-selected' : ''}`}
-                    type="button"
-                    role="option"
-                    aria-selected={manualTargetLang === null}
-                    title="智能自动匹配 (对偶切换)"
-                    onClick={() => {
-                      setIsTargetLangMenuOpen(false)
-                      if (manualTargetLang !== null) {
-                        setManualTargetLang(null)
-                        if (sourceText.trim()) {
-                          markTranslationPending()
-                        }
-                      }
-                    }}
-                  >
-                    AUTO
-                  </button>
-
-                  {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => {
-                    const isSelected = manualTargetLang === lang.code
-
+            {enabledProviders.length > 0 ? (
+              /* 所有渠道的模型平铺成一列：一次点击直达，渠道之间只用一条细线分隔 */
+              <div className="terminal-engine-models-list" role="listbox" aria-label="模型列表">
+                {enabledProviders.flatMap((prov, provIndex) => {
+                  const rows = prov.models.map((item) => {
+                    const isSelected = prov.id === selectedProviderId && item.id === selectedModel
                     return (
                       <button
-                        key={lang.code}
-                        className={`tape-chip ${isSelected ? 'tape-chip-selected' : ''}`}
+                        key={`${prov.id}-${item.id}`}
                         type="button"
                         role="option"
                         aria-selected={isSelected}
-                        title={lang.label}
-                        onClick={() => {
-                          setIsTargetLangMenuOpen(false)
-                          if (manualTargetLang !== lang.code) {
-                            setManualTargetLang(lang.code)
-                            if (sourceText.trim()) {
-                              markTranslationPending()
-                            }
-                          }
-                        }}
+                        className={`terminal-engine-option ${
+                          isSelected ? 'terminal-engine-option-selected' : ''
+                        }`}
+                        onClick={() => handleModelSelect(prov.id, item.id)}
+                        title={`${item.id} · ${prov.name}`}
                       >
-                        {lang.shortLabel}
+                        <span className="terminal-engine-name">{item.id}</span>
+                        <span className="terminal-engine-provider">{prov.name}</span>
                       </button>
                     )
-                  })}
-                </div>
-                <div className="tape-ribbon-controls">
-                  <button
-                    type="button"
-                    className="tape-close-btn"
-                    onClick={() => setIsTargetLangMenuOpen(false)}
-                    title="收起滑轨"
-                    aria-label="收起滑轨"
-                  >
-                    ✕
-                  </button>
-                </div>
+                  })
+
+                  // 第一个渠道前面不加分隔线，避免顶部多出一条悬空的线
+                  if (provIndex === 0) return rows
+                  return [
+                    <div
+                      key={`sep-${prov.id}`}
+                      className="terminal-engine-group-sep"
+                      aria-hidden="true"
+                    />,
+                    ...rows
+                  ]
+                })}
               </div>
             ) : (
-              <>
-                {/* 目标语言选择器 */}
-                <div className="lang-header-item" ref={targetLangSelectorRef}>
-                  <button
-                    className={`lang-badge-button ${isTargetLangMenuOpen ? 'lang-badge-button-open' : ''}`}
-                    type="button"
-                    aria-haspopup="listbox"
-                    aria-expanded={isTargetLangMenuOpen}
-                    aria-label={`当前目标语言: ${getLanguageInfo(effectiveTargetLang).label}，点击展开语言滑轨`}
-                    onClick={() => {
-                      setIsTargetLangMenuOpen((open) => !open)
-                      setIsSourceLangMenuOpen(false)
-                      closeModelMenu()
-                    }}
-                  >
-                    <span className="section-header-label">TARGET:</span>
-                    <span className="section-header-value">
-                      {formatLanguageDisplay(effectiveTargetLang)}
-                    </span>
-                  </button>
-                </div>
-
-                {/* 模型选择器（保留在腰线右侧入口） */}
-                <div className="model-selector" ref={modelSelectorRef}>
-                  <button
-                    className={`model-switcher-trigger ${isModelMenuOpen ? 'model-switcher-trigger-open' : ''}`}
-                    type="button"
-                    aria-haspopup="listbox"
-                    aria-expanded={isModelMenuOpen}
-                    aria-label={
-                      activeProvider
-                        ? `当前服务商: ${activeProvider.name}，模型: ${selectedModel}，点击在下方屏幕展开选择`
-                        : '当前没有启用任何服务商，点击在下方屏幕查看'
-                    }
-                    title={
-                      activeProvider
-                        ? `服务商: ${activeProvider.name}\n模型: ${selectedModel}\n地址: ${activeProvider.baseUrl}`
-                        : '当前没有启用任何服务商，请在偏好设置里启用一个'
-                    }
-                    onClick={() => {
-                      setIsSourceLangMenuOpen(false)
-                      setIsTargetLangMenuOpen(false)
-                      if (isModelMenuOpen) {
-                        closeModelMenu()
-                      } else {
-                        openModelMenu()
-                      }
-                    }}
-                  >
-                    <span className="section-header-label">MODEL:</span>
-                    <span className="section-header-value">{selectedModel || '--'}</span>
-                  </button>
-                </div>
-              </>
+              /* 一个启用的服务商都没有：点右上角「设置」去启用，不再列出写死的示例模型 */
+              <div className="terminal-engine-empty-hint">
+                还没有启用任何服务商，点右上角「设置」去启用
+              </div>
             )}
           </div>
-          <div
-            ref={targetScreenRef}
-            className={`display-screen display-screen-target ${
-              isModelMenuOpen ? 'display-screen-target-deck-open' : ''
-            }`}
-          >
-            <div className="display-screen-body">
-              <div className="display-scroll">
-                {status === 'translating' ? (
-                  <div className="translation-loader" aria-live="polite" aria-label="正在翻译">
-                    <div className="translation-loader-bubble" aria-hidden="true">
-                      <span className="translation-loader-bubble-tail" />
-                      <span className="translation-loader-bubble-dots">
-                        <span />
-                        <span />
-                        <span />
-                        <span />
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className={`display-content ${!targetText ? 'display-placeholder' : ''}`}>
-                    {targetText || '等待翻译结果...'}
-                  </p>
-                )}
-              </div>
-              <div className="display-screen-actions">
-                <span className="display-screen-actions-label">OUTPUT ACTIONS</span>
-                <div className="display-screen-actions-list">
-                  <button
-                    className={screenActionButtonClassName}
-                    type="button"
-                    onClick={() => void handleCopyTarget()}
-                    disabled={!hasTargetText || status === 'translating'}
-                    aria-label={copyState === 'done' ? '复制完成' : '复制输出'}
-                    title={copyState === 'done' ? '复制完成' : '复制输出'}
-                  >
-                    <span
-                      className={`display-screen-action-icon ${
-                        copyState === 'done'
-                          ? 'display-screen-action-icon-check'
-                          : 'display-screen-action-icon-copy'
-                      }`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* 深色掌机终端引擎面板 (Terminal Engine Deck - 嵌在结果输出屏内部) */}
-            {isDeckMounted ? (
-              <div
-                className={`terminal-engine-deck ${isDeckClosing ? 'terminal-engine-deck-closing' : ''}`}
-                ref={engineDeckRef}
-                role="dialog"
-                aria-label="翻译引擎选择面板"
-              >
-                <div className="terminal-engine-deck-header">
-                  <div className="terminal-engine-deck-title">
-                    <span className="terminal-engine-deck-dot" aria-hidden="true" />
-                    <span>ENGINE</span>
-                  </div>
-                  {/* 设置入口从底部整条按钮收进头部，把高度还给模型列表 */}
-                  <div className="terminal-engine-deck-actions">
-                    <button
-                      type="button"
-                      className="terminal-engine-deck-config"
-                      onClick={() => {
-                        closeModelMenu()
-                        void window.api.openConfigWindow()
-                      }}
-                      aria-label="打开偏好设置"
-                      title="配置服务商（Cmd+,）"
-                    >
-                      CONFIG
-                    </button>
-                    <button
-                      type="button"
-                      className="terminal-engine-deck-close"
-                      onClick={() => closeModelMenu()}
-                      aria-label="关闭引擎面板"
-                      title="关闭面板"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-
-                {enabledProviders.length > 0 ? (
-                  /* 所有渠道的模型平铺成一列：一次点击直达，渠道之间只用一条细线分隔 */
-                  <div className="terminal-engine-models-list" role="listbox" aria-label="模型列表">
-                    {enabledProviders.flatMap((prov, provIndex) => {
-                      const rows = prov.models.map((item) => {
-                        const isSelected =
-                          prov.id === selectedProviderId && item.id === selectedModel
-                        return (
-                          <button
-                            key={`${prov.id}-${item.id}`}
-                            type="button"
-                            role="option"
-                            aria-selected={isSelected}
-                            className={`terminal-engine-option ${
-                              isSelected ? 'terminal-engine-option-selected' : ''
-                            }`}
-                            onClick={() => handleModelSelect(prov.id, item.id)}
-                            title={`${item.id} · ${prov.name}`}
-                          >
-                            <span className="terminal-engine-name">{item.id}</span>
-                            <span className="terminal-engine-provider">{prov.name}</span>
-                          </button>
-                        )
-                      })
-
-                      // 第一个渠道前面不加分隔线，避免顶部多出一条悬空的线
-                      if (provIndex === 0) return rows
-                      return [
-                        <div
-                          key={`sep-${prov.id}`}
-                          className="terminal-engine-group-sep"
-                          aria-hidden="true"
-                        />,
-                        ...rows
-                      ]
-                    })}
-                  </div>
-                ) : (
-                  /* 一个启用的服务商都没有：这里以前兜底列出写死的示例模型，会把人引到不存在的渠道上 */
-                  <div className="terminal-engine-empty-hint terminal-engine-empty-hint-deck">
-                    还没有启用任何服务商，点右上角齿轮去启用
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </div>
-
-          {errorMessage ? (
-            <p className="translate-error" role="status" aria-live="polite">
-              <span className="translate-error-label">SYSTEM NOTICE</span>
-              <span className="translate-error-text">{errorMessage}</span>
-            </p>
-          ) : null}
-        </section>
+        ) : null}
       </section>
     </main>
   )

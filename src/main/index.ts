@@ -124,7 +124,8 @@ function createWindow(): void {
   const { workArea } = primaryDisplay
 
   const windowWidth = 358
-  const windowHeight = 340
+  // 主窗口只有上下两档：330 是"一行输入"的紧凑机身，430 是"三行输入"的封顶高度
+  const windowHeight = 330
 
   // 计算屏幕右上角坐标（完全贴合在屏幕工作区右上角，无缝紧贴右侧与顶部）
   const x = Math.max(workArea.x, Math.round(workArea.x + workArea.width - windowWidth))
@@ -138,8 +139,8 @@ function createWindow(): void {
     height: windowHeight,
     minWidth: 358,
     maxWidth: 358,
-    minHeight: 280,
-    maxHeight: 880,
+    minHeight: 330,
+    maxHeight: 430,
     resizable: false,
     frame: false,
     show: false,
@@ -383,10 +384,6 @@ app.whenReady().then(async () => {
     return await fetchProviderModels(params)
   })
 
-  ipcMain.handle('capture:screen', async () => {
-    return await triggerScreenshotTranslation(() => mainWindow)
-  })
-
   ipcMain.handle('window:toggle-always-on-top', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return false
     const nextState = !mainWindow.isAlwaysOnTop()
@@ -399,11 +396,11 @@ app.whenReady().then(async () => {
     return mainWindow.isAlwaysOnTop()
   })
 
-  // 窗口高度实时同步设置（保持不低于 280px 紧凑高度，超长文本自适应延展）
+  // 窗口高度实时同步设置（下限 330px 紧凑机身，上限 430px 后交给译文区内部滚动）
   ipcMain.handle('window:set-height', (_, targetHeight: number) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     const [width, currentHeight] = mainWindow.getContentSize()
-    const clampedTargetHeight = Math.max(280, Math.min(Math.round(targetHeight), 880))
+    const clampedTargetHeight = Math.max(330, Math.min(Math.round(targetHeight), 430))
     if (Math.abs(currentHeight - clampedTargetHeight) >= 2) {
       mainWindow.setContentSize(width, clampedTargetHeight, false)
     }

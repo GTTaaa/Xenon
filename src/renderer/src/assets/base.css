@@ -1,7 +1,7 @@
 :root {
-  /* 主窗口兜底底色与正文色；electron-vite 模板自带的预设色板已清理 */
-  --color-background: #1b1b1f;
-  --color-text: rgba(255, 255, 245, 0.86);
+  /* 主窗口兜底底色与正文色（与 main.css 的中性极简主题保持一致）；模板自带色板已清理 */
+  --color-background: #f2f2f5;
+  --color-text: #1c1c21;
 }
 
 *,
