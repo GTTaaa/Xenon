@@ -17,6 +17,11 @@ import {
   DEFAULT_SHORTCUTS,
   DEFAULT_TRANSLATION_SETTINGS
 } from '../../shared/config'
+import {
+  SPEED_TEST_PROMPT,
+  calculateTokensPerSecond,
+  consumeChatCompletionStream
+} from '../../shared/streamSpeed'
 
 /**
  * 规整 Base URL，自动去除末尾的 /chat/completions 与多余斜杠
@@ -373,6 +378,11 @@ export const saveLLMConfig = async (
 }
 
 /**
+ * 连通性测试允许的最长等待时间（毫秒），流式测速比单纯握手更耗时，因此放宽到 20 秒
+ */
+const CONNECTION_TEST_TIMEOUT_MS = 20000
+
+/**
  * 测试大模型配置连通性（支持传入单个 ProviderItem 或完整 LLMConfig）
  */
 export const testLLMConnection = async (
@@ -425,7 +435,7 @@ export const testLLMConnection = async (
 
   const endpoint = `${baseUrl}/chat/completions`
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 10000)
+  const timeoutId = setTimeout(() => controller.abort(), CONNECTION_TEST_TIMEOUT_MS)
 
   const testModel = model || 'gpt-4o-mini'
   console.log('[main] testLLMConnection 独立测试厂商:', {
@@ -435,7 +445,8 @@ export const testLLMConnection = async (
   })
 
   try {
-    const response = await net.fetch(endpoint, {
+    // 统一走流式请求：既能验证连通性，又能顺便统计首 token 延迟与每秒输出 token 数
+    let response = await net.fetch(endpoint, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -444,20 +455,77 @@ export const testLLMConnection = async (
       },
       body: JSON.stringify({
         model: testModel,
-        messages: [{ role: 'user', content: 'Hello' }]
+        messages: [{ role: 'user', content: SPEED_TEST_PROMPT }],
+        stream: true
       }),
       signal: controller.signal
     })
 
-    clearTimeout(timeoutId)
-    const latencyMs = Date.now() - startTime
+    // 部分兼容服务不支持 stream 参数，遇到 400/422 时退化为普通请求再确认一次连通性
+    if (!response.ok && (response.status === 400 || response.status === 422)) {
+      const fallbackResponse = await net.fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'screenshot-translator/1.0'
+        },
+        body: JSON.stringify({
+          model: testModel,
+          messages: [{ role: 'user', content: 'Hello' }]
+        }),
+        signal: controller.signal
+      })
+
+      if (fallbackResponse.ok) {
+        clearTimeout(timeoutId)
+        const latencyMs = Date.now() - startTime
+        console.log(
+          '[main] testLLMConnection 测试成功（该服务不支持流式输出），耗时:',
+          latencyMs,
+          'ms'
+        )
+        return {
+          ok: true,
+          message: '连接成功，服务响应正常（该服务不支持流式输出，未测速）',
+          latencyMs
+        }
+      }
+
+      response = fallbackResponse
+    }
 
     if (response.ok) {
-      console.log('[main] testLLMConnection 测试成功，耗时:', latencyMs, 'ms')
+      // 响应体不可读时只能退化为纯连通性判断
+      if (!response.body) {
+        clearTimeout(timeoutId)
+        return {
+          ok: true,
+          message: '连接成功，服务响应正常',
+          latencyMs: Date.now() - startTime
+        }
+      }
+
+      const stats = await consumeChatCompletionStream(response.body, startTime)
+      clearTimeout(timeoutId)
+
+      const tokensPerSecond = calculateTokensPerSecond(stats)
+
+      console.log('[main] testLLMConnection 测试成功:', {
+        latencyMs: stats.totalMs,
+        firstTokenMs: stats.firstTokenMs,
+        outputTokens: stats.outputTokens,
+        tokensPerSecond
+      })
+
       return {
         ok: true,
         message: '连接成功，服务响应正常',
-        latencyMs
+        latencyMs: stats.totalMs,
+        firstTokenMs: stats.firstTokenMs || undefined,
+        outputTokens: stats.outputTokens || undefined,
+        tokensPerSecond,
+        speedEstimated: tokensPerSecond !== undefined ? stats.estimated : undefined
       }
     }
 
@@ -523,7 +591,7 @@ export const testLLMConnection = async (
     if (error instanceof Error && error.name === 'AbortError') {
       return {
         ok: false,
-        message: '连接超时（10秒内未收到响应，请检查网络或代理）'
+        message: `连接超时（${CONNECTION_TEST_TIMEOUT_MS / 1000}秒内未完成输出，请检查网络或代理）`
       }
     }
 

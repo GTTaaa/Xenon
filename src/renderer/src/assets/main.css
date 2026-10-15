@@ -897,16 +897,11 @@ body {
 }
 
 /* 状态微徽章：浅绿底 + 深绿字，是页面上唯一允许出现的彩色文字 */
-.pref-root[data-pref-theme='wise'] .pref-primary-indicator,
-.pref-root[data-pref-theme='wise'] .pref-test-status-ok {
+.pref-root[data-pref-theme='wise'] .pref-primary-indicator {
   background: var(--pref-accent-light);
   color: var(--pref-accent-ink);
   border: 1px solid var(--pref-accent-border);
   font-weight: 600;
-}
-
-.pref-root[data-pref-theme='wise'] .pref-test-status-ok .pref-status-dot {
-  background: var(--pref-accent);
 }
 
 .pref-root {
@@ -1891,29 +1886,74 @@ body {
   }
 }
 
-/* 测试状态胶囊指示徽标 */
-.pref-test-status {
-  font-weight: 400;
+/*
+ * 测试结果胶囊：测试完成后，「测试当前连接」按钮原地变成这个胶囊。
+ * 高度与普通按钮一致（32px），所以页脚高度不会因出结果而跳动；整条可点击，用于重新测试。
+ */
+.pref-test-result-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  height: 26px;
-  padding: 0 8px;
+  height: 32px;
+  padding: 0 13px;
   border-radius: var(--pref-radius-btn);
-  background: rgba(0, 0, 0, 0.04);
-  max-width: 280px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  /* 等宽数字：延迟与速度刷新时宽度不跳动 */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
   flex-shrink: 1;
   box-sizing: border-box;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
-.pref-test-status-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.pref-test-result-pill:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.pref-test-result-pill:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.pref-test-result-pill-ok {
+  color: var(--pref-accent-ink);
+  border: 1px solid var(--pref-accent-border);
+  background: var(--pref-accent-light);
+}
+
+.pref-test-result-pill-ok:hover:not(:disabled) {
+  background: #dcefe4;
+}
+
+.pref-test-result-pill-ok .pref-status-dot {
+  background: var(--pref-accent);
+}
+
+.pref-test-result-pill-fail {
+  color: #a83232;
+  border: 1px solid rgba(216, 92, 92, 0.35);
+  background: rgba(216, 92, 92, 0.1);
+}
+
+.pref-test-result-pill-fail:hover:not(:disabled) {
+  background: rgba(216, 92, 92, 0.16);
+}
+
+.pref-test-result-pill-fail .pref-status-dot {
+  background: #d85c5c;
+}
+
+/* 胶囊内的分隔点：弱化到只做分隔，不抢数字的注意力 */
+.pref-test-result-sep {
+  font-weight: 400;
+  opacity: 0.38;
 }
 
 .pref-status-dot {
@@ -1921,28 +1961,6 @@ body {
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-.pref-test-status-ok {
-  color: var(--pref-accent-ink);
-  border: 1px solid var(--pref-accent-border);
-  background: var(--pref-accent-light);
-}
-
-.pref-test-status-ok .pref-status-dot {
-  background: var(--pref-accent);
-  box-shadow: none;
-}
-
-.pref-test-status-fail {
-  color: #a83232;
-  border: 1px solid rgba(216, 92, 92, 0.35);
-  background: rgba(216, 92, 92, 0.1);
-}
-
-.pref-test-status-fail .pref-status-dot {
-  background: #d85c5c;
-  box-shadow: 0 0 4px rgba(216, 92, 92, 0.5);
 }
 
 /*
@@ -2059,16 +2077,7 @@ body {
   transform: translateY(1px);
 }
 
-/* 测试结果组与错误详情入口 */
-/* 测试结果组：跟在测试按钮之后，长消息靠省略号收尾，页脚与详情弹窗共用 */
-.pref-test-result-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex: 0 1 auto;
-}
-
+/* 错误详情入口：失败时跟在结果胶囊之后 */
 .pref-test-detail-btn {
   height: 26px;
   padding: 0 8px;
@@ -2355,7 +2364,7 @@ body {
   flex-shrink: 0;
 }
 
-/* 弹窗底部左区：需要能收缩，否则"测试按钮 + 长错误提示 + 诊断报告"会顶破 560px 弹窗 */
+/* 弹窗底部左区：需要能收缩，否则"结果胶囊 + 诊断报告"会顶破 530px 弹窗 */
 .pref-modal-footer-left {
   display: flex;
   align-items: center;

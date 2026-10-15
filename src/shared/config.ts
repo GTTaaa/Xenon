@@ -90,8 +90,16 @@ export interface TestConnectionResult {
   ok: boolean
   /** 提示消息或错误原因 */
   message: string
-  /** 响应延迟（毫秒） */
+  /** 整体响应延迟（毫秒），流式测试下为从发起请求到输出结束的总耗时 */
   latencyMs?: number
+  /** 首 token 延迟（毫秒），即从发起请求到收到第一个内容分片的耗时 */
+  firstTokenMs?: number
+  /** 本次测试实际生成的输出 token 数 */
+  outputTokens?: number
+  /** 输出速度，单位 token/秒 */
+  tokensPerSecond?: number
+  /** token 数或速度是否为估算值（服务端未返回 usage 时为 true） */
+  speedEstimated?: boolean
   /** 详细错误信息或 HTTP 响应体，供排查诊断 */
   errorDetail?: string
 }

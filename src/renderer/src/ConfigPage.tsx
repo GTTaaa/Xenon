@@ -179,6 +179,39 @@ const PRESET_TEMPLATES: ProviderTemplate[] = [
 const pickNextPrimaryProvider = (list: ProviderItem[]): ProviderItem | undefined =>
   list.find((p) => p.enabled) ?? list[0]
 
+/**
+ * 组装连通性测试结果的悬浮提示，把测速细节（首 token 延迟、输出 token 数、总耗时）一并展示
+ */
+const buildTestResultTooltip = (result: TestConnectionResult): string => {
+  if (!result.ok) {
+    return result.errorDetail ? `${result.message}（点击“诊断报告”查看详情）` : result.message
+  }
+
+  const details: string[] = []
+  if (typeof result.firstTokenMs === 'number')
+    details.push(`首 token 延迟 ${result.firstTokenMs}ms`)
+  if (typeof result.outputTokens === 'number') {
+    details.push(`本次输出 ${result.speedEstimated ? '约 ' : ''}${result.outputTokens} 个 token`)
+  }
+  if (typeof result.latencyMs === 'number') details.push(`总耗时 ${result.latencyMs}ms`)
+
+  if (details.length === 0) return result.message
+  return `${result.message}\n${details.join(' · ')}`
+}
+
+/**
+ * 从失败信息里提取极简提示，供紧凑结果胶囊使用（例如「连接失败 (404)」）
+ *
+ * 优先取括号里的三位状态码；没有状态码时退化为按关键词判断超时与鉴权问题。
+ */
+const extractFailureHint = (message: string): string => {
+  const statusMatch = message.match(/[(（](\d{3})[)）]/)
+  if (statusMatch) return `(${statusMatch[1]})`
+  if (message.includes('超时')) return '(超时)'
+  if (message.includes('鉴权')) return '(鉴权失败)'
+  return ''
+}
+
 export const ConfigPage = (): React.JSX.Element => {
   // 当前处于的左侧分类
   const [activeCategory, setActiveCategory] = useState<PrefNavCategory>('providers')
@@ -796,6 +829,9 @@ export const ConfigPage = (): React.JSX.Element => {
 
   // 已启用的服务商数量，用于标题行统计文案
   const enabledProviderCount = useMemo(() => providers.filter((p) => p.enabled).length, [providers])
+
+  // 失败时用于紧凑结果胶囊的简短提示，例如「(404)」
+  const failureHint = testResult ? extractFailureHint(testResult.message) : ''
 
   return (
     <div className="pref-root" data-pref-theme={PREF_THEME}>
@@ -1634,39 +1670,52 @@ export const ConfigPage = (): React.JSX.Element => {
             <div className="pref-modal-footer">
               <div className="pref-modal-footer-left">
                 {/* 连通性测试跟着当前编辑的服务商走：刚改完地址就能原地验证，不用先关弹窗 */}
-                <button
-                  type="button"
-                  className="pref-btn pref-btn-test"
-                  onClick={handleTestCurrentProvider}
-                  disabled={isTesting || !activeProvider.baseUrl}
-                  title={`测试【${activeProvider.name}】的连通性 (${activeProvider.baseUrl})`}
-                >
-                  {isTesting ? (
+                {isTesting ? (
+                  <button type="button" className="pref-btn pref-btn-test" disabled>
                     <span className="pref-btn-testing-wrap">
                       <span className="pref-loading-pulse" />
                       <span>正在检测...</span>
                     </span>
-                  ) : (
-                    '测试当前连接'
-                  )}
-                </button>
-
-                {testResult ? (
-                  <div className="pref-test-result-group">
-                    <span
-                      className={`pref-test-status ${
-                        testResult.ok ? 'pref-test-status-ok' : 'pref-test-status-fail'
+                  </button>
+                ) : testResult ? (
+                  <>
+                    {/* 测完按钮原地变成结果胶囊：状态、延迟、速度一行放完，点一下即重新测试 */}
+                    <button
+                      type="button"
+                      className={`pref-test-result-pill ${
+                        testResult.ok ? 'pref-test-result-pill-ok' : 'pref-test-result-pill-fail'
                       }`}
-                      title={testResult.message}
+                      onClick={handleTestCurrentProvider}
+                      disabled={!activeProvider.baseUrl}
+                      title={`${buildTestResultTooltip(testResult)}\n点击重新测试`}
                     >
                       <span className="pref-status-dot" />
-                      <span className="pref-test-status-text">
-                        {testResult.message}
-                        {testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}
+                      <span>
+                        {testResult.ok ? '连接成功' : '连接失败'}
+                        {!testResult.ok && failureHint ? ` ${failureHint}` : ''}
                       </span>
-                    </span>
 
-                    {/* 报错详情入口 */}
+                      {/* 首 token 延迟：更接近用户感知的连接速度，总耗时放在悬浮提示里 */}
+                      {testResult.ok && typeof testResult.firstTokenMs === 'number' ? (
+                        <>
+                          <span className="pref-test-result-sep">·</span>
+                          <span>{testResult.firstTokenMs}ms</span>
+                        </>
+                      ) : null}
+
+                      {/* 输出速度：服务端未返回 usage 时按估算值展示 */}
+                      {testResult.ok && typeof testResult.tokensPerSecond === 'number' ? (
+                        <>
+                          <span className="pref-test-result-sep">·</span>
+                          <span>
+                            {testResult.speedEstimated ? '约 ' : ''}
+                            {testResult.tokensPerSecond.toFixed(1)} token/s
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+
+                    {/* 失败时保留诊断报告入口 */}
                     {!testResult.ok && testResult.errorDetail ? (
                       <button
                         type="button"
@@ -1680,8 +1729,18 @@ export const ConfigPage = (): React.JSX.Element => {
                         诊断报告
                       </button>
                     ) : null}
-                  </div>
-                ) : null}
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="pref-btn pref-btn-test"
+                    onClick={handleTestCurrentProvider}
+                    disabled={!activeProvider.baseUrl}
+                    title={`测试【${activeProvider.name}】的连通性 (${activeProvider.baseUrl})`}
+                  >
+                    测试当前连接
+                  </button>
+                )}
               </div>
 
               <div className="pref-modal-footer-btns">
