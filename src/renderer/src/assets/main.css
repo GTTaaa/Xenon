@@ -69,10 +69,6 @@ body {
   display: flex;
   flex-direction: column;
   background: var(--app-bg);
-  /*
-   * 不画描边也不画圆角：无边框窗口的圆角与投影是系统给的，
-   * 页面里再画一圈就会变成"窗口里套了一个卡片"。
-   */
   overflow: hidden;
 }
 
