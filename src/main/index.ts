@@ -26,7 +26,8 @@ import {
   saveLLMConfig,
   testLLMConnection
 } from './services/configManager'
-import { triggerScreenshotTranslation, prewarmOcrTool } from './services/screenCapture'
+import { triggerScreenshotTranslation } from './services/screenCapture'
+import { prewarmOcr, shutdownOcrDaemon } from './services/ocrEngine'
 import { migrateLegacyUserData } from './services/configMigration'
 
 loadEnv({ path: resolve(process.cwd(), '.env'), quiet: true })
@@ -410,8 +411,8 @@ app.whenReady().then(async () => {
   createWindow()
   createTray()
 
-  // 后台预热 Vision OCR 子进程，把 dyld/Vision 冷加载开销移出用户截图关键路径
-  prewarmOcrTool()
+  // 后台预热 Vision OCR daemon，把 CoreML/e5rt 模型首次编译开销移出用户截图关键路径
+  void prewarmOcr()
 
   // 动态注册与管理全局快捷键
   let currentRegisteredShortcuts: ShortcutSettings | null = null
@@ -506,6 +507,7 @@ app.whenReady().then(async () => {
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
+    shutdownOcrDaemon()
   })
 })
 
