@@ -406,6 +406,21 @@ body {
   color: #b0b0b8;
 }
 
+/* 截图 OCR 进行中的占位提示：与译文同字号，避免识别时译文区空白导致误判为卡死 */
+.result-pending {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: #b0b0b8;
+}
+
+.result-pending-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #c4c4cc;
+}
+
 /* 错误提示不做整条横幅，只在译文区顶部占一行小字 */
 .result-error {
   display: flex;

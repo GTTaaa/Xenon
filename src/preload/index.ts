@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { TranslateRequest, TranslateResponse } from '../shared/translate'
 import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
+import type { OcrStatus } from '../shared/ocr'
 
 // 暴露给渲染进程的应用 API
 const api = {
@@ -46,6 +47,17 @@ const api = {
 
     return () => {
       ipcRenderer.removeListener('translate:apply-source-text', listener)
+    }
+  },
+  onOcrStatus: (callback: (status: OcrStatus) => void): (() => void) => {
+    const listener = (_: unknown, status: OcrStatus): void => {
+      callback(status)
+    }
+
+    ipcRenderer.on('translate:ocr-status', listener)
+
+    return () => {
+      ipcRenderer.removeListener('translate:ocr-status', listener)
     }
   },
   setWindowHeight: (height: number): Promise<void> => {

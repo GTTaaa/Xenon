@@ -20,6 +20,8 @@
     "build:mac": "pnpm run build && electron-builder --mac",
     "build:linux": "pnpm run build && electron-builder --linux",
     "build:ocr": "mkdir -p resources/bin && swiftc -O -o resources/bin/mac-vision-ocr src/main/native/mac-ocr/main.swift",
+    "verify:ocr-cold": "node scripts/verify-ocr-cold.mjs",
+    "verify:ocr-engine": "node scripts/verify-ocr-engine.mjs",
     "test": "node --test \"src/**/*.test.ts\""
   },
   "dependencies": {

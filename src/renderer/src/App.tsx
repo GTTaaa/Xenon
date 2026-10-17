@@ -82,6 +82,9 @@ function App(): React.JSX.Element {
     INITIAL_SOURCE_TEXT.trim() ? 'translating' : 'idle'
   )
   const [errorMessage, setErrorMessage] = useState('')
+  // 截图后 OCR 进行中（首次冷启动可能持续数十秒），用于给界面一个明确的忙碌态
+  const [isRecognizing, setIsRecognizing] = useState(false)
+  const [ocrSlowHint, setOcrSlowHint] = useState(false)
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const requestIdRef = useRef(0)
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
@@ -383,6 +386,30 @@ function App(): React.JSX.Element {
     setStatus('translating')
     setTranslateTriggerToken((prev) => prev + 1)
   }
+
+  // 监听主进程的 OCR 阶段状态：识别期间界面要有反馈，
+  // 否则全新安装首次截图要等 30~60s（模型编译），用户只会以为应用卡死
+  useEffect(() => {
+    return window.api.onOcrStatus((next) => {
+      // 新一轮识别开始时清掉上一轮的「较慢」提示（在事件回调里重置，
+      // 避免在 effect 体内同步 setState 触发级联渲染）
+      setOcrSlowHint(false)
+      setIsRecognizing(next.phase === 'pending')
+
+      if (next.phase === 'error') {
+        setErrorMessage(next.message)
+        setStatus('error')
+      }
+    })
+  }, [])
+
+  // 识别超过 4 秒仍无结果时补一句说明：全新安装的首次识别要现场编译
+  // Vision 模型（实测 30~60s），这属于预期行为而不是卡死，提前讲清楚
+  useEffect(() => {
+    if (!isRecognizing) return
+    const timer = window.setTimeout(() => setOcrSlowHint(true), 4000)
+    return () => window.clearTimeout(timer)
+  }, [isRecognizing])
 
   // 监听截图 OCR 提取出的文本并自动填充触发翻译
   useEffect(() => {
@@ -815,7 +842,16 @@ function App(): React.JSX.Element {
                 </p>
               ) : null}
 
-              {status === 'translating' ? (
+              {isRecognizing ? (
+                <div className="result-pending" role="status" aria-live="polite">
+                  <p>正在识别截图文字…</p>
+                  {ocrSlowHint ? (
+                    <p className="result-pending-hint">
+                      首次使用需要初始化识别模型，可能需要半分钟，请稍候
+                    </p>
+                  ) : null}
+                </div>
+              ) : status === 'translating' ? (
                 <div className="result-loader" aria-live="polite" aria-label="正在翻译">
                   <span />
                   <span />

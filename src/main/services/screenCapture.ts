@@ -68,10 +68,10 @@ const takeInteractiveScreenshot = async (tempImagePath: string): Promise<boolean
 }
 
 /**
- * 调起 macOS 原生选区截图并进行 Vision OCR 文字提取
- * 若用户按 ESC 取消，返回 null
+ * 调起 macOS 原生选区截图，仅负责拿到临时图片路径
+ * 若用户按 ESC 取消，返回 null（临时文件不会被创建）
  */
-export const captureAndRecognize = async (): Promise<string | null> => {
+const captureScreenshotToTempPath = async (): Promise<string | null> => {
   if (process.platform !== 'darwin') {
     throw new Error('当前截图 OCR 功能仅支持 macOS 系统')
   }
@@ -79,23 +79,15 @@ export const captureAndRecognize = async (): Promise<string | null> => {
   // 统一使用 /tmp 目录，保证跨进程绝对读写权限
   const tempImagePath = `/tmp/snip_${Date.now()}.png`
 
-  try {
-    // 1. 调起系统原生交互截屏
-    const hasCaptured = await takeInteractiveScreenshot(tempImagePath)
-    if (!hasCaptured) {
-      debugCapture('[main] 用户按 ESC 取消了选区截图')
-      return null
-    }
-
-    debugCapture('[main] 选区截图已生成:', tempImagePath)
-
-    // 2. 执行 OCR 文字提取
-    const recognizedText = await recognizeImageText(tempImagePath)
-    return recognizedText
-  } finally {
-    // 3. 确保临时截图图片被安全清理
-    await unlink(tempImagePath).catch(() => {})
+  // 1. 调起系统原生交互截屏
+  const hasCaptured = await takeInteractiveScreenshot(tempImagePath)
+  if (!hasCaptured) {
+    debugCapture('[main] 用户按 ESC 取消了选区截图')
+    return null
   }
+
+  debugCapture('[main] 选区截图已生成:', tempImagePath)
+  return tempImagePath
 }
 
 /**
@@ -225,11 +217,11 @@ export const triggerScreenshotTranslation = async (
     }
 
     const captureStart = Date.now()
-    const recognizedText = await captureAndRecognize()
-    debugCapture(`[main][截图诊断] 截屏+OCR 耗时 ${Date.now() - captureStart}ms`)
+    const tempImagePath = await captureScreenshotToTempPath()
+    debugCapture(`[main][截图诊断] 截屏耗时 ${Date.now() - captureStart}ms`)
 
     // 用户主动取消了截图，恢复截图前可见的所有窗口
-    if (recognizedText === null) {
+    if (tempImagePath === null) {
       for (const win of windowsBeforeCapture) {
         if (!win.isDestroyed()) {
           win.show()
@@ -240,6 +232,7 @@ export const triggerScreenshotTranslation = async (
     }
 
     if (!mainWindow || mainWindow.isDestroyed()) {
+      await unlink(tempImagePath).catch(() => {})
       return { ok: false, message: '主窗口未初始化' }
     }
 
@@ -260,11 +253,26 @@ export const triggerScreenshotTranslation = async (
       app.focus({ steal: true })
     }
 
-    // 向渲染进程发送提取到的文本
-    mainWindow.webContents.send('translate:apply-source-text', recognizedText)
+    // 窗口已恢复可见，后续 OCR 在用户看得见的界面上进行。
+    // 全新安装后的首次 OCR 需要现场编译 Vision 模型（实测 30~60s），
+    // 如果把它放在窗口恢复之前，这期间用户面对的是一个「消失的窗口」，
+    // 看起来就像应用卡死了 —— 所以先恢复窗口，再用忙碌态告知进度。
+    debugCapture('[main][截图诊断] 截图完成，已恢复窗口，开始 OCR:', describeWindowStates())
+    mainWindow.webContents.send('translate:ocr-status', { phase: 'pending' })
 
-    debugCapture('[main][截图诊断] 截图成功，恢复后窗口状态:', describeWindowStates())
-    return { ok: true }
+    try {
+      const ocrStart = Date.now()
+      const recognizedText = await recognizeImageText(tempImagePath)
+      debugCapture(`[main][截图诊断] OCR 耗时 ${Date.now() - ocrStart}ms`)
+      mainWindow.webContents.send('translate:ocr-status', { phase: 'idle' })
+      mainWindow.webContents.send('translate:apply-source-text', recognizedText)
+      return { ok: true }
+    } catch (error) {
+      mainWindow.webContents.send('translate:ocr-status', { phase: 'idle' })
+      throw error
+    } finally {
+      await unlink(tempImagePath).catch(() => {})
+    }
   } catch (error) {
     console.error('[main] 截图翻译流程异常', error)
 
@@ -286,7 +294,12 @@ export const triggerScreenshotTranslation = async (
         ? '截屏失败：缺少系统「屏幕录制」权限，请在系统设置中开启'
         : `[截屏异常]: ${rawErrorMsg}`
 
-      mainWindow.webContents.send('translate:apply-source-text', userMessage)
+      // 失败信息走 ocr-status 而不是 apply-source-text：
+      // 后者会把错误文案塞进源输入框并触发一次翻译，等于「把报错当内容去翻」
+      mainWindow.webContents.send('translate:ocr-status', {
+        phase: 'error',
+        message: userMessage
+      })
     }
 
     return {
