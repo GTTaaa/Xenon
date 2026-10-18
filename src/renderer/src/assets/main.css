@@ -29,8 +29,8 @@
   --app-accent: #1a7f45;
   --app-danger: #b3371f;
   /* 输入与译文的双向关联高亮：只做轻量底色，不改变正文颜色 */
-  --app-association-bg: rgba(26, 127, 69, 0.11);
-  --app-association-edge: rgba(26, 127, 69, 0.36);
+  --app-association-bg: rgba(26, 127, 69, 0.14);
+  --app-association-edge: rgba(26, 127, 69, 0.58);
 
   --app-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   --app-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -441,7 +441,10 @@ body {
 }
 
 .alignment-segment-active {
-  background: var(--app-association-bg);
+  /* 左缘标记明确显示片段起点，避免相邻句在同一行时误判高亮范围 */
+  background:
+    linear-gradient(90deg, var(--app-association-edge) 0 2px, transparent 2px),
+    var(--app-association-bg);
   box-shadow: inset 0 -1px 0 var(--app-association-edge);
 }
 
@@ -481,6 +484,21 @@ body {
   box-shadow:
     inset 0 -1px 0 rgba(26, 127, 69, 0.84),
     0 0 0 1px rgba(26, 127, 69, 0.32);
+}
+
+/*
+ * 悬停某一组句子时，暂时收起其他句子的词级标记。
+ * 否则同色虚线和整句底色叠在一起，会让用户误以为相邻句子也被关联。
+ */
+.compose-mirror:has(.alignment-segment-active)
+  .alignment-segment:not(.alignment-segment-active)
+  .learning-segment,
+.result-text:has(.alignment-segment-active)
+  .alignment-segment:not(.alignment-segment-active)
+  .learning-segment {
+  background: transparent;
+  box-shadow: none;
+  text-decoration-color: transparent;
 }
 
 .result-placeholder {

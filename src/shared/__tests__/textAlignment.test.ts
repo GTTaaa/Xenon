@@ -31,6 +31,55 @@ test('英文片段之间的空格不出现在高亮范围内', () => {
   assert.ok(segments[1].start > segments[0].end)
 })
 
+test('英文句号后接小写品牌名时仍按自然句切分', () => {
+  const text = 'A subscription works in one agent. magpie puts everything behind one gateway:'
+  const segments = segmentText(text, 'ENGLISH', 's')
+
+  assert.deepEqual(
+    segments.map((segment) => segment.text),
+    ['A subscription works in one agent.', 'magpie puts everything behind one gateway:']
+  )
+  assert.equal(text.slice(segments[0].start, segments[0].end), segments[0].text)
+  assert.equal(text.slice(segments[1].start, segments[1].end), segments[1].text)
+})
+
+test('Markdown 列表项内部的小写句首也会单独切分', () => {
+  const text = '- **Pick any model for any agent** from one list. magpie edits the important key.'
+  const segments = segmentText(text, 'ENGLISH', 's')
+
+  assert.deepEqual(
+    segments.map((segment) => segment.text),
+    ['- **Pick any model for any agent** from one list.', 'magpie edits the important key.']
+  )
+})
+
+test('常见英文缩写后的句号不会误切', () => {
+  const text = 'Use e.g. this value with Dr. smith. It works.'
+  const segments = segmentText(text, 'ENGLISH', 's')
+
+  assert.deepEqual(
+    segments.map((segment) => segment.text),
+    ['Use e.g. this value with Dr. smith.', 'It works.']
+  )
+})
+
+test('小写品牌名样例会生成与中文句子边界更接近的原文片段', () => {
+  const text = `Each agent keeps its model in its own file, in its own format, with its own keys and base URLs. A subscription you pay for works in one agent and nowhere else. magpie puts all of that behind one app and one local gateway:
+
+- **Pick any model for any agent** from one list. magpie edits the one key that matters in the agent's own config.
+- **Use one provider everywhere**: an API key, a local model, or the Claude, ChatGPT, Copilot, Gemini or Grok plan you're signed in to.
+- **Keep going when a quota runs out**: a routing group moves to the next account or model, and the agent never sees the error.
+
+It's for you if you use more than one agent, more than one provider, or more than one account. If you use one agent on its vendor's own plan and that's enough, you don't need it.
+
+Runs on macOS, Windows and Linux (menu bar app, window, TUI, web UI and CLI), in Docker, and on Termux.`
+  const segments = segmentText(text, 'ENGLISH', 's')
+
+  assert.equal(segments.length, 10)
+  assert.equal(segments[2].text, 'magpie puts all of that behind one app and one local gateway:')
+  assert.equal(segments[4].text, "magpie edits the one key that matters in the agent's own config.")
+})
+
 test('纯空白不会生成可悬停片段', () => {
   assert.deepEqual(segmentText('  \n\n  ', 'ENGLISH', 's'), [])
 })

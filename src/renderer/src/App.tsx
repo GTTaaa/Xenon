@@ -10,6 +10,7 @@ import {
   SUPPORTED_LANGUAGES,
   type SupportedLanguage
 } from '../../shared/languageDetector'
+import { calculatePairScrollTop } from './scrollAlignment'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
@@ -26,7 +27,9 @@ const WINDOW_HEIGHT_MAX = 530
 // 学习对齐结果只保留当前会话内最近使用的少量文本，避免缓存无限增长
 const MAX_ALIGNMENT_CACHE_ENTRIES = 8
 // 调整对齐规则或提示词后递增缓存版本，主动淘汰旧结果
-const ALIGNMENT_CACHE_VERSION = 'learning-v2'
+const ALIGNMENT_CACHE_VERSION = 'learning-v3'
+// 程序化平滑滚动期间短暂忽略滚动事件，避免自动定位被当成用户滚动而关闭悬停状态
+const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 600
 
 const getUserFriendlyErrorMessage = (code: string): string => {
   switch (code) {
@@ -95,6 +98,23 @@ interface SourceHitBox {
   id: string
   /** 片段在屏幕上的所有行矩形 */
   rects: DOMRect[]
+}
+
+/** 收集同一对齐组内所有元素的屏幕矩形，兼容跨行片段 */
+const collectElementRects = (
+  elements: NodeListOf<HTMLElement>
+): Array<{ top: number; bottom: number }> => {
+  const rects: Array<{ top: number; bottom: number }> = []
+
+  for (const element of elements) {
+    for (const rect of element.getClientRects()) {
+      if (rect.width > 0 && rect.height > 0) {
+        rects.push({ top: rect.top, bottom: rect.bottom })
+      }
+    }
+  }
+
+  return rects
 }
 
 /** 学习提示浮层相对鼠标的位置 */
@@ -254,6 +274,10 @@ function App(): React.JSX.Element {
   const sourceHitBoxesRef = useRef<SourceHitBox[]>([])
   const sourceHoverFrameRef = useRef<number | null>(null)
   const activeLearningHintIdRef = useRef<string | null>(null)
+  const isAutoScrollingSourceRef = useRef(false)
+  const isAutoScrollingResultRef = useRef(false)
+  const autoScrollSourceTimerRef = useRef<number | null>(null)
+  const autoScrollResultTimerRef = useRef<number | null>(null)
   const [providers, setProviders] = useState<ProviderItem[]>([])
   // 渠道与模型的初始值只认本地记忆值，读不到就留空 ——
   // 这里不再写 'deepseek' / 'deepseek-chat' 这类硬编码兜底：
@@ -470,6 +494,80 @@ function App(): React.JSX.Element {
   // 缓存上一次同步给 Electron 主进程的窗口高度，避免高频冗余触发
   const lastSentHeightRef = useRef<number>(0)
 
+  /** 标记一次程序化滚动，短暂抑制滚动事件对悬停状态的清理 */
+  const beginAutoScroll = useCallback((target: 'source' | 'result'): void => {
+    const activeRef = target === 'source' ? isAutoScrollingSourceRef : isAutoScrollingResultRef
+    const timerRef = target === 'source' ? autoScrollSourceTimerRef : autoScrollResultTimerRef
+
+    activeRef.current = true
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    timerRef.current = window.setTimeout(() => {
+      activeRef.current = false
+      timerRef.current = null
+    }, PROGRAMMATIC_SCROLL_SUPPRESS_MS)
+  }, [])
+
+  /** 悬停译文片段时，把对应原文按需滚入输入区可视范围 */
+  const scrollSourceToPair = useCallback(
+    (pairId: string): void => {
+      const textarea = sourceInputRef.current
+      const mirror = sourceMirrorRef.current
+      if (!textarea || !mirror) return
+
+      const pairElements = mirror.querySelectorAll<HTMLElement>(`[data-source-pair-id="${pairId}"]`)
+      const previousMirrorScrollTop = mirror.scrollTop
+      mirror.scrollTop = 0
+      const pairRects = collectElementRects(pairElements).map((rect) => ({
+        top: rect.top - textarea.scrollTop,
+        bottom: rect.bottom - textarea.scrollTop
+      }))
+      mirror.scrollTop = previousMirrorScrollTop
+      const textareaRect = textarea.getBoundingClientRect()
+      const nextScrollTop = calculatePairScrollTop(
+        {
+          scrollTop: textarea.scrollTop,
+          scrollHeight: textarea.scrollHeight,
+          clientHeight: textarea.clientHeight,
+          viewportTop: textareaRect.top,
+          viewportBottom: textareaRect.bottom
+        },
+        pairRects
+      )
+
+      if (nextScrollTop === null) return
+      beginAutoScroll('source')
+      textarea.scrollTo({ top: nextScrollTop, behavior: 'smooth' })
+    },
+    [beginAutoScroll]
+  )
+
+  /** 悬停原文片段时，把对应译文按需滚入输出区可视范围 */
+  const scrollResultToPair = useCallback(
+    (pairId: string): void => {
+      const scroll = resultScrollRef.current
+      if (!scroll) return
+
+      const pairElements = scroll.querySelectorAll<HTMLElement>(`[data-target-pair-id="${pairId}"]`)
+      const pairRects = collectElementRects(pairElements)
+      const scrollRect = scroll.getBoundingClientRect()
+      const nextScrollTop = calculatePairScrollTop(
+        {
+          scrollTop: scroll.scrollTop,
+          scrollHeight: scroll.scrollHeight,
+          clientHeight: scroll.clientHeight,
+          viewportTop: scrollRect.top,
+          viewportBottom: scrollRect.bottom
+        },
+        pairRects
+      )
+
+      if (nextScrollTop === null) return
+      beginAutoScroll('result')
+      scroll.scrollTo({ top: nextScrollTop, behavior: 'smooth' })
+    },
+    [beginAutoScroll]
+  )
+
   /**
    * 输入区高度与窗口高度联动。
    *
@@ -620,6 +718,16 @@ function App(): React.JSX.Element {
     setActiveLearningHintId(null)
     setLearningTooltipPosition(null)
     sourceHitBoxesRef.current = []
+    isAutoScrollingSourceRef.current = false
+    isAutoScrollingResultRef.current = false
+    if (autoScrollSourceTimerRef.current !== null) {
+      window.clearTimeout(autoScrollSourceTimerRef.current)
+      autoScrollSourceTimerRef.current = null
+    }
+    if (autoScrollResultTimerRef.current !== null) {
+      window.clearTimeout(autoScrollResultTimerRef.current)
+      autoScrollResultTimerRef.current = null
+    }
     if (sourceInputRef.current) sourceInputRef.current.style.cursor = ''
   }, [])
 
@@ -936,7 +1044,8 @@ function App(): React.JSX.Element {
 
     mirror.style.width = `${textarea.clientWidth}px`
     mirror.style.height = `${textarea.clientHeight}px`
-    mirror.scrollTop = textarea.scrollTop
+    // 命中框统一按未滚动的“内容坐标”保存，悬停时再叠加 textarea.scrollTop
+    mirror.scrollTop = 0
 
     const hitBoxes: SourceHitBox[] = []
 
@@ -970,6 +1079,7 @@ function App(): React.JSX.Element {
     }
 
     sourceHitBoxesRef.current = hitBoxes
+    mirror.scrollTop = textarea.scrollTop
   }, [alignment])
 
   useLayoutEffect(() => {
@@ -1003,6 +1113,12 @@ function App(): React.JSX.Element {
       if (sourceHoverFrameRef.current !== null) {
         window.cancelAnimationFrame(sourceHoverFrameRef.current)
       }
+      if (autoScrollSourceTimerRef.current !== null) {
+        window.clearTimeout(autoScrollSourceTimerRef.current)
+      }
+      if (autoScrollResultTimerRef.current !== null) {
+        window.clearTimeout(autoScrollResultTimerRef.current)
+      }
     }
   }, [])
 
@@ -1035,7 +1151,8 @@ function App(): React.JSX.Element {
     }
 
     const pointerX = event.clientX
-    const pointerY = event.clientY
+    // 命中框存的是未滚动内容坐标，这里把鼠标位置换算到同一坐标系
+    const pointerY = event.clientY + textarea.scrollTop
 
     if (sourceHoverFrameRef.current !== null) {
       window.cancelAnimationFrame(sourceHoverFrameRef.current)
@@ -1045,28 +1162,44 @@ function App(): React.JSX.Element {
       sourceHoverFrameRef.current = null
       let nextPairId: string | null = null
       let nextHint: LearningHint | null = null
+      let bestVerticalDistance = Number.POSITIVE_INFINITY
+      let bestPriority = Number.POSITIVE_INFINITY
 
-      findHitBox: for (const hitBox of sourceHitBoxesRef.current) {
+      for (const hitBox of sourceHitBoxesRef.current) {
         for (const rect of hitBox.rects) {
+          if (pointerX < rect.left - 2 || pointerX > rect.right + 2) continue
+
+          const verticalDistance =
+            pointerY < rect.top
+              ? rect.top - pointerY
+              : pointerY > rect.bottom
+                ? pointerY - rect.bottom
+                : 0
+          if (verticalDistance > 4) continue
+
+          const priority = hitBox.kind === 'learning' ? 0 : 1
           if (
-            pointerX >= rect.left - 2 &&
-            pointerX <= rect.right + 2 &&
-            pointerY >= rect.top - 1 &&
-            pointerY <= rect.bottom + 1
+            verticalDistance > bestVerticalDistance ||
+            (verticalDistance === bestVerticalDistance && priority >= bestPriority)
           ) {
-            if (hitBox.kind === 'learning') {
-              nextHint = learningView?.hintById.get(hitBox.id) ?? null
-              nextPairId = nextHint?.pairId ?? null
-            } else {
-              nextPairId = hitBox.id
-            }
-            break findHitBox
+            continue
+          }
+
+          bestVerticalDistance = verticalDistance
+          bestPriority = priority
+          if (hitBox.kind === 'learning') {
+            nextHint = learningView?.hintById.get(hitBox.id) ?? null
+            nextPairId = nextHint?.pairId ?? null
+          } else {
+            nextHint = null
+            nextPairId = hitBox.id
           }
         }
       }
 
       setActiveAlignmentPairId((current) => (current === nextPairId ? current : nextPairId))
       updateActiveLearningHint(nextHint, pointerX, pointerY)
+      if (nextPairId) scrollResultToPair(nextPairId)
       textarea.style.cursor = nextHint ? 'help' : 'text'
     })
   }
@@ -1083,16 +1216,44 @@ function App(): React.JSX.Element {
   }
 
   /** 输入框滚动后同步测量层，避免命中的语句与显示文本错位 */
-  const handleSourceScroll = (): void => {
+  const handleSourceScroll = useCallback((): void => {
     const textarea = sourceInputRef.current
     const mirror = sourceMirrorRef.current
     if (textarea && mirror) mirror.scrollTop = textarea.scrollTop
+
+    // 等浏览器完成滚动布局后再测量，避免继续使用滚动前的旧命中框
+    window.requestAnimationFrame(() => {
+      if (textarea && mirror) mirror.scrollTop = textarea.scrollTop
+      measureSourceHitBoxes()
+    })
+
+    if (isAutoScrollingSourceRef.current) {
+      return
+    }
+
     if (textarea) textarea.style.cursor = ''
 
     setActiveAlignmentPairId(null)
     updateActiveLearningHint(null)
     measureSourceHitBoxes()
-  }
+  }, [measureSourceHitBoxes, updateActiveLearningHint])
+
+  useEffect(() => {
+    const textarea = sourceInputRef.current
+    if (!textarea) return
+
+    textarea.addEventListener('scroll', handleSourceScroll, { passive: true })
+    return () => textarea.removeEventListener('scroll', handleSourceScroll)
+  }, [handleSourceScroll])
+
+  /** 悬停译文整句时，同步定位原文中的对应片段 */
+  const handleTargetPairEnter = useCallback(
+    (pairId: string): void => {
+      setActiveAlignmentPairId(pairId)
+      scrollSourceToPair(pairId)
+    },
+    [scrollSourceToPair]
+  )
 
   /** 译文词片段悬停时显示学习提示，并同步高亮原文 */
   const handleTargetLearningHintEnter = (
@@ -1103,6 +1264,7 @@ function App(): React.JSX.Element {
     if (!hint) return
 
     setActiveAlignmentPairId(hint.pairId)
+    scrollSourceToPair(hint.pairId)
     updateActiveLearningHint(hint, event.clientX, event.clientY)
   }
 
@@ -1116,6 +1278,12 @@ function App(): React.JSX.Element {
     setActiveAlignmentPairId(null)
     updateActiveLearningHint(null)
   }, [updateActiveLearningHint])
+
+  /** 用户手动滚动译文时清空悬停状态，程序化定位滚动则保持高亮 */
+  const handleResultScroll = (): void => {
+    if (isAutoScrollingResultRef.current) return
+    clearHoverState()
+  }
 
   useEffect(() => {
     return window.api.onFocusInput(() => {
@@ -1406,7 +1574,6 @@ function App(): React.JSX.Element {
                 onChange={handleSourceTextChange}
                 onMouseMove={handleSourceMouseMove}
                 onMouseLeave={handleSourceMouseLeave}
-                onScroll={handleSourceScroll}
                 placeholder={`截图 ${screenshotShortcut}，或直接输入 / 粘贴文字`}
                 rows={1}
                 spellCheck={false}
@@ -1416,7 +1583,7 @@ function App(): React.JSX.Element {
           </div>
 
           <section className="result">
-            <div className="result-scroll" ref={resultScrollRef} onScroll={clearHoverState}>
+            <div className="result-scroll" ref={resultScrollRef} onScroll={handleResultScroll}>
               {errorMessage ? (
                 <p className="result-error" role="status" aria-live="polite">
                   {errorMessage}
@@ -1445,7 +1612,7 @@ function App(): React.JSX.Element {
                     segments={alignment.targetSegments}
                     pairBySegmentId={alignmentView.targetPairBySegmentId}
                     activePairId={activeAlignmentPairId}
-                    onPairEnter={setActiveAlignmentPairId}
+                    onPairEnter={handleTargetPairEnter}
                     learningSpansBySegmentId={learningView?.targetSpansBySegmentId}
                     activeLearningHintId={activeLearningHintId}
                     onLearningHintEnter={handleTargetLearningHintEnter}

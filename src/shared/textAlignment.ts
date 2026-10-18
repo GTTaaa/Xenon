@@ -158,6 +158,63 @@ const getSegmenter = (language: string, granularity: 'sentence' | 'word'): Intl.
   return segmenter
 }
 
+/** 英文中常以缩写形式出现、句号后不应强制切分的词 */
+const ENGLISH_SENTENCE_ABBREVIATIONS = new Set([
+  'approx',
+  'co',
+  'corp',
+  'dept',
+  'dr',
+  'ed',
+  'eds',
+  'est',
+  'etc',
+  'fig',
+  'inc',
+  'jr',
+  'ltd',
+  'mr',
+  'mrs',
+  'ms',
+  'mx',
+  'no',
+  'nos',
+  'pp',
+  'prof',
+  'sr',
+  'st',
+  'vs',
+  'vol'
+])
+
+/**
+ * 查找英文句子内部仍应切分的位置。
+ * 浏览器分句器遇到“句号后接小写品牌名”时通常会合并成一段，
+ * 例如“…nowhere else. magpie…”，这里补上这条保守规则。
+ */
+const findEnglishSentenceSplitOffsets = (rawText: string): number[] => {
+  const offsets: number[] = []
+  const pattern = /([.!?])(["'”’)\]]*)(\s+)(?=[A-Za-z])/g
+  let match: RegExpExecArray | null
+
+  while ((match = pattern.exec(rawText)) !== null) {
+    const previousContent = rawText.slice(0, match.index)
+    const previousWord = /([A-Za-z][A-Za-z.'’]*)$/.exec(previousContent)?.[1]?.toLowerCase()
+    if (!previousWord) continue
+    if (previousWord.length <= 1) continue
+    if (previousWord.includes('.')) continue
+    if (ENGLISH_SENTENCE_ABBREVIATIONS.has(previousWord)) continue
+
+    const nextContent = rawText.slice(match.index + match[0].length)
+    if (!/[A-Za-z0-9]/.test(previousContent)) continue
+    if (!/[A-Za-z0-9]/.test(nextContent)) continue
+
+    offsets.push(match.index + 1 + match[2].length)
+  }
+
+  return offsets
+}
+
 /**
  * 按自然句切分文本，并保留片段在原始字符串中的精确偏移。
  * 片段会去掉首尾空白，片段之间的空白与换行由渲染层原样补回。
@@ -171,15 +228,17 @@ export const segmentText = (
 
   const segments: AlignmentSegment[] = []
   const iterator = getSegmenter(language, 'sentence').segment(text)
+  const shouldRefineEnglishSentences = resolveSegmenterLocale(language) === 'en'
 
-  for (const item of iterator) {
-    const rawText = item.segment
+  /** 按绝对偏移截取片段，并去掉首尾空白 */
+  const pushSegment = (rawStart: number, rawEnd: number): void => {
+    const rawText = text.slice(rawStart, rawEnd)
     const leadingWhitespaceLength = rawText.match(/^\s*/)?.[0].length ?? 0
     const trailingWhitespaceLength = rawText.match(/\s*$/)?.[0].length ?? 0
-    const start = item.index + leadingWhitespaceLength
-    const end = item.index + rawText.length - trailingWhitespaceLength
+    const start = rawStart + leadingWhitespaceLength
+    const end = rawEnd - trailingWhitespaceLength
 
-    if (end <= start) continue
+    if (end <= start) return
 
     segments.push({
       id: `${idPrefix}${segments.length}`,
@@ -187,6 +246,19 @@ export const segmentText = (
       start,
       end
     })
+  }
+
+  for (const item of iterator) {
+    const rawText = item.segment
+    const splitOffsets = shouldRefineEnglishSentences
+      ? findEnglishSentenceSplitOffsets(rawText)
+      : []
+    let rangeStart = item.index
+
+    for (const splitOffset of [...splitOffsets, rawText.length]) {
+      pushSegment(rangeStart, item.index + splitOffset)
+      rangeStart = item.index + splitOffset
+    }
   }
 
   return segments
