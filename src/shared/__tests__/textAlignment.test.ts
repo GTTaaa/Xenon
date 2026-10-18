@@ -65,6 +65,8 @@ test('常见英文缩写后的句号不会误切', () => {
 })
 
 test('真实中英文文本的分句和一一配对保持稳定', () => {
+  assert.equal(alignmentRegressionCases.length, 10)
+
   for (const regressionCase of alignmentRegressionCases) {
     const sourceSegments = segmentText(regressionCase.sourceText, 'ENGLISH', 's')
     const targetSegments = segmentText(regressionCase.targetText, 'CHINESE (SIM)', 't')
