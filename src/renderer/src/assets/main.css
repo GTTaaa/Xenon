@@ -28,6 +28,9 @@
   /* 语义色：置顶（正向）、错误 */
   --app-accent: #1a7f45;
   --app-danger: #b3371f;
+  /* 输入与译文的双向关联高亮：只做轻量底色，不改变正文颜色 */
+  --app-association-bg: rgba(26, 127, 69, 0.11);
+  --app-association-edge: rgba(26, 127, 69, 0.36);
 
   --app-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   --app-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -315,8 +318,36 @@ body {
   border-bottom: 1px solid var(--app-divider);
 }
 
+.compose-stage {
+  position: relative;
+}
+
+/*
+ * 透明测量层：与 textarea 使用完全相同的排版参数。
+ * 平时文字透明，只显示当前关联片段的底色；鼠标事件仍由下方 textarea 接收。
+ */
+.compose-mirror {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  color: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* 输入框本体就是一段普通文字：高度随内容长到 5 行（97.5px）封顶，再多交给它自己滚动 */
 .compose-input {
+  position: relative;
+  z-index: 0;
   display: block;
   width: 100%;
   height: 20px;
@@ -399,6 +430,46 @@ body {
   color: var(--app-fg-read);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* 悬停时同一对齐组在输入与输出两侧共用同一种轻量底色 */
+.alignment-segment {
+  border-radius: 3px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: background-color 80ms ease;
+}
+
+.alignment-segment-active {
+  background: var(--app-association-bg);
+  box-shadow: inset 0 -1px 0 var(--app-association-edge);
+}
+
+/* 词级学习提示：只标记模型确认有上下文释义的内容词 */
+.learning-segment {
+  border-radius: 3px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition:
+    background-color 80ms ease,
+    box-shadow 80ms ease;
+}
+
+.learning-segment-source {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: rgba(26, 127, 69, 0.3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.result-text .learning-segment {
+  cursor: help;
+}
+
+.learning-segment-active {
+  background: rgba(26, 127, 69, 0.16);
+  box-shadow: inset 0 -1px 0 rgba(26, 127, 69, 0.54);
 }
 
 .result-placeholder {
@@ -539,6 +610,130 @@ body {
 
 .model-entry:hover {
   color: var(--app-fg-body);
+}
+
+/* 学习模式开关：常态保持安静，开启后用唯一正向色标明学习辅助已生效 */
+.learning-toggle {
+  flex: 0 0 auto;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-fg-muted);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.learning-toggle:hover:not(:disabled) {
+  color: var(--app-fg-body);
+  background: var(--app-hover-bg);
+}
+
+.learning-toggle-on {
+  border-color: rgba(26, 127, 69, 0.22);
+  background: rgba(26, 127, 69, 0.08);
+  color: var(--app-accent);
+}
+
+.learning-toggle:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: #cfcfd6;
+  cursor: default;
+}
+
+/* 词级提示卡：贴鼠标显示，不拦截鼠标事件，避免干扰原文选择与输入 */
+.learning-tooltip {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  width: 232px;
+  padding: 9px 10px 8px;
+  border: 1px solid rgba(26, 127, 69, 0.16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 8px 24px rgba(23, 28, 25, 0.12),
+    0 1px 2px rgba(23, 28, 25, 0.06);
+  color: var(--app-fg-body);
+  pointer-events: none;
+  animation: learningTooltipIn 90ms ease-out;
+}
+
+.learning-tooltip-above {
+  transform: translateY(-100%);
+}
+
+@keyframes learningTooltipIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.learning-tooltip-above {
+  animation-name: learningTooltipInAbove;
+}
+
+@keyframes learningTooltipInAbove {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-100% + 2px));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-100%);
+  }
+}
+
+.learning-tooltip-word {
+  overflow-wrap: anywhere;
+  color: var(--app-fg);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.learning-tooltip-meaning {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 4px;
+  color: var(--app-fg-body);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.learning-tooltip-meaning span {
+  flex: 0 0 auto;
+  color: var(--app-accent);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.learning-tooltip-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 5px;
+  color: var(--app-fg-muted);
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 /* ==========================================================================

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { TranslateRequest, TranslateResponse } from '../shared/translate'
+import type { AlignTextRequest, AlignTextResponse } from '../shared/textAlignment'
 import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
 
@@ -8,6 +9,9 @@ import type { OcrStatus } from '../shared/ocr'
 const api = {
   translateText: (request: TranslateRequest): Promise<TranslateResponse> => {
     return ipcRenderer.invoke('translate:text', request)
+  },
+  alignText: (request: AlignTextRequest): Promise<AlignTextResponse> => {
+    return ipcRenderer.invoke('translate:align', request)
   },
   onFocusInput: (callback: () => void): (() => void) => {
     const listener = (): void => {

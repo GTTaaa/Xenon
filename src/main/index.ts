@@ -17,9 +17,11 @@ import icon from '../../resources/icon.png?asset'
 import trayIconTemplate2x from '../../resources/trayTemplate@2x.png?asset'
 import trayIconColor2x from '../../resources/xenon.png?asset'
 import type { TranslateRequest } from '../shared/translate'
+import type { AlignTextRequest } from '../shared/textAlignment'
 import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
 import { DEFAULT_SHORTCUTS } from '../shared/config'
 import { translateText } from './services/translator'
+import { alignText } from './services/aligner'
 import {
   fetchProviderModels,
   getLLMConfig,
@@ -353,6 +355,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('translate:text', async (_, request: TranslateRequest) => {
     return await translateText(request)
+  })
+
+  ipcMain.handle('translate:align', async (_, request: AlignTextRequest) => {
+    return await alignText(request)
   })
 
   ipcMain.handle('config:get', async () => {
