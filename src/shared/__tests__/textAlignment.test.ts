@@ -6,6 +6,7 @@ import {
   segmentText,
   tokenizeTextWords
 } from '../textAlignment.ts'
+import { learningRegressionCases } from './fixtures/learningRegressionCases.ts'
 
 test('中文按自然句切分并保留精确偏移', () => {
   const text = '你好。今天很好！'
@@ -172,7 +173,8 @@ test('合法的词级学习提示会附加到整句对齐结果', () => {
           source: [reviewToken.id],
           target: [targetReviewToken.id],
           lemma: 'review',
-          meaning: '审阅'
+          meaning: '审阅',
+          confidence: 'high'
         }
       ]
     }),
@@ -213,7 +215,8 @@ test('词级提示跨句对应时关闭全部词级提示但保留整句对齐',
           source: [runToken.id],
           target: [walkTargetToken.id],
           lemma: 'run',
-          meaning: '走'
+          meaning: '走',
+          confidence: 'high'
         }
       ]
     }),
@@ -248,13 +251,168 @@ test('词级提示重复使用单词编号时整组关闭，避免覆盖冲突',
           source: [reviewToken.id],
           target: [targetReviewToken.id],
           lemma: 'review',
-          meaning: '审阅'
+          meaning: '审阅',
+          confidence: 'high'
         },
         {
           source: [reviewToken.id],
           target: [targetReviewToken.id],
           lemma: 'review',
-          meaning: '提案'
+          meaning: '提案',
+          confidence: 'high'
+        }
+      ]
+    }),
+    sourceSegments,
+    targetSegments,
+    { sourceText, targetText, sourceTokens, targetTokens }
+  )
+
+  assert.ok(alignment)
+  assert.equal(alignment.learningHints, undefined)
+})
+
+test('学习模式 36 组候选词回归样例保持预期过滤结果', () => {
+  assert.equal(learningRegressionCases.length, 36)
+
+  for (const regressionCase of learningRegressionCases) {
+    const sourceSegments = segmentText(regressionCase.sourceText, 'ENGLISH', 's')
+    const sourceTokens = tokenizeTextWords(
+      regressionCase.sourceText,
+      'ENGLISH',
+      sourceSegments,
+      'sw'
+    )
+    const filteredTerms = new Set(
+      filterLearningTokens(sourceTokens, 'ENGLISH', 'sw').map((token) => token.text.toLowerCase())
+    )
+
+    for (const term of regressionCase.expectedTerms) {
+      assert.ok(
+        filteredTerms.has(term.toLowerCase()),
+        `${regressionCase.name}: 应保留候选词 ${term}`
+      )
+    }
+    for (const term of regressionCase.forbiddenTerms) {
+      assert.ok(
+        !filteredTerms.has(term.toLowerCase()),
+        `${regressionCase.name}: 不应保留候选词 ${term}`
+      )
+    }
+  }
+})
+
+test('低置信度和缺少置信度的词级提示会被丢弃', () => {
+  const sourceText = 'Please review the proposal.'
+  const targetText = '请审阅这份提案。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
+  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
+  const reviewToken = sourceTokens.find((token) => token.text === 'review')
+  const targetReviewToken = targetTokens.find((token) => token.text === '审阅')
+
+  assert.ok(reviewToken)
+  assert.ok(targetReviewToken)
+
+  const alignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      learningHints: [
+        {
+          source: [reviewToken.id],
+          target: [targetReviewToken.id],
+          lemma: 'review',
+          meaning: '审阅',
+          confidence: 'low'
+        },
+        {
+          source: [reviewToken.id],
+          target: [targetReviewToken.id],
+          lemma: 'review',
+          meaning: '审阅'
+        }
+      ]
+    }),
+    sourceSegments,
+    targetSegments,
+    { sourceText, targetText, sourceTokens, targetTokens }
+  )
+
+  assert.ok(alignment)
+  assert.deepEqual(alignment.learningHints, [])
+})
+
+test('低置信度提示被丢弃时仍保留同组的高置信度提示', () => {
+  const sourceText = 'Please review the proposal.'
+  const targetText = '请审阅这份提案。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
+  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
+  const reviewToken = sourceTokens.find((token) => token.text === 'review')
+  const proposalToken = sourceTokens.find((token) => token.text === 'proposal')
+  const targetReviewToken = targetTokens.find((token) => token.text === '审阅')
+  const targetProposalToken = targetTokens.find((token) => token.text === '提案')
+
+  assert.ok(reviewToken)
+  assert.ok(proposalToken)
+  assert.ok(targetReviewToken)
+  assert.ok(targetProposalToken)
+
+  const alignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      learningHints: [
+        {
+          source: [reviewToken.id],
+          target: [targetReviewToken.id],
+          lemma: 'review',
+          meaning: '审阅',
+          confidence: 'medium'
+        },
+        {
+          source: [proposalToken.id],
+          target: [targetProposalToken.id],
+          lemma: 'proposal',
+          meaning: '提案',
+          confidence: 0.95
+        }
+      ]
+    }),
+    sourceSegments,
+    targetSegments,
+    { sourceText, targetText, sourceTokens, targetTokens }
+  )
+
+  assert.ok(alignment)
+  assert.equal(alignment.learningHints?.length, 1)
+  assert.equal(alignment.learningHints?.[0].sourceText, 'proposal')
+})
+
+test('高置信提示的释义必须包含简体中文', () => {
+  const sourceText = 'Please review the proposal.'
+  const targetText = '请审阅这份提案。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
+  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
+  const reviewToken = sourceTokens.find((token) => token.text === 'review')
+  const targetReviewToken = targetTokens.find((token) => token.text === '审阅')
+
+  assert.ok(reviewToken)
+  assert.ok(targetReviewToken)
+
+  const alignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      learningHints: [
+        {
+          source: [reviewToken.id],
+          target: [targetReviewToken.id],
+          lemma: 'review',
+          meaning: 'review',
+          confidence: 'high'
         }
       ]
     }),

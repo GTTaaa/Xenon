@@ -305,8 +305,27 @@ const ENGLISH_LOW_VALUE_WORDS = new Set([
   'both',
   'either',
   'neither',
+  'nor',
+  'none',
   'not',
   'no',
+  'never',
+  'cannot',
+  'nobody',
+  'nothing',
+  'nowhere',
+  'anyone',
+  'anybody',
+  'anything',
+  'everyone',
+  'everybody',
+  'everything',
+  'someone',
+  'somebody',
+  'something',
+  'one',
+  'oneself',
+  'there',
   'yes',
   "i'm",
   "you're",
@@ -381,11 +400,36 @@ export const filterLearningTokens = (
   idPrefix: 'sw' | 'tw'
 ): AlignmentToken[] => {
   const locale = resolveSegmenterLocale(language)
+  const firstTokenIdBySegment = new Map<string, string>()
+
+  for (const token of tokens) {
+    if (!firstTokenIdBySegment.has(token.segmentId)) {
+      firstTokenIdBySegment.set(token.segmentId, token.id)
+    }
+  }
 
   return tokens
     .filter((token) => {
+      if (!token.text.trim()) return false
+      if (/\d/.test(token.text)) return false
+
       const normalizedText = token.text.toLowerCase().replace(/’/g, "'")
-      if (locale === 'en') return !ENGLISH_LOW_VALUE_WORDS.has(normalizedText)
+      if (locale === 'en') {
+        if (ENGLISH_LOW_VALUE_WORDS.has(normalizedText)) return false
+        if (!/^[A-Za-z][A-Za-z'’-]*$/.test(token.text)) return false
+
+        // 缩写词、品牌名和句中的首字母大写词通常是专有名词，不作为学习候选
+        const hasInternalUppercase = /[A-Z]/.test(token.text.slice(1))
+        const isAllCaps =
+          token.text.length > 1 &&
+          token.text === token.text.toUpperCase() &&
+          /[A-Z]/.test(token.text)
+        const isMidSentenceTitleCase =
+          /^[A-Z][a-z'’-]+$/.test(token.text) &&
+          firstTokenIdBySegment.get(token.segmentId) !== token.id
+
+        return !hasInternalUppercase && !isAllCaps && !isMidSentenceTitleCase
+      }
       if (locale === 'zh') return !CHINESE_LOW_VALUE_WORDS.has(token.text)
       return true
     })
@@ -460,6 +504,12 @@ const normalizeTokenId = (value: unknown, prefix: 'sw' | 'tw'): string | null =>
   return null
 }
 
+/** 只接受模型明确标记为高置信度的结果，避免把猜测包装成学习提示 */
+const isHighConfidenceHint = (value: unknown): boolean => {
+  if (typeof value === 'string') return value.trim().toLowerCase() === 'high'
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0.9
+}
+
 /**
  * 校验模型返回的词级学习提示。
  * 任一条提示不可靠时返回 null，调用方只关闭词级提示并保留整句关联。
@@ -502,7 +552,12 @@ const parseLearningHints = (
       targetIds?: unknown
       lemma?: unknown
       meaning?: unknown
+      confidence?: unknown
     }
+
+    // 低置信和未标记置信度的结果直接丢弃；结构错误的高置信结果仍会关闭整组词级提示
+    if (!isHighConfidenceHint(hintItem.confidence)) continue
+
     const rawSourceIds = hintItem.source ?? hintItem.sourceIds
     const rawTargetIds = hintItem.target ?? hintItem.targetIds
     if (!Array.isArray(rawSourceIds) || !Array.isArray(rawTargetIds)) return null
@@ -564,6 +619,9 @@ const parseLearningHints = (
 
     if (!lemma || lemma.length > 80) return null
     if (!meaning || meaning.length > 80) return null
+    if (!/^[A-Za-z][A-Za-z' -]*$/.test(lemma)) return null
+    if (!/[\u3400-\u9fff]/.test(meaning)) return null
+    if (!/[\u3400-\u9fff]/.test(targetRawText)) return null
     if (sourceEnd - sourceStart > 120 || targetEnd - targetStart > 120) return null
 
     hints.push({

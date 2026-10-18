@@ -23,6 +23,10 @@ const RESULT_MIN_HEIGHT = 18 * 1.6 * 4
 // 窗口高度只在这两档之间浮动：240px 紧凑机身，530px 封顶
 const WINDOW_HEIGHT_MIN = 240
 const WINDOW_HEIGHT_MAX = 530
+// 学习对齐结果只保留当前会话内最近使用的少量文本，避免缓存无限增长
+const MAX_ALIGNMENT_CACHE_ENTRIES = 8
+// 调整对齐规则或提示词后递增缓存版本，主动淘汰旧结果
+const ALIGNMENT_CACHE_VERSION = 'learning-v2'
 
 const getUserFriendlyErrorMessage = (code: string): string => {
   switch (code) {
@@ -244,6 +248,7 @@ function App(): React.JSX.Element {
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const requestIdRef = useRef(0)
   const alignmentRequestIdRef = useRef(0)
+  const alignmentCacheRef = useRef<Map<string, TextAlignment>>(new Map())
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const sourceMirrorRef = useRef<HTMLDivElement | null>(null)
   const sourceHitBoxesRef = useRef<SourceHitBox[]>([])
@@ -615,6 +620,7 @@ function App(): React.JSX.Element {
     setActiveLearningHintId(null)
     setLearningTooltipPosition(null)
     sourceHitBoxesRef.current = []
+    if (sourceInputRef.current) sourceInputRef.current.style.cursor = ''
   }, [])
 
   const resetTranslationState = (): void => {
@@ -834,11 +840,33 @@ function App(): React.JSX.Element {
 
     const effectiveSourcePrompt = resolvePromptLanguage(sourceLanguage, detectedInfo.detected)
     const effectiveTargetPrompt = getLanguageInfo(effectiveTargetLang).promptName
+    const alignmentCacheKey = JSON.stringify([
+      ALIGNMENT_CACHE_VERSION,
+      sourceText,
+      targetText,
+      effectiveSourcePrompt,
+      effectiveTargetPrompt,
+      selectedProviderId,
+      selectedModel
+    ])
 
     const currentAlignmentRequestId = alignmentRequestIdRef.current + 1
     alignmentRequestIdRef.current = currentAlignmentRequestId
 
     const timer = window.setTimeout(async () => {
+      if (currentAlignmentRequestId !== alignmentRequestIdRef.current) return
+
+      const cachedAlignment = alignmentCacheRef.current.get(alignmentCacheKey)
+      if (cachedAlignment) {
+        setAlignment(cachedAlignment)
+        setActiveAlignmentPairId(null)
+        activeLearningHintIdRef.current = null
+        setActiveLearningHintId(null)
+        setLearningTooltipPosition(null)
+        console.info('[renderer] 复用学习模式对齐缓存')
+        return
+      }
+
       try {
         const response = await window.api.alignText({
           sourceText,
@@ -855,6 +883,13 @@ function App(): React.JSX.Element {
         if (currentAlignmentRequestId !== alignmentRequestIdRef.current) return
 
         if (response.ok) {
+          alignmentCacheRef.current.delete(alignmentCacheKey)
+          alignmentCacheRef.current.set(alignmentCacheKey, response.alignment)
+          if (alignmentCacheRef.current.size > MAX_ALIGNMENT_CACHE_ENTRIES) {
+            const oldestKey = alignmentCacheRef.current.keys().next().value
+            if (oldestKey) alignmentCacheRef.current.delete(oldestKey)
+          }
+
           setAlignment(response.alignment)
           setActiveAlignmentPairId(null)
           activeLearningHintIdRef.current = null
@@ -993,7 +1028,11 @@ function App(): React.JSX.Element {
 
   /** 鼠标在原生输入框上移动时，优先反查具体单词，再回退到整句 */
   const handleSourceMouseMove = (event: React.MouseEvent<HTMLTextAreaElement>): void => {
-    if (!alignment) return
+    const textarea = event.currentTarget
+    if (!alignment) {
+      textarea.style.cursor = ''
+      return
+    }
 
     const pointerX = event.clientX
     const pointerY = event.clientY
@@ -1028,15 +1067,17 @@ function App(): React.JSX.Element {
 
       setActiveAlignmentPairId((current) => (current === nextPairId ? current : nextPairId))
       updateActiveLearningHint(nextHint, pointerX, pointerY)
+      textarea.style.cursor = nextHint ? 'help' : 'text'
     })
   }
 
   /** 鼠标离开输入区时立即取消两侧高亮 */
-  const handleSourceMouseLeave = (): void => {
+  const handleSourceMouseLeave = (event: React.MouseEvent<HTMLTextAreaElement>): void => {
     if (sourceHoverFrameRef.current !== null) {
       window.cancelAnimationFrame(sourceHoverFrameRef.current)
       sourceHoverFrameRef.current = null
     }
+    event.currentTarget.style.cursor = ''
     setActiveAlignmentPairId(null)
     updateActiveLearningHint(null)
   }
@@ -1046,6 +1087,7 @@ function App(): React.JSX.Element {
     const textarea = sourceInputRef.current
     const mirror = sourceMirrorRef.current
     if (textarea && mirror) mirror.scrollTop = textarea.scrollTop
+    if (textarea) textarea.style.cursor = ''
 
     setActiveAlignmentPairId(null)
     updateActiveLearningHint(null)

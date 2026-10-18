@@ -108,7 +108,7 @@ const buildAlignmentSystemPrompt = (includeLearning: boolean): string => {
     'You will receive numbered source segments and numbered target segments.',
     'Return only strict JSON in this exact shape:',
     includeLearning
-      ? '{"pairs":[{"source":["s0"],"target":["t0"]}],"learningHints":[{"source":["sw0","sw1"],"target":["tw0"],"lemma":"look forward to","meaning":"期待"}]}'
+      ? '{"pairs":[{"source":["s0"],"target":["t0"]}],"learningHints":[{"source":["sw0","sw1"],"target":["tw0"],"lemma":"look forward to","meaning":"期待","confidence":"high"}]}'
       : '{"pairs":[{"source":["s0"],"target":["t0"]}]}',
     'Rules:',
     '- sourceSegments and targetSegments are compact [id, text] tuples.',
@@ -128,6 +128,9 @@ const buildAlignmentSystemPrompt = (includeLearning: boolean): string => {
       '- Source ids in a hint must be contiguous and target ids in a hint must be contiguous.',
       '- Each word id may appear in at most one learning hint.',
       '- lemma must be the concise English base form; meaning must be a short Simplified Chinese contextual meaning.',
+      '- confidence must be exactly "high". Omit any hint that is ambiguous, idiomatic, or less than highly certain.',
+      '- Do not create hints for pronouns, negations, proper nouns, names, acronyms, numbers, or grammar-only words.',
+      '- Do not reuse a generic dictionary meaning when the paired translation indicates a different contextual meaning.',
       '- Return an empty learningHints array when no reliable learning hint can be provided.',
       '- Never guess a word mapping that is not directly supported by the paired translation.'
     )
