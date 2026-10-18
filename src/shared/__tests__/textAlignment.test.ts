@@ -1,6 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseAlignmentPairs, segmentText, tokenizeTextWords } from '../textAlignment.ts'
+import {
+  filterLearningTokens,
+  parseAlignmentPairs,
+  segmentText,
+  tokenizeTextWords
+} from '../textAlignment.ts'
 
 test('中文按自然句切分并保留精确偏移', () => {
   const text = '你好。今天很好！'
@@ -128,6 +133,22 @@ test('英文原文与中文译文可以生成保留精确偏移的词片段', ()
     const fullText = token.id.startsWith('sw') ? sourceText : targetText
     assert.equal(fullText.slice(token.start, token.end), token.text)
   }
+})
+
+test('学习候选词会过滤低价值虚词并重新连续编号', () => {
+  const sourceText = 'The team looks forward to reviewing your proposal.'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
+  const filteredTokens = filterLearningTokens(sourceTokens, 'ENGLISH', 'sw')
+
+  assert.ok(filteredTokens.some((token) => token.text === 'team'))
+  assert.ok(filteredTokens.some((token) => token.text === 'reviewing'))
+  assert.ok(!filteredTokens.some((token) => token.text === 'The'))
+  assert.ok(!filteredTokens.some((token) => token.text === 'your'))
+  assert.deepEqual(
+    filteredTokens.map((token) => token.id),
+    filteredTokens.map((_, index) => `sw${index}`)
+  )
 })
 
 test('合法的词级学习提示会附加到整句对齐结果', () => {

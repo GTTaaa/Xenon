@@ -232,6 +232,169 @@ export const tokenizeTextWords = (
   return tokens
 }
 
+/** 英语中通常不单独作为学习目标的虚词 */
+const ENGLISH_LOW_VALUE_WORDS = new Set([
+  'a',
+  'an',
+  'the',
+  'this',
+  'that',
+  'these',
+  'those',
+  'i',
+  'me',
+  'my',
+  'mine',
+  'we',
+  'us',
+  'our',
+  'ours',
+  'you',
+  'your',
+  'yours',
+  'he',
+  'him',
+  'his',
+  'she',
+  'her',
+  'hers',
+  'it',
+  'its',
+  'they',
+  'them',
+  'their',
+  'theirs',
+  'am',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'do',
+  'does',
+  'did',
+  'have',
+  'has',
+  'had',
+  'will',
+  'would',
+  'shall',
+  'should',
+  'can',
+  'could',
+  'may',
+  'might',
+  'must',
+  'and',
+  'or',
+  'but',
+  'if',
+  'because',
+  'while',
+  'than',
+  'then',
+  'so',
+  'such',
+  'very',
+  'too',
+  'also',
+  'just',
+  'only',
+  'both',
+  'either',
+  'neither',
+  'not',
+  'no',
+  'yes',
+  "i'm",
+  "you're",
+  "we're",
+  "they're",
+  "it's",
+  "don't",
+  "doesn't",
+  "didn't",
+  "can't",
+  "won't",
+  "isn't",
+  "aren't",
+  "wasn't",
+  "weren't",
+  "i've",
+  "we've",
+  "you've",
+  "they've",
+  "i'll",
+  "we'll",
+  "you'll",
+  "they'll",
+  "i'd",
+  "we'd",
+  "you'd",
+  "they'd"
+])
+
+/** 中文中通常只承担语法作用、不单独生成学习提示的词 */
+const CHINESE_LOW_VALUE_WORDS = new Set([
+  '的',
+  '地',
+  '得',
+  '了',
+  '着',
+  '过',
+  '是',
+  '在',
+  '和',
+  '与',
+  '及',
+  '或',
+  '而',
+  '但',
+  '就',
+  '都',
+  '也',
+  '还',
+  '又',
+  '很',
+  '更',
+  '最',
+  '这',
+  '那',
+  '个',
+  '些',
+  '吗',
+  '呢',
+  '吧',
+  '啊',
+  '呀'
+])
+
+/**
+ * 过滤低学习价值词片段，并重新编号为连续编号。
+ * 完整句子仍会发送给模型，因此过滤候选词不会丢失上下文。
+ */
+export const filterLearningTokens = (
+  tokens: AlignmentToken[],
+  language: string,
+  idPrefix: 'sw' | 'tw'
+): AlignmentToken[] => {
+  const locale = resolveSegmenterLocale(language)
+
+  return tokens
+    .filter((token) => {
+      const normalizedText = token.text.toLowerCase().replace(/’/g, "'")
+      if (locale === 'en') return !ENGLISH_LOW_VALUE_WORDS.has(normalizedText)
+      if (locale === 'zh') return !CHINESE_LOW_VALUE_WORDS.has(token.text)
+      return true
+    })
+    .map((token, index) => ({
+      ...token,
+      id: `${idPrefix}${index}`
+    }))
+}
+
 /** 从模型回复中提取 JSON，兼容代码围栏和前后说明文字 */
 const extractJsonValue = (rawText: string): unknown => {
   const cleaned = rawText

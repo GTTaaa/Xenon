@@ -1,6 +1,7 @@
 import { net } from 'electron'
 import type { AppSettings, ProviderItem } from '../../shared/config'
 import {
+  filterLearningTokens,
   parseAlignmentPairs,
   segmentText,
   tokenizeTextWords,
@@ -35,6 +36,21 @@ interface ResolvedAlignmentRoute {
   apiKey: string
   /** 实际使用的模型编号 */
   model: string
+}
+
+/** 兼容服务商返回的 token 用量信息 */
+interface AlignmentUsage {
+  /** 输入 token */
+  prompt_tokens?: number
+  /** 输出 token，包含推理 token */
+  completion_tokens?: number
+  /** 总 token */
+  total_tokens?: number
+  /** 输出 token 明细 */
+  completion_tokens_details?: {
+    /** 推理 token */
+    reasoning_tokens?: number
+  }
 }
 
 /**
@@ -95,6 +111,7 @@ const buildAlignmentSystemPrompt = (includeLearning: boolean): string => {
       ? '{"pairs":[{"source":["s0"],"target":["t0"]}],"learningHints":[{"source":["sw0","sw1"],"target":["tw0"],"lemma":"look forward to","meaning":"期待"}]}'
       : '{"pairs":[{"source":["s0"],"target":["t0"]}]}',
     'Rules:',
+    '- sourceSegments and targetSegments are compact [id, text] tuples.',
     '- Every source id and target id must appear exactly once.',
     '- Use one-to-one, one-to-many, many-to-one, or many-to-many pairs only when the meaning aligns.',
     '- Source ids inside one pair must be contiguous, and target ids inside one pair must be contiguous.',
@@ -104,6 +121,7 @@ const buildAlignmentSystemPrompt = (includeLearning: boolean): string => {
 
   if (includeLearning) {
     rules.push(
+      '- sourceWords and targetWords are compact [id, text, segmentId] tuples.',
       '- learningHints must only contain useful English content words or phrases for Chinese learners.',
       '- Skip function words, articles, auxiliary words, and tokens without an independent contextual meaning.',
       '- A learning hint must stay inside one corresponding sentence pair.',
@@ -117,6 +135,7 @@ const buildAlignmentSystemPrompt = (includeLearning: boolean): string => {
 
   rules.push(
     '- Do not include Markdown fences, explanations, headings, or extra keys.',
+    '- Return compact JSON without unnecessary whitespace.',
     '- Always include the pairs field.'
   )
 
@@ -131,39 +150,21 @@ const buildAlignmentUserMessage = (
   sourceTokens?: AlignmentToken[],
   targetTokens?: AlignmentToken[]
 ): string => {
-  const sourceWords = sourceTokens?.map((token) => ({
-    id: token.id,
-    text: token.text,
-    segmentId: token.segmentId
-  }))
-  const targetWords = targetTokens?.map((token) => ({
-    id: token.id,
-    text: token.text,
-    segmentId: token.segmentId
-  }))
+  const sourceWords = sourceTokens?.map((token) => [token.id, token.text, token.segmentId])
+  const targetWords = targetTokens?.map((token) => [token.id, token.text, token.segmentId])
 
-  return JSON.stringify(
-    {
-      sourceLanguage: request.sourceLanguage,
-      targetLanguage: request.targetLanguage,
-      sourceSegments: sourceSegments.map((segment) => ({
-        id: segment.id,
-        text: segment.text
-      })),
-      targetSegments: targetSegments.map((segment) => ({
-        id: segment.id,
-        text: segment.text
-      })),
-      ...(sourceWords && targetWords
-        ? {
-            sourceWords,
-            targetWords
-          }
-        : {})
-    },
-    null,
-    2
-  )
+  return JSON.stringify({
+    sourceLanguage: request.sourceLanguage,
+    targetLanguage: request.targetLanguage,
+    sourceSegments: sourceSegments.map((segment) => [segment.id, segment.text]),
+    targetSegments: targetSegments.map((segment) => [segment.id, segment.text]),
+    ...(sourceWords && targetWords
+      ? {
+          sourceWords,
+          targetWords
+        }
+      : {})
+  })
 }
 
 /** 从兼容 OpenAI 的响应中提取正文 */
@@ -208,6 +209,8 @@ const requestAlignment = async (
   targetTokens?: AlignmentToken[]
 ): Promise<TextAlignment> => {
   const includeLearning = Boolean(sourceTokens?.length && targetTokens?.length)
+  // Cline Pass 已实测支持关闭推理；结构化编号对齐不需要长推理链，可显著降低延迟和 token
+  const disableReasoning = route.provider?.id === 'cline' || route.model.startsWith('cline-pass/')
   const cleanBaseUrl = route.baseUrl
     .trim()
     .replace(/\/chat\/completions\/?$/, '')
@@ -223,6 +226,7 @@ const requestAlignment = async (
     },
     body: JSON.stringify({
       model: route.model,
+      ...(disableReasoning ? { reasoning_effort: 'none' } : {}),
       messages: [
         {
           role: 'system',
@@ -257,7 +261,9 @@ const requestAlignment = async (
         }
         text?: string
       }>
+      usage?: AlignmentUsage
     }
+    usage?: AlignmentUsage
     error?: {
       message?: string
     }
@@ -277,6 +283,16 @@ const requestAlignment = async (
       `HTTP_${response.status}`,
       data.error?.message || `对齐请求失败：${response.status}`
     )
+  }
+
+  const usage = data.data?.usage ?? data.usage
+  if (usage) {
+    console.log('[main] 文本对齐 token 用量:', {
+      promptTokens: usage.prompt_tokens ?? 0,
+      completionTokens: usage.completion_tokens ?? 0,
+      reasoningTokens: usage.completion_tokens_details?.reasoning_tokens ?? 0,
+      totalTokens: usage.total_tokens ?? 0
+    })
   }
 
   const rawAlignment = extractMessageText(data)
@@ -373,11 +389,17 @@ export const alignText = async (request: AlignTextRequest): Promise<AlignTextRes
       normalizedSourceLanguage === 'ENGLISH' &&
       normalizedTargetLanguage.startsWith('CHINESE')
 
-    const sourceTokens = learningRequested
+    const rawSourceTokens = learningRequested
       ? tokenizeTextWords(request.sourceText, request.sourceLanguage, sourceSegments, 'sw')
       : []
-    const targetTokens = learningRequested
+    const rawTargetTokens = learningRequested
       ? tokenizeTextWords(request.targetText, request.targetLanguage, targetSegments, 'tw')
+      : []
+    const sourceTokens = learningRequested
+      ? filterLearningTokens(rawSourceTokens, request.sourceLanguage, 'sw')
+      : []
+    const targetTokens = learningRequested
+      ? filterLearningTokens(rawTargetTokens, request.targetLanguage, 'tw')
       : []
     const learningTokensAvailable =
       sourceTokens.length > 0 &&
@@ -431,6 +453,8 @@ export const alignText = async (request: AlignTextRequest): Promise<AlignTextRes
       sourceSegments: sourceSegments.length,
       targetSegments: targetSegments.length,
       learningMode: learningRequested,
+      rawSourceTokens: rawSourceTokens.length,
+      rawTargetTokens: rawTargetTokens.length,
       sourceTokens: learningTokensAvailable ? sourceTokens.length : 0,
       targetTokens: learningTokensAvailable ? targetTokens.length : 0
     })

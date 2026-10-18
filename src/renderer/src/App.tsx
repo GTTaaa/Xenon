@@ -249,11 +249,6 @@ function App(): React.JSX.Element {
   const sourceHitBoxesRef = useRef<SourceHitBox[]>([])
   const sourceHoverFrameRef = useRef<number | null>(null)
   const activeLearningHintIdRef = useRef<string | null>(null)
-  // 对齐结果对应的输入快照与是否包含词级提示，用于切换学习模式时不重复请求
-  const alignmentContextRef = useRef<{
-    key: string
-    includesLearning: boolean
-  } | null>(null)
   const [providers, setProviders] = useState<ProviderItem[]>([])
   // 渠道与模型的初始值只认本地记忆值，读不到就留空 ——
   // 这里不再写 'deepseek' / 'deepseek-chat' 这类硬编码兜底：
@@ -614,7 +609,6 @@ function App(): React.JSX.Element {
   // 清除旧对齐结果，并让尚未返回的对齐请求失效
   const resetAlignment = useCallback((): void => {
     alignmentRequestIdRef.current += 1
-    alignmentContextRef.current = null
     setAlignment(null)
     setActiveAlignmentPairId(null)
     activeLearningHintIdRef.current = null
@@ -828,6 +822,7 @@ function App(): React.JSX.Element {
   // 译文完成后再独立请求一次编号对齐，主翻译结果此时已经可见且不会被改写
   useEffect(() => {
     if (
+      !isLearningActive ||
       status !== 'idle' ||
       !sourceText.trim() ||
       !targetText.trim() ||
@@ -839,21 +834,6 @@ function App(): React.JSX.Element {
 
     const effectiveSourcePrompt = resolvePromptLanguage(sourceLanguage, detectedInfo.detected)
     const effectiveTargetPrompt = getLanguageInfo(effectiveTargetLang).promptName
-    const alignmentKey = JSON.stringify([
-      sourceText,
-      targetText,
-      effectiveSourcePrompt,
-      effectiveTargetPrompt,
-      selectedProviderId,
-      selectedModel
-    ])
-    const cachedAlignment = alignmentContextRef.current
-    const hasReusableAlignment =
-      cachedAlignment?.key === alignmentKey &&
-      (!isLearningActive || cachedAlignment.includesLearning)
-
-    // 关闭学习模式时复用已有整句对齐；重新开启时才补一次词级分析
-    if (hasReusableAlignment) return
 
     const currentAlignmentRequestId = alignmentRequestIdRef.current + 1
     alignmentRequestIdRef.current = currentAlignmentRequestId
@@ -865,7 +845,7 @@ function App(): React.JSX.Element {
           targetText,
           sourceLanguage: effectiveSourcePrompt,
           targetLanguage: effectiveTargetPrompt,
-          learningMode: isLearningActive,
+          learningMode: true,
           options: {
             providerId: selectedProviderId,
             model: selectedModel
@@ -875,10 +855,6 @@ function App(): React.JSX.Element {
         if (currentAlignmentRequestId !== alignmentRequestIdRef.current) return
 
         if (response.ok) {
-          alignmentContextRef.current = {
-            key: alignmentKey,
-            includesLearning: isLearningActive
-          }
           setAlignment(response.alignment)
           setActiveAlignmentPairId(null)
           activeLearningHintIdRef.current = null
@@ -887,12 +863,10 @@ function App(): React.JSX.Element {
           return
         }
 
-        alignmentContextRef.current = null
         setAlignment(null)
         console.info('[renderer] 悬停关联未启用:', response.error.code, response.error.message)
       } catch (error) {
         if (currentAlignmentRequestId !== alignmentRequestIdRef.current) return
-        alignmentContextRef.current = null
         setAlignment(null)
         console.warn('[renderer] 文本对齐请求失败，译文不受影响:', error)
       }
@@ -1369,7 +1343,7 @@ function App(): React.JSX.Element {
         <div className="device-body">
           <div className="compose">
             <div className="compose-stage">
-              {alignment && alignmentView ? (
+              {isLearningActive && alignment && alignmentView ? (
                 <div className="compose-mirror" aria-hidden="true" ref={sourceMirrorRef}>
                   <SegmentedText
                     text={sourceText}
@@ -1422,7 +1396,7 @@ function App(): React.JSX.Element {
                   <span />
                   <span />
                 </div>
-              ) : alignment && alignmentView ? (
+              ) : isLearningActive && alignment && alignmentView ? (
                 <p className="result-text" onMouseLeave={clearHoverState}>
                   <SegmentedText
                     text={targetText}
@@ -1512,7 +1486,10 @@ function App(): React.JSX.Element {
                   onClick={() => {
                     const nextMode = !learningMode
                     setLearningMode(nextMode)
-                    if (!nextMode) clearHoverState()
+                    if (!nextMode) {
+                      clearHoverState()
+                      resetAlignment()
+                    }
                   }}
                 >
                   学习
