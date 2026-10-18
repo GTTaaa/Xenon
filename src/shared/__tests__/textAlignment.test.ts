@@ -6,6 +6,7 @@ import {
   segmentText,
   tokenizeTextWords
 } from '../textAlignment.ts'
+import { alignmentRegressionCases } from './fixtures/alignmentRegressionCases.ts'
 import { learningRegressionCases } from './fixtures/learningRegressionCases.ts'
 
 test('中文按自然句切分并保留精确偏移', () => {
@@ -63,21 +64,43 @@ test('常见英文缩写后的句号不会误切', () => {
   )
 })
 
-test('小写品牌名样例会生成与中文句子边界更接近的原文片段', () => {
-  const text = `Each agent keeps its model in its own file, in its own format, with its own keys and base URLs. A subscription you pay for works in one agent and nowhere else. magpie puts all of that behind one app and one local gateway:
+test('真实中英文文本的分句和一一配对保持稳定', () => {
+  for (const regressionCase of alignmentRegressionCases) {
+    const sourceSegments = segmentText(regressionCase.sourceText, 'ENGLISH', 's')
+    const targetSegments = segmentText(regressionCase.targetText, 'CHINESE (SIM)', 't')
 
-- **Pick any model for any agent** from one list. magpie edits the one key that matters in the agent's own config.
-- **Use one provider everywhere**: an API key, a local model, or the Claude, ChatGPT, Copilot, Gemini or Grok plan you're signed in to.
-- **Keep going when a quota runs out**: a routing group moves to the next account or model, and the agent never sees the error.
+    assert.deepEqual(
+      sourceSegments.map((segment) => segment.text),
+      regressionCase.expectedSourceSegments,
+      `${regressionCase.name}: 英文分句不符合预期`
+    )
+    assert.deepEqual(
+      targetSegments.map((segment) => segment.text),
+      regressionCase.expectedTargetSegments,
+      `${regressionCase.name}: 中文分句不符合预期`
+    )
 
-It's for you if you use more than one agent, more than one provider, or more than one account. If you use one agent on its vendor's own plan and that's enough, you don't need it.
+    const alignment = parseAlignmentPairs(
+      JSON.stringify({
+        pairs: regressionCase.expectedPairs.map((pair) => ({
+          source: pair.sourceIds,
+          target: pair.targetIds
+        }))
+      }),
+      sourceSegments,
+      targetSegments
+    )
 
-Runs on macOS, Windows and Linux (menu bar app, window, TUI, web UI and CLI), in Docker, and on Termux.`
-  const segments = segmentText(text, 'ENGLISH', 's')
-
-  assert.equal(segments.length, 10)
-  assert.equal(segments[2].text, 'magpie puts all of that behind one app and one local gateway:')
-  assert.equal(segments[4].text, "magpie edits the one key that matters in the agent's own config.")
+    assert.ok(alignment, `${regressionCase.name}: 合法配对不应被拒绝`)
+    assert.deepEqual(
+      alignment.pairs.map((pair) => ({
+        sourceIds: pair.sourceIds,
+        targetIds: pair.targetIds
+      })),
+      regressionCase.expectedPairs,
+      `${regressionCase.name}: 配对结果不符合预期`
+    )
+  }
 })
 
 test('纯空白不会生成可悬停片段', () => {
