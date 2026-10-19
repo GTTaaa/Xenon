@@ -10,7 +10,12 @@ import {
   SUPPORTED_LANGUAGES,
   type SupportedLanguage
 } from '../../shared/languageDetector'
-import { calculatePairScrollTop } from './scrollAlignment'
+import {
+  calculatePairScrollTop,
+  findFirstVisiblePairId as selectFirstVisiblePairId,
+  type ScrollRectBoundary,
+  type VisiblePairBox
+} from './scrollAlignment'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
@@ -19,6 +24,9 @@ const INITIAL_SOURCE_TEXT = ''
 const INPUT_LINE_HEIGHT = 19.5
 // 输入区最多长到 5 行，再多交给输入框自己滚动
 const MAX_INPUT_LINES = 5
+// 学习模式两侧统一显示 3～5 行：短文本不留下过多空白，长文本也不把窗口撑满
+const LEARNING_MIN_VISIBLE_LINES = 3
+const LEARNING_MAX_VISIBLE_LINES = 5
 // 译文区最少铺 4 行（译文 18px 字号 × 1.6 行高）：空态和短内容靠它撑住，窗口才不会空一大截
 const RESULT_MIN_HEIGHT = 18 * 1.6 * 4
 // 窗口高度只在这两档之间浮动：240px 紧凑机身，530px 封顶
@@ -30,6 +38,8 @@ const MAX_ALIGNMENT_CACHE_ENTRIES = 8
 const ALIGNMENT_CACHE_VERSION = 'learning-v3'
 // 程序化平滑滚动期间短暂忽略滚动事件，避免自动定位被当成用户滚动而关闭悬停状态
 const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 600
+// 用户停止滚动后再同步另一侧，避免连续滚动时两侧抢滚动位置
+const PAIR_SCROLL_SYNC_DEBOUNCE_MS = 80
 
 const getUserFriendlyErrorMessage = (code: string): string => {
   switch (code) {
@@ -115,6 +125,25 @@ const collectElementRects = (
   }
 
   return rects
+}
+
+/** 找出滚动容器中第一个进入可视区的对齐组，用作另一侧的滚动锚点 */
+const findVisiblePairId = (container: HTMLElement, selector: string): string | null => {
+  const viewport = container.getBoundingClientRect()
+  const elements = container.querySelectorAll<HTMLElement>(selector)
+  const pairs: VisiblePairBox[] = []
+
+  for (const element of elements) {
+    const pairId = element.dataset.sourcePairId ?? element.dataset.targetPairId
+    if (!pairId) continue
+
+    const rects: ScrollRectBoundary[] = Array.from(element.getClientRects())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .map((rect) => ({ top: rect.top, bottom: rect.bottom }))
+    if (rects.length > 0) pairs.push({ id: pairId, rects })
+  }
+
+  return selectFirstVisiblePairId(viewport, pairs)
 }
 
 /** 学习提示浮层相对鼠标的位置 */
@@ -278,6 +307,8 @@ function App(): React.JSX.Element {
   const isAutoScrollingResultRef = useRef(false)
   const autoScrollSourceTimerRef = useRef<number | null>(null)
   const autoScrollResultTimerRef = useRef<number | null>(null)
+  const sourceScrollSyncTimerRef = useRef<number | null>(null)
+  const resultScrollSyncTimerRef = useRef<number | null>(null)
   const [providers, setProviders] = useState<ProviderItem[]>([])
   // 渠道与模型的初始值只认本地记忆值，读不到就留空 ——
   // 这里不再写 'deepseek' / 'deepseek-chat' 这类硬编码兜底：
@@ -409,6 +440,10 @@ function App(): React.JSX.Element {
   // 第一版学习提示只面向最明确的英语原文到中文译文场景
   const isLearningSupported = effectiveSourceLang === 'en' && effectiveTargetLang === 'zh'
   const isLearningActive = learningMode && isLearningSupported
+  const hasSourceText = sourceText.trim().length > 0
+  const hasTargetText = targetText.trim().length > 0
+  // 有实际原文时才切换成上下等高的对照布局，空窗口仍保持紧凑
+  const useLearningLayout = isLearningActive && hasSourceText
 
   // 头部语言行：源语言名（自动模式下显示当前识别出的语言，识别不出就写"自动"）
   const sourceLanguageName = useMemo(() => {
@@ -585,24 +620,43 @@ function App(): React.JSX.Element {
     const panel = deviceRef.current
     if (!textarea || !scroll || !toolbar || !panel) return
 
-    // 输入框先按内容长高，最多 5 行，再多交给它自己滚动
+    // 输入框先恢复自动高度，才能量到文本本身的真实行数，而不是上一次的容器高度
     textarea.style.height = 'auto'
     const contentHeight = textarea.scrollHeight
-    const lineCount = Math.max(
-      1,
-      Math.min(MAX_INPUT_LINES, Math.round(contentHeight / INPUT_LINE_HEIGHT))
+    const learningLineHeight = parseFloat(getComputedStyle(textarea).lineHeight)
+    const resultText = scroll.querySelector<HTMLElement>('.result-text')
+    const sourceLineCount = Math.max(1, Math.ceil(contentHeight / learningLineHeight))
+    const targetLineCount = resultText
+      ? Math.max(1, Math.ceil(resultText.offsetHeight / learningLineHeight))
+      : 1
+    const learningVisibleLines = Math.min(
+      LEARNING_MAX_VISIBLE_LINES,
+      Math.max(LEARNING_MIN_VISIBLE_LINES, sourceLineCount, targetLineCount)
     )
-    // 高度按整行取整，避免内容高度里的小数点让输入框每次输入都抖动 1px
-    textarea.style.height = `${Math.min(lineCount * INPUT_LINE_HEIGHT, contentHeight)}px`
+    const learningTextHeight = learningLineHeight * learningVisibleLines
+
+    if (useLearningLayout) {
+      textarea.style.height = `${learningTextHeight}px`
+    } else {
+      const lineCount = Math.max(
+        1,
+        Math.min(MAX_INPUT_LINES, Math.round(contentHeight / INPUT_LINE_HEIGHT))
+      )
+      // 高度按整行取整，避免内容高度里的小数点让输入框每次输入都抖动 1px
+      textarea.style.height = `${Math.min(lineCount * INPUT_LINE_HEIGHT, contentHeight)}px`
+    }
 
     // 译文区顶部到窗口顶部的距离（头部 + 输入区 + 分隔线），不受窗口高度影响
     const lead = scroll.getBoundingClientRect().top - panel.getBoundingClientRect().top
     const scrollStyle = getComputedStyle(scroll)
     const scrollPadding =
       parseFloat(scrollStyle.paddingTop || '0') + parseFloat(scrollStyle.paddingBottom || '0')
-    // scrollHeight 把上下内边距也算在内，减掉之后才是译文本身的字面高度；
-    // 再套一层保底，空态和短译文才不会把窗口压成一条
-    const resultHeight = Math.max(RESULT_MIN_HEIGHT, scroll.scrollHeight - scrollPadding)
+    // 学习模式让译文滚动区与原文输入区拥有相同的文字可视高度
+    scroll.style.height = useLearningLayout ? `${learningTextHeight + scrollPadding}px` : ''
+    // 普通模式按译文实际内容计算；学习模式忽略内容高度，保持两侧等高
+    const resultHeight = useLearningLayout
+      ? learningTextHeight
+      : Math.max(RESULT_MIN_HEIGHT, scroll.scrollHeight - scrollPadding)
     // 工具行到窗口底边的这点留白写在 .device-body 的 padding-bottom 上，从样式里读，避免两处硬编码
     const body = panel.querySelector('.device-body')
     const bottomPadding = body ? parseFloat(getComputedStyle(body).paddingBottom || '0') : 0
@@ -626,9 +680,9 @@ function App(): React.JSX.Element {
       lastSentHeightRef.current = nextWindowHeight
       void window.api.setWindowHeight(nextWindowHeight)
     }
-  }, [])
+  }, [useLearningLayout])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     syncWindowHeight()
   }, [sourceText, targetText, status, errorMessage, syncWindowHeight])
 
@@ -1119,6 +1173,12 @@ function App(): React.JSX.Element {
       if (autoScrollResultTimerRef.current !== null) {
         window.clearTimeout(autoScrollResultTimerRef.current)
       }
+      if (sourceScrollSyncTimerRef.current !== null) {
+        window.clearTimeout(sourceScrollSyncTimerRef.current)
+      }
+      if (resultScrollSyncTimerRef.current !== null) {
+        window.clearTimeout(resultScrollSyncTimerRef.current)
+      }
     }
   }, [])
 
@@ -1236,7 +1296,30 @@ function App(): React.JSX.Element {
     setActiveAlignmentPairId(null)
     updateActiveLearningHint(null)
     measureSourceHitBoxes()
-  }, [measureSourceHitBoxes, updateActiveLearningHint])
+
+    if (sourceScrollSyncTimerRef.current !== null) {
+      window.clearTimeout(sourceScrollSyncTimerRef.current)
+    }
+    if (!useLearningLayout || !alignment) return
+
+    sourceScrollSyncTimerRef.current = window.setTimeout(() => {
+      sourceScrollSyncTimerRef.current = null
+      if (isAutoScrollingSourceRef.current) return
+
+      const currentTextarea = sourceInputRef.current
+      const currentMirror = sourceMirrorRef.current
+      if (!currentTextarea || !currentMirror) return
+
+      const pairId = findVisiblePairId(currentMirror, '[data-source-pair-id]')
+      if (pairId) scrollResultToPair(pairId)
+    }, PAIR_SCROLL_SYNC_DEBOUNCE_MS)
+  }, [
+    alignment,
+    measureSourceHitBoxes,
+    scrollResultToPair,
+    updateActiveLearningHint,
+    useLearningLayout
+  ])
 
   useEffect(() => {
     const textarea = sourceInputRef.current
@@ -1283,6 +1366,22 @@ function App(): React.JSX.Element {
   const handleResultScroll = (): void => {
     if (isAutoScrollingResultRef.current) return
     clearHoverState()
+
+    if (resultScrollSyncTimerRef.current !== null) {
+      window.clearTimeout(resultScrollSyncTimerRef.current)
+    }
+    if (!useLearningLayout || !alignment) return
+
+    resultScrollSyncTimerRef.current = window.setTimeout(() => {
+      resultScrollSyncTimerRef.current = null
+      if (isAutoScrollingResultRef.current) return
+
+      const scroll = resultScrollRef.current
+      if (!scroll) return
+
+      const pairId = findVisiblePairId(scroll, '[data-target-pair-id]')
+      if (pairId) scrollSourceToPair(pairId)
+    }, PAIR_SCROLL_SYNC_DEBOUNCE_MS)
   }
 
   useEffect(() => {
@@ -1358,8 +1457,6 @@ function App(): React.JSX.Element {
     }
   }
 
-  const hasSourceText = sourceText.trim().length > 0
-  const hasTargetText = targetText.trim().length > 0
   const activeLearningHint =
     activeLearningHintId && learningView
       ? (learningView.hintById.get(activeLearningHintId) ?? null)
@@ -1370,7 +1467,10 @@ function App(): React.JSX.Element {
       activeLearningHint!.sourceText.trim().toLowerCase()
 
   return (
-    <main className="translator-device" ref={deviceRef}>
+    <main
+      className={`translator-device${useLearningLayout ? ' learning-layout' : ''}`}
+      ref={deviceRef}
+    >
       <section className="device-panel">
         <header className="lang-bar">
           <div className="lang-slot" ref={sourceLangSelectorRef}>

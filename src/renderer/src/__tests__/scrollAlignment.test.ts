@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { calculatePairScrollTop } from '../scrollAlignment.ts'
+import { calculatePairScrollTop, findFirstVisiblePairId } from '../scrollAlignment.ts'
 
 const baseContainer = {
   scrollTop: 100,
@@ -53,4 +53,38 @@ test('目标滚动位置不会超出容器有效范围', () => {
   )
 
   assert.equal(nextScrollTop, 400)
+})
+
+test('选择第一个进入可视区的对齐组作为同步锚点', () => {
+  const pairId = findFirstVisiblePairId({ top: 50, bottom: 250 }, [
+    { id: 'p0', rects: [{ top: 10, bottom: 42 }] },
+    { id: 'p1', rects: [{ top: 48, bottom: 76 }] },
+    { id: 'p2', rects: [{ top: 90, bottom: 130 }] }
+  ])
+
+  assert.equal(pairId, 'p1')
+})
+
+test('跨行对齐组只有末尾进入可视区时仍可作为锚点', () => {
+  const pairId = findFirstVisiblePairId({ top: 50, bottom: 250 }, [
+    { id: 'p0', rects: [{ top: 10, bottom: 48 }] },
+    {
+      id: 'p1',
+      rects: [
+        { top: 20, bottom: 46 },
+        { top: 52, bottom: 80 }
+      ]
+    }
+  ])
+
+  assert.equal(pairId, 'p1')
+})
+
+test('没有对齐组进入可视区时不选择锚点', () => {
+  const pairId = findFirstVisiblePairId({ top: 50, bottom: 250 }, [
+    { id: 'p0', rects: [{ top: 10, bottom: 40 }] },
+    { id: 'p1', rects: [{ top: 260, bottom: 290 }] }
+  ])
+
+  assert.equal(pairId, null)
 })

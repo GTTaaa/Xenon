@@ -20,8 +20,30 @@ export interface ScrollContainerMetrics {
   viewportBottom: number
 }
 
+/** 一个对齐组在页面上的所有行矩形 */
+export interface VisiblePairBox {
+  /** 对齐组编号 */
+  id: string
+  /** 该对齐组跨行后的全部矩形 */
+  rects: ScrollRectBoundary[]
+}
+
 /** 定位目标与容器边缘之间保留的安全距离 */
 const SCROLL_SAFE_MARGIN = 8
+
+/** 找出第一个与可视区相交的对齐组，用作另一侧的滚动锚点 */
+export const findFirstVisiblePairId = (
+  viewport: ScrollRectBoundary,
+  pairs: VisiblePairBox[]
+): string | null => {
+  for (const pair of pairs) {
+    if (pair.rects.some((rect) => rect.bottom > viewport.top && rect.top < viewport.bottom)) {
+      return pair.id
+    }
+  }
+
+  return null
+}
 
 /**
  * 计算把对应片段带入可视区所需的滚动位置。

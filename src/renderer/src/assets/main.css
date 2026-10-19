@@ -506,6 +506,36 @@ body {
   color: #b0b0b8;
 }
 
+/*
+ * 学习对照布局：原文与译文使用同一套字号、行高与字重。
+ * 两侧文字可视高度由 App.tsx 按同一行高计算，长文本在这里各自内部滚动。
+ */
+.learning-layout .compose-mirror,
+.learning-layout .compose-input,
+.learning-layout .result-text {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0;
+}
+
+.learning-layout .compose-input {
+  max-height: none;
+  color: var(--app-fg-read);
+}
+
+.learning-layout .result-scroll {
+  flex: 0 0 auto;
+}
+
+.learning-layout .result-text {
+  color: var(--app-fg-read);
+}
+
+.learning-layout .result-placeholder {
+  color: #b0b0b8;
+}
+
 /* 截图 OCR 进行中的占位提示：与译文同字号，避免识别时译文区空白导致误判为卡死 */
 .result-pending {
   font-size: 18px;
