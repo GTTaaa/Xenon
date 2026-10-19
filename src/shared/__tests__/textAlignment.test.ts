@@ -265,7 +265,7 @@ test('合法的词级学习提示会附加到整句对齐结果', () => {
   assert.equal(alignment.learningHints?.[0].meaning, '审阅')
 })
 
-test('词级提示跨句对应时关闭全部词级提示但保留整句对齐', () => {
+test('词级提示跨句对应时只丢弃错误项并保留合法项', () => {
   const sourceText = 'Run. Walk.'
   const targetText = '跑。走。'
   const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
@@ -273,9 +273,13 @@ test('词级提示跨句对应时关闭全部词级提示但保留整句对齐',
   const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
   const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
   const runToken = sourceTokens.find((token) => token.text === 'Run')
+  const walkToken = sourceTokens.find((token) => token.text === 'Walk')
+  const runTargetToken = targetTokens.find((token) => token.text === '跑')
   const walkTargetToken = targetTokens.find((token) => token.text === '走')
 
   assert.ok(runToken)
+  assert.ok(walkToken)
+  assert.ok(runTargetToken)
   assert.ok(walkTargetToken)
 
   const alignment = parseAlignmentPairs(
@@ -291,6 +295,13 @@ test('词级提示跨句对应时关闭全部词级提示但保留整句对齐',
           lemma: 'run',
           meaning: '走',
           confidence: 'high'
+        },
+        {
+          source: [walkToken.id],
+          target: [walkTargetToken.id],
+          lemma: 'walk',
+          meaning: '走',
+          confidence: 'high'
         }
       ]
     }),
@@ -301,10 +312,11 @@ test('词级提示跨句对应时关闭全部词级提示但保留整句对齐',
 
   assert.ok(alignment)
   assert.equal(alignment.pairs.length, 2)
-  assert.equal(alignment.learningHints, undefined)
+  assert.equal(alignment.learningHints?.length, 1)
+  assert.equal(alignment.learningHints?.[0].sourceText, 'Walk')
 })
 
-test('词级提示重复使用单词编号时整组关闭，避免覆盖冲突', () => {
+test('词级提示重复使用单词编号时只丢弃冲突项', () => {
   const sourceText = 'Please review the proposal.'
   const targetText = '请审阅这份提案。'
   const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
@@ -312,10 +324,14 @@ test('词级提示重复使用单词编号时整组关闭，避免覆盖冲突',
   const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
   const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
   const reviewToken = sourceTokens.find((token) => token.text === 'review')
+  const proposalToken = sourceTokens.find((token) => token.text === 'proposal')
   const targetReviewToken = targetTokens.find((token) => token.text === '审阅')
+  const targetProposalToken = targetTokens.find((token) => token.text === '提案')
 
   assert.ok(reviewToken)
+  assert.ok(proposalToken)
   assert.ok(targetReviewToken)
+  assert.ok(targetProposalToken)
 
   const alignment = parseAlignmentPairs(
     JSON.stringify({
@@ -334,6 +350,13 @@ test('词级提示重复使用单词编号时整组关闭，避免覆盖冲突',
           lemma: 'review',
           meaning: '提案',
           confidence: 'high'
+        },
+        {
+          source: [proposalToken.id],
+          target: [targetProposalToken.id],
+          lemma: 'proposal',
+          meaning: '提案',
+          confidence: 'high'
         }
       ]
     }),
@@ -343,7 +366,101 @@ test('词级提示重复使用单词编号时整组关闭，避免覆盖冲突',
   )
 
   assert.ok(alignment)
-  assert.equal(alignment.learningHints, undefined)
+  assert.deepEqual(
+    alignment.learningHints?.map((hint) => hint.sourceText),
+    ['review', 'proposal']
+  )
+})
+
+test('目标词没有中文译文时只丢弃该条提示', () => {
+  const sourceText = 'Please open the web UI.'
+  const targetText = '请打开 Web 界面。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
+  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
+  const webToken = sourceTokens.find((token) => token.text.toLowerCase() === 'web')
+  const uiToken = sourceTokens.find((token) => token.text === 'UI')
+  const webTargetToken = targetTokens.find((token) => token.text === 'Web')
+  const uiTargetToken = targetTokens.find((token) => token.text === '界面')
+
+  assert.ok(webToken)
+  assert.ok(uiToken)
+  assert.ok(webTargetToken)
+  assert.ok(uiTargetToken)
+
+  const alignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      learningHints: [
+        {
+          source: [webToken.id],
+          target: [webTargetToken.id],
+          lemma: 'web',
+          meaning: '网页',
+          confidence: 'high'
+        },
+        {
+          source: [uiToken.id],
+          target: [uiTargetToken.id],
+          lemma: 'UI',
+          meaning: '界面',
+          confidence: 'high'
+        }
+      ]
+    }),
+    sourceSegments,
+    targetSegments,
+    { sourceText, targetText, sourceTokens, targetTokens }
+  )
+
+  assert.ok(alignment)
+  assert.equal(alignment.learningHints?.length, 1)
+  assert.equal(alignment.learningHints?.[0].sourceText, 'UI')
+})
+
+test('目标词编号不连续时只丢弃该条提示', () => {
+  const sourceText = 'local gateway.'
+  const targetText = '一个本地网关。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
+  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
+  const localToken = sourceTokens.find((token) => token.text === 'local')
+  const gatewayToken = sourceTokens.find((token) => token.text === 'gateway')
+
+  assert.ok(localToken)
+  assert.ok(gatewayToken)
+  assert.ok(targetTokens.length >= 3)
+
+  const alignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      learningHints: [
+        {
+          source: [localToken.id],
+          target: [targetTokens[0].id, targetTokens[2].id],
+          lemma: 'local',
+          meaning: '本地',
+          confidence: 'high'
+        },
+        {
+          source: [gatewayToken.id],
+          target: [targetTokens[2].id],
+          lemma: 'gateway',
+          meaning: '网关',
+          confidence: 'high'
+        }
+      ]
+    }),
+    sourceSegments,
+    targetSegments,
+    { sourceText, targetText, sourceTokens, targetTokens }
+  )
+
+  assert.ok(alignment)
+  assert.equal(alignment.learningHints?.length, 1)
+  assert.equal(alignment.learningHints?.[0].sourceText, 'gateway')
 })
 
 test('学习模式 36 组候选词回归样例保持预期过滤结果', () => {
@@ -496,5 +613,5 @@ test('高置信提示的释义必须包含简体中文', () => {
   )
 
   assert.ok(alignment)
-  assert.equal(alignment.learningHints, undefined)
+  assert.deepEqual(alignment.learningHints, [])
 })

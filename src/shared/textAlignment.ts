@@ -584,7 +584,8 @@ const isHighConfidenceHint = (value: unknown): boolean => {
 
 /**
  * 校验模型返回的词级学习提示。
- * 任一条提示不可靠时返回 null，调用方只关闭词级提示并保留整句关联。
+ * 单条提示不可靠时只丢弃该提示，保留其他高置信结果；
+ * 只有词级提示整体结构异常时才返回 null。
  */
 const parseLearningHints = (
   parsed: unknown,
@@ -615,7 +616,7 @@ const parseLearningHints = (
   const hints: LearningHint[] = []
 
   for (const rawHint of rawHints) {
-    if (!rawHint || typeof rawHint !== 'object') return null
+    if (!rawHint || typeof rawHint !== 'object') continue
 
     const hintItem = rawHint as {
       source?: unknown
@@ -627,14 +628,14 @@ const parseLearningHints = (
       confidence?: unknown
     }
 
-    // 低置信和未标记置信度的结果直接丢弃；结构错误的高置信结果仍会关闭整组词级提示
+    // 低置信和未标记置信度的结果直接丢弃
     if (!isHighConfidenceHint(hintItem.confidence)) continue
 
     const rawSourceIds = hintItem.source ?? hintItem.sourceIds
     const rawTargetIds = hintItem.target ?? hintItem.targetIds
-    if (!Array.isArray(rawSourceIds) || !Array.isArray(rawTargetIds)) return null
-    if (rawSourceIds.length === 0 || rawSourceIds.length > 8) return null
-    if (rawTargetIds.length === 0 || rawTargetIds.length > 12) return null
+    if (!Array.isArray(rawSourceIds) || !Array.isArray(rawTargetIds)) continue
+    if (rawSourceIds.length === 0 || rawSourceIds.length > 8) continue
+    if (rawTargetIds.length === 0 || rawTargetIds.length > 12) continue
 
     const sourceIds = rawSourceIds
       .map((value) => normalizeTokenId(value, 'sw'))
@@ -643,41 +644,34 @@ const parseLearningHints = (
       .map((value) => normalizeTokenId(value, 'tw'))
       .filter((value): value is string => Boolean(value))
 
-    if (sourceIds.length !== rawSourceIds.length) return null
-    if (targetIds.length !== rawTargetIds.length) return null
+    if (sourceIds.length !== rawSourceIds.length) continue
+    if (targetIds.length !== rawTargetIds.length) continue
 
-    // 同一条提示内部出现重复编号，说明模型输出不稳定，直接放弃全部词级提示
-    if (new Set(sourceIds).size !== sourceIds.length) return null
-    if (new Set(targetIds).size !== targetIds.length) return null
+    // 同一条提示内部出现重复编号时，只丢弃这一条不稳定结果
+    if (new Set(sourceIds).size !== sourceIds.length) continue
+    if (new Set(targetIds).size !== targetIds.length) continue
 
     const sourceIndexes = sourceIds.map((id) => sourceTokenIndexById.get(id))
     const targetIndexes = targetIds.map((id) => targetTokenIndexById.get(id))
-    if (sourceIndexes.some((value) => value === undefined)) return null
-    if (targetIndexes.some((value) => value === undefined)) return null
+    if (sourceIndexes.some((value) => value === undefined)) continue
+    if (targetIndexes.some((value) => value === undefined)) continue
 
     const normalizedSourceIndexes = (sourceIndexes as number[]).sort((a, b) => a - b)
     const normalizedTargetIndexes = (targetIndexes as number[]).sort((a, b) => a - b)
-    if (!isContiguousSequence(normalizedSourceIndexes)) return null
-    if (!isContiguousSequence(normalizedTargetIndexes)) return null
+    if (!isContiguousSequence(normalizedSourceIndexes)) continue
+    if (!isContiguousSequence(normalizedTargetIndexes)) continue
 
     const sourceTokensInHint = normalizedSourceIndexes.map((index) => sourceTokens[index])
     const targetTokensInHint = normalizedTargetIndexes.map((index) => targetTokens[index])
     const sourceSegmentId = sourceTokensInHint[0].segmentId
     const targetSegmentId = targetTokensInHint[0].segmentId
-    if (sourceTokensInHint.some((token) => token.segmentId !== sourceSegmentId)) return null
-    if (targetTokensInHint.some((token) => token.segmentId !== targetSegmentId)) return null
+    if (sourceTokensInHint.some((token) => token.segmentId !== sourceSegmentId)) continue
+    if (targetTokensInHint.some((token) => token.segmentId !== targetSegmentId)) continue
 
     const allowedTargetSegments = targetSegmentIdsBySourceSegmentId.get(sourceSegmentId)
-    if (!allowedTargetSegments?.has(targetSegmentId)) return null
-
-    for (const id of sourceIds) {
-      if (usedSourceTokenIds.has(id)) return null
-      usedSourceTokenIds.add(id)
-    }
-    for (const id of targetIds) {
-      if (usedTargetTokenIds.has(id)) return null
-      usedTargetTokenIds.add(id)
-    }
+    if (!allowedTargetSegments?.has(targetSegmentId)) continue
+    if (sourceIds.some((id) => usedSourceTokenIds.has(id))) continue
+    if (targetIds.some((id) => usedTargetTokenIds.has(id))) continue
 
     const sourceStart = Math.min(...sourceTokensInHint.map((token) => token.start))
     const sourceEnd = Math.max(...sourceTokensInHint.map((token) => token.end))
@@ -689,12 +683,15 @@ const parseLearningHints = (
     const meaning =
       typeof hintItem.meaning === 'string' ? hintItem.meaning.trim().replace(/\s+/g, ' ') : ''
 
-    if (!lemma || lemma.length > 80) return null
-    if (!meaning || meaning.length > 80) return null
-    if (!/^[A-Za-z][A-Za-z' -]*$/.test(lemma)) return null
-    if (!/[\u3400-\u9fff]/.test(meaning)) return null
-    if (!/[\u3400-\u9fff]/.test(targetRawText)) return null
-    if (sourceEnd - sourceStart > 120 || targetEnd - targetStart > 120) return null
+    if (!lemma || lemma.length > 80) continue
+    if (!meaning || meaning.length > 80) continue
+    if (!/^[A-Za-z][A-Za-z' -]*$/.test(lemma)) continue
+    if (!/[\u3400-\u9fff]/.test(meaning)) continue
+    if (!/[\u3400-\u9fff]/.test(targetRawText)) continue
+    if (sourceEnd - sourceStart > 120 || targetEnd - targetStart > 120) continue
+
+    for (const id of sourceIds) usedSourceTokenIds.add(id)
+    for (const id of targetIds) usedTargetTokenIds.add(id)
 
     hints.push({
       id: `h${hints.length}`,
