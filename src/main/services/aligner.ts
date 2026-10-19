@@ -4,6 +4,7 @@ import {
   resolveAlignmentReasoningEffort,
   type AlignmentReasoningEffort
 } from '../../shared/alignmentReasoning'
+import { buildAlignmentUserMessage } from '../../shared/alignmentPrompt'
 import {
   filterLearningTokens,
   parseAlignmentPairs,
@@ -156,7 +157,8 @@ const buildAlignmentSystemPrompt = (includeLearning: boolean): string => {
 
   if (includeLearning) {
     rules.push(
-      '- sourceWords and targetWords are compact [id, text, segmentId] tuples.',
+      '- sourceWords and targetWords are [segmentId, [[wordId, text], ...]] tuples grouped by sentence.',
+      '- The segment id applies to every word in its group; word order follows each side text.',
       '- learningHints must only contain useful English content words or phrases for Chinese learners.',
       '- Skip function words, articles, auxiliary words, and tokens without an independent contextual meaning.',
       '- A learning hint must stay inside one corresponding sentence pair.',
@@ -178,31 +180,6 @@ const buildAlignmentSystemPrompt = (includeLearning: boolean): string => {
   )
 
   return rules.join('\n')
-}
-
-/** 构造包含两侧全部编号片段的用户消息 */
-const buildAlignmentUserMessage = (
-  request: AlignTextRequest,
-  sourceSegments: TextAlignment['sourceSegments'],
-  targetSegments: TextAlignment['targetSegments'],
-  sourceTokens?: AlignmentToken[],
-  targetTokens?: AlignmentToken[]
-): string => {
-  const sourceWords = sourceTokens?.map((token) => [token.id, token.text, token.segmentId])
-  const targetWords = targetTokens?.map((token) => [token.id, token.text, token.segmentId])
-
-  return JSON.stringify({
-    sourceLanguage: request.sourceLanguage,
-    targetLanguage: request.targetLanguage,
-    sourceSegments: sourceSegments.map((segment) => [segment.id, segment.text]),
-    targetSegments: targetSegments.map((segment) => [segment.id, segment.text]),
-    ...(sourceWords && targetWords
-      ? {
-          sourceWords,
-          targetWords
-        }
-      : {})
-  })
 }
 
 /** 从兼容 OpenAI 的响应中提取正文 */
