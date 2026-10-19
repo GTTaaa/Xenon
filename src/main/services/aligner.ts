@@ -1,6 +1,10 @@
 import { net } from 'electron'
 import type { AppSettings, ProviderItem } from '../../shared/config'
 import {
+  resolveAlignmentReasoningEffort,
+  type AlignmentReasoningEffort
+} from '../../shared/alignmentReasoning'
+import {
   filterLearningTokens,
   parseAlignmentPairs,
   segmentText,
@@ -51,6 +55,37 @@ interface AlignmentUsage {
     /** 推理 token */
     reasoning_tokens?: number
   }
+}
+
+/** 对齐接口返回体 */
+interface AlignmentResponseBody {
+  choices?: Array<{
+    message?: {
+      content?: string | Array<{ text?: string; content?: string }>
+    }
+    text?: string
+  }>
+  data?: {
+    choices?: Array<{
+      message?: {
+        content?: string | Array<{ text?: string; content?: string }>
+      }
+      text?: string
+    }>
+    usage?: AlignmentUsage
+  }
+  usage?: AlignmentUsage
+  error?:
+    | {
+        message?: string
+      }
+    | string
+}
+
+/** 单次对齐 HTTP 请求结果 */
+interface AlignmentHttpResult {
+  response: Awaited<ReturnType<typeof net.fetch>>
+  data: AlignmentResponseBody
 }
 
 /**
@@ -202,18 +237,25 @@ const extractMessageText = (data: {
   return ''
 }
 
-/** 调用 OpenAI 兼容接口完成编号配对 */
-const requestAlignment = async (
+/** 提取服务商返回的错误说明 */
+const getAlignmentErrorMessage = (result: AlignmentHttpResult): string => {
+  const error = result.data.error
+  if (typeof error === 'string' && error.trim()) return error.trim()
+  if (error && typeof error === 'object' && error.message?.trim()) return error.message.trim()
+  return `对齐请求失败：${result.response.status}`
+}
+
+/** 使用指定推理强度发送一次对齐请求 */
+const sendAlignmentRequest = async (
   request: AlignTextRequest,
   route: ResolvedAlignmentRoute,
   sourceSegments: TextAlignment['sourceSegments'],
   targetSegments: TextAlignment['targetSegments'],
   sourceTokens?: AlignmentToken[],
-  targetTokens?: AlignmentToken[]
-): Promise<TextAlignment> => {
+  targetTokens?: AlignmentToken[],
+  reasoningEffort?: AlignmentReasoningEffort
+): Promise<AlignmentHttpResult> => {
   const includeLearning = Boolean(sourceTokens?.length && targetTokens?.length)
-  // Cline Pass 已实测支持关闭推理；结构化编号对齐不需要长推理链，可显著降低延迟和 token
-  const disableReasoning = route.provider?.id === 'cline' || route.model.startsWith('cline-pass/')
   const cleanBaseUrl = route.baseUrl
     .trim()
     .replace(/\/chat\/completions\/?$/, '')
@@ -229,7 +271,7 @@ const requestAlignment = async (
     },
     body: JSON.stringify({
       model: route.model,
-      ...(disableReasoning ? { reasoning_effort: 'none' } : {}),
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
       messages: [
         {
           role: 'system',
@@ -250,27 +292,7 @@ const requestAlignment = async (
   })
 
   const rawResponseText = await response.text()
-  let data: {
-    choices?: Array<{
-      message?: {
-        content?: string | Array<{ text?: string; content?: string }>
-      }
-      text?: string
-    }>
-    data?: {
-      choices?: Array<{
-        message?: {
-          content?: string | Array<{ text?: string; content?: string }>
-        }
-        text?: string
-      }>
-      usage?: AlignmentUsage
-    }
-    usage?: AlignmentUsage
-    error?: {
-      message?: string
-    }
-  }
+  let data: AlignmentResponseBody
 
   try {
     data = JSON.parse(rawResponseText)
@@ -281,14 +303,65 @@ const requestAlignment = async (
     )
   }
 
-  if (!response.ok) {
-    throw new AlignmentServiceError(
-      `HTTP_${response.status}`,
-      data.error?.message || `对齐请求失败：${response.status}`
+  return {
+    response,
+    data
+  }
+}
+
+/** 调用 OpenAI 兼容接口完成编号配对 */
+const requestAlignment = async (
+  request: AlignTextRequest,
+  route: ResolvedAlignmentRoute,
+  sourceSegments: TextAlignment['sourceSegments'],
+  targetSegments: TextAlignment['targetSegments'],
+  sourceTokens?: AlignmentToken[],
+  targetTokens?: AlignmentToken[]
+): Promise<TextAlignment> => {
+  const includeLearning = Boolean(sourceTokens?.length && targetTokens?.length)
+  const preferredReasoningEffort = resolveAlignmentReasoningEffort(route.model)
+  const reasoningAttempts: Array<AlignmentReasoningEffort | undefined> = preferredReasoningEffort
+    ? [preferredReasoningEffort, undefined]
+    : [undefined]
+  let result: AlignmentHttpResult | null = null
+
+  for (let index = 0; index < reasoningAttempts.length; index += 1) {
+    const reasoningEffort = reasoningAttempts[index]
+    result = await sendAlignmentRequest(
+      request,
+      route,
+      sourceSegments,
+      targetSegments,
+      sourceTokens,
+      targetTokens,
+      reasoningEffort
     )
+
+    if (result.response.ok) break
+
+    const message = getAlignmentErrorMessage(result)
+    const canRetryWithDefault = index < reasoningAttempts.length - 1
+    if (canRetryWithDefault && result.response.status === 500 && /reasoning/i.test(message)) {
+      console.warn('[main] 当前推理强度不被模型支持，将使用服务商默认值重试:', {
+        model: route.model,
+        reasoningEffort,
+        message
+      })
+      continue
+    }
+
+    throw new AlignmentServiceError(`HTTP_${result.response.status}`, message)
   }
 
-  const usage = data.data?.usage ?? data.usage
+  if (!result) {
+    throw new AlignmentServiceError('EMPTY_RESPONSE', '对齐服务没有返回可用内容')
+  }
+
+  if (!result.response.ok) {
+    throw new AlignmentServiceError('HTTP_ERROR', '对齐请求失败')
+  }
+
+  const usage = result.data.data?.usage ?? result.data.usage
   if (usage) {
     console.log('[main] 文本对齐 token 用量:', {
       promptTokens: usage.prompt_tokens ?? 0,
@@ -298,7 +371,7 @@ const requestAlignment = async (
     })
   }
 
-  const rawAlignment = extractMessageText(data)
+  const rawAlignment = extractMessageText(result.data)
   if (!rawAlignment) {
     throw new AlignmentServiceError('EMPTY_RESPONSE', '对齐服务没有返回可用内容')
   }
