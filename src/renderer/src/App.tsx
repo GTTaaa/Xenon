@@ -4,7 +4,6 @@ import {
   tokenizeTextWords,
   type AlignmentSegment,
   type AlignmentToken,
-  type LearningHint,
   type TextAlignment
 } from '../../shared/textAlignment'
 import { findEnglishWordAtOffset, type WordLookupResult } from '../../shared/wordLookup'
@@ -48,7 +47,7 @@ const MAX_WORD_LOOKUP_CACHE_ENTRIES = 64
 // 鼠标离开单词后留出移动到释义浮层的时间，超时后自动关闭
 const WORD_LOOKUP_HOVER_HIDE_DELAY_MS = 120
 // 调整对齐规则或提示词后递增缓存版本，主动淘汰旧结果
-const ALIGNMENT_CACHE_VERSION = 'learning-v3'
+const ALIGNMENT_CACHE_VERSION = 'learning-v4'
 // 程序化平滑滚动期间短暂忽略滚动事件，避免自动定位被当成用户滚动而关闭悬停状态
 const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 600
 // 用户停止滚动后再同步另一侧，避免连续滚动时两侧抢滚动位置
@@ -124,21 +123,11 @@ function getShortLanguageLabel(code: SupportedLanguage): string {
   return getLanguageInfo(code).label.split(' (')[0]
 }
 
-/** 渲染层使用的词级提示范围 */
-interface LearningRenderSpan {
-  /** 对应词级提示编号 */
-  hintId: string
-  /** 片段起始偏移 */
-  start: number
-  /** 片段结束偏移 */
-  end: number
-}
-
 /** 输入框透明测量层缓存的命中区域 */
 interface SourceHitBox {
-  /** 命中类型：已有词级提示优先于普通单词，普通单词优先于整句 */
-  kind: 'learning' | 'word' | 'sentence'
-  /** 词级提示编号、单词编号或整句对齐组编号 */
+  /** 命中类型：普通单词优先于整句 */
+  kind: 'word' | 'sentence'
+  /** 单词编号或整句对齐组编号 */
   id: string
   /** 片段在屏幕上的所有行矩形 */
   rects: DOMRect[]
@@ -223,8 +212,8 @@ const findVisiblePairId = (container: HTMLElement, selector: string): string | n
   return selectFirstVisiblePairId(viewport, pairs)
 }
 
-/** 学习提示浮层相对鼠标的位置 */
-interface LearningTooltipPosition {
+/** 查词浮层相对鼠标的位置 */
+interface WordLookupPosition {
   /** 横向坐标 */
   x: number
   /** 纵向坐标 */
@@ -234,7 +223,7 @@ interface LearningTooltipPosition {
 }
 
 /** 用户点击单词后显示的上下文释义浮层状态 */
-interface WordLookupDisplay extends LearningTooltipPosition {
+interface WordLookupDisplay extends WordLookupPosition {
   /** 当前查询的英文单词 */
   sourceText: string
   /** 当前查询对应的原文词片段编号，用于固定词级高亮 */
@@ -249,8 +238,8 @@ interface WordLookupDisplay extends LearningTooltipPosition {
   errorMessage?: string
 }
 
-/** 根据鼠标位置计算提示浮层坐标，并预留窗口边缘安全距离 */
-const getLearningTooltipPosition = (x: number, y: number): LearningTooltipPosition => {
+/** 根据鼠标位置计算查词浮层坐标，并预留窗口边缘安全距离 */
+const getWordLookupPosition = (x: number, y: number): WordLookupPosition => {
   return {
     x: Math.max(8, Math.min(x + 14, window.innerWidth - 248)),
     y: y + 16,
@@ -271,18 +260,10 @@ interface SegmentedTextProps {
   sourceMode?: boolean
   /** 鼠标进入某个对齐组时的回调 */
   onPairEnter?: (pairId: string) => void
-  /** 当前自然句内可悬停的词级提示范围 */
-  learningSpansBySegmentId?: ReadonlyMap<string, LearningRenderSpan[]>
-  /** 当前激活的词级提示编号 */
-  activeLearningHintId?: string | null
   /** 原文全部英文词片段，按自然句归组 */
   sourceWordTokensBySegmentId?: ReadonlyMap<string, AlignmentToken[]>
   /** 当前鼠标指向的普通英文词编号 */
   activeSourceWordId?: string | null
-  /** 鼠标进入译文词片段时的回调 */
-  onLearningHintEnter?: (hintId: string, event: React.MouseEvent<HTMLSpanElement>) => void
-  /** 鼠标离开译文词片段时的回调 */
-  onLearningHintLeave?: () => void
 }
 
 /**
@@ -296,12 +277,8 @@ function SegmentedText({
   activePairId,
   sourceMode = false,
   onPairEnter,
-  learningSpansBySegmentId,
-  activeLearningHintId = null,
   sourceWordTokensBySegmentId,
-  activeSourceWordId = null,
-  onLearningHintEnter,
-  onLearningHintLeave
+  activeSourceWordId = null
 }: SegmentedTextProps): React.JSX.Element {
   const nodes: React.ReactNode[] = []
   let cursor = 0
@@ -311,7 +288,6 @@ function SegmentedText({
 
     const pairId = pairBySegmentId.get(segment.id) ?? null
     const isActive = pairId !== null && pairId === activePairId
-    const learningSpans = learningSpansBySegmentId?.get(segment.id) ?? []
     const segmentNodes: React.ReactNode[] = []
     let segmentCursor = segment.start
     const sourceWordTokens = sourceMode ? (sourceWordTokensBySegmentId?.get(segment.id) ?? []) : []
@@ -323,19 +299,12 @@ function SegmentedText({
           segmentNodes.push(text.slice(segmentCursor, token.start))
         }
 
-        const learningSpan = learningSpans.find(
-          (span) => token.start >= span.start && token.end <= span.end
-        )
-        const isLearningActive = learningSpan?.hintId === activeLearningHintId
         const isWordActive = token.id === activeSourceWordId
         segmentNodes.push(
           <span
             key={`word-${token.id}`}
-            className={`source-word${learningSpan ? ' learning-segment learning-segment-source' : ''}${
-              isLearningActive ? ' learning-segment-active' : ''
-            }${isWordActive ? ' source-word-active' : ''}`}
+            className={`source-word${isWordActive ? ' source-word-active' : ''}`}
             data-source-word-id={token.id}
-            data-learning-source-hint-id={learningSpan?.hintId}
           >
             {text.slice(token.start, token.end)}
           </span>
@@ -343,33 +312,8 @@ function SegmentedText({
         segmentCursor = token.end
       }
     } else {
-      for (const learningSpan of learningSpans) {
-        if (learningSpan.start < segment.start || learningSpan.end > segment.end) continue
-        if (learningSpan.start > segmentCursor) {
-          segmentNodes.push(text.slice(segmentCursor, learningSpan.start))
-        }
-
-        const isLearningActive = learningSpan.hintId === activeLearningHintId
-        segmentNodes.push(
-          <span
-            key={`learning-${learningSpan.hintId}`}
-            className={`learning-segment${sourceMode ? ' learning-segment-source' : ''}${
-              isLearningActive ? ' learning-segment-active' : ''
-            }`}
-            data-learning-source-hint-id={sourceMode ? learningSpan.hintId : undefined}
-            data-learning-target-hint-id={!sourceMode ? learningSpan.hintId : undefined}
-            onMouseEnter={
-              !sourceMode && onLearningHintEnter
-                ? (event) => onLearningHintEnter(learningSpan.hintId, event)
-                : undefined
-            }
-            onMouseLeave={!sourceMode ? onLearningHintLeave : undefined}
-          >
-            {text.slice(learningSpan.start, learningSpan.end)}
-          </span>
-        )
-        segmentCursor = learningSpan.end
-      }
+      segmentNodes.push(text.slice(segment.start, segment.end))
+      segmentCursor = segment.end
     }
 
     if (segmentCursor < segment.end) {
@@ -409,15 +353,10 @@ function App(): React.JSX.Element {
   })
   // 当前悬停或指向的对齐组编号
   const [activeAlignmentPairId, setActiveAlignmentPairId] = useState<string | null>(null)
-  // 当前悬停的词级学习提示编号
-  const [activeLearningHintId, setActiveLearningHintId] = useState<string | null>(null)
   // 当前鼠标指向的普通英文词，用于输入框透明层上的词级底色
   const [hoveredSourceWordId, setHoveredSourceWordId] = useState<string | null>(null)
   // 点击单词后显示的上下文释义浮层
   const [wordLookup, setWordLookup] = useState<WordLookupDisplay | null>(null)
-  // 学习提示浮层位置
-  const [learningTooltipPosition, setLearningTooltipPosition] =
-    useState<LearningTooltipPosition | null>(null)
   // const [statusText, setStatusText] = useState('READY_V1.1')
   const [status, setStatus] = useState<TranslateStatus>(
     INITIAL_SOURCE_TEXT.trim() ? 'translating' : 'idle'
@@ -438,7 +377,6 @@ function App(): React.JSX.Element {
   const sourceMirrorRef = useRef<HTMLDivElement | null>(null)
   const sourceHitBoxesRef = useRef<SourceHitBox[]>([])
   const sourceHoverFrameRef = useRef<number | null>(null)
-  const activeLearningHintIdRef = useRef<string | null>(null)
   const isAutoScrollingSourceRef = useRef(false)
   const isAutoScrollingResultRef = useRef(false)
   const autoScrollSourceTimerRef = useRef<number | null>(null)
@@ -614,48 +552,6 @@ function App(): React.JSX.Element {
       targetPairBySegmentId
     }
   }, [alignment])
-
-  // 把词级提示按自然句归组，渲染时只处理当前句子内部的精确范围
-  const learningView = useMemo(() => {
-    if (!isLearningActive || !alignment?.learningHints?.length) return null
-
-    const hintById = new Map<string, LearningHint>()
-    const sourceSpansBySegmentId = new Map<string, LearningRenderSpan[]>()
-    const targetSpansBySegmentId = new Map<string, LearningRenderSpan[]>()
-
-    for (const hint of alignment.learningHints) {
-      hintById.set(hint.id, hint)
-
-      const sourceSpans = sourceSpansBySegmentId.get(hint.sourceSegmentId) ?? []
-      sourceSpans.push({
-        hintId: hint.id,
-        start: hint.sourceStart,
-        end: hint.sourceEnd
-      })
-      sourceSpansBySegmentId.set(hint.sourceSegmentId, sourceSpans)
-
-      const targetSpans = targetSpansBySegmentId.get(hint.targetSegmentId) ?? []
-      targetSpans.push({
-        hintId: hint.id,
-        start: hint.targetStart,
-        end: hint.targetEnd
-      })
-      targetSpansBySegmentId.set(hint.targetSegmentId, targetSpans)
-    }
-
-    for (const spans of sourceSpansBySegmentId.values()) {
-      spans.sort((a, b) => a.start - b.start)
-    }
-    for (const spans of targetSpansBySegmentId.values()) {
-      spans.sort((a, b) => a.start - b.start)
-    }
-
-    return {
-      hintById,
-      sourceSpansBySegmentId,
-      targetSpansBySegmentId
-    }
-  }, [alignment, isLearningActive])
 
   // 原文中所有英文词都参与点击查词；分词结果与透明测量层共用同一套偏移
   const sourceWordView = useMemo(() => {
@@ -929,9 +825,6 @@ function App(): React.JSX.Element {
     setActiveAlignmentPairId(null)
     setHoveredSourceWordId(null)
     setWordLookup(null)
-    activeLearningHintIdRef.current = null
-    setActiveLearningHintId(null)
-    setLearningTooltipPosition(null)
     sourceHitBoxesRef.current = []
     isAutoScrollingSourceRef.current = false
     isAutoScrollingResultRef.current = false
@@ -1183,9 +1076,6 @@ function App(): React.JSX.Element {
       if (cachedAlignment) {
         setAlignment(cachedAlignment)
         setActiveAlignmentPairId(null)
-        activeLearningHintIdRef.current = null
-        setActiveLearningHintId(null)
-        setLearningTooltipPosition(null)
         console.info('[renderer] 复用学习模式对齐缓存')
         return
       }
@@ -1196,7 +1086,6 @@ function App(): React.JSX.Element {
           targetText,
           sourceLanguage: effectiveSourcePrompt,
           targetLanguage: effectiveTargetPrompt,
-          learningMode: true,
           options: {
             providerId: selectedProviderId,
             model: selectedModel
@@ -1215,9 +1104,6 @@ function App(): React.JSX.Element {
 
           setAlignment(response.alignment)
           setActiveAlignmentPairId(null)
-          activeLearningHintIdRef.current = null
-          setActiveLearningHintId(null)
-          setLearningTooltipPosition(null)
           return
         }
 
@@ -1248,7 +1134,7 @@ function App(): React.JSX.Element {
     isLearningActive
   ])
 
-  /** 同步透明测量层尺寸与滚动位置，并缓存整句与词级提示的屏幕命中矩形 */
+  /** 同步透明测量层尺寸与滚动位置，并缓存单词与整句的屏幕命中矩形 */
   const measureSourceHitBoxes = useCallback((): void => {
     const textarea = sourceInputRef.current
     const mirror = sourceMirrorRef.current
@@ -1264,22 +1150,7 @@ function App(): React.JSX.Element {
 
     const hitBoxes: SourceHitBox[] = []
 
-    // 词级提示优先命中：鼠标落在具体单词上时，不退回整句提示
-    const learningElements = mirror.querySelectorAll<HTMLElement>('[data-learning-source-hint-id]')
-    for (const element of learningElements) {
-      const hintId = element.dataset.learningSourceHintId
-      if (!hintId) continue
-
-      const range = document.createRange()
-      range.selectNodeContents(element)
-      const rects = Array.from(range.getClientRects()).filter(
-        (rect) => rect.width > 0 && rect.height > 0
-      )
-
-      if (rects.length > 0) hitBoxes.push({ kind: 'learning', id: hintId, rects })
-    }
-
-    // 所有英文词都建立独立命中区，保证没有预生成释义的词也能被指针识别
+    // 所有英文词都建立独立命中区，鼠标落在具体单词上时不退回整句
     const wordElements = mirror.querySelectorAll<HTMLElement>('[data-source-word-id]')
     for (const element of wordElements) {
       const wordId = element.dataset.sourceWordId
@@ -1320,7 +1191,7 @@ function App(): React.JSX.Element {
 
     const frame = window.requestAnimationFrame(measureSourceHitBoxes)
     return () => window.cancelAnimationFrame(frame)
-  }, [alignment, learningView, measureSourceHitBoxes, sourceWordView])
+  }, [alignment, measureSourceHitBoxes, sourceWordView])
 
   useEffect(() => {
     if (!alignment) return
@@ -1336,7 +1207,7 @@ function App(): React.JSX.Element {
       observer.disconnect()
       window.removeEventListener('resize', measureSourceHitBoxes)
     }
-  }, [alignment, learningView, measureSourceHitBoxes, sourceWordView])
+  }, [alignment, measureSourceHitBoxes, sourceWordView])
 
   useEffect(() => {
     return () => {
@@ -1361,26 +1232,6 @@ function App(): React.JSX.Element {
     }
   }, [])
 
-  /** 统一更新词级提示；只有切换到不同单词时才移动浮层 */
-  const updateActiveLearningHint = useCallback(
-    (hint: LearningHint | null, x?: number, y?: number): void => {
-      const nextHintId = hint?.id ?? null
-      const hasChanged = activeLearningHintIdRef.current !== nextHintId
-      activeLearningHintIdRef.current = nextHintId
-      setActiveLearningHintId(nextHintId)
-
-      if (!hint || x === undefined || y === undefined) {
-        if (hasChanged) setLearningTooltipPosition(null)
-        return
-      }
-
-      if (hasChanged) {
-        setLearningTooltipPosition(getLearningTooltipPosition(x, y))
-      }
-    },
-    []
-  )
-
   /** 关闭查词浮层，并让尚未返回的旧查询自动失效 */
   const closeWordLookup = useCallback((): void => {
     if (wordLookupCloseTimerRef.current !== null) {
@@ -1391,8 +1242,7 @@ function App(): React.JSX.Element {
     setWordLookup(null)
     setActiveAlignmentPairId(null)
     setHoveredSourceWordId(null)
-    updateActiveLearningHint(null)
-  }, [updateActiveLearningHint])
+  }, [])
 
   /** 写入单词查询缓存，并按最近使用顺序淘汰旧条目 */
   const cacheWordLookupResult = useCallback((cacheKey: string, result: WordLookupResult): void => {
@@ -1442,7 +1292,6 @@ function App(): React.JSX.Element {
     sourceHoverFrameRef.current = window.requestAnimationFrame(() => {
       sourceHoverFrameRef.current = null
       let nextPairId: string | null = null
-      let nextHint: LearningHint | null = null
       let nextWordId: string | null = null
       let hoveredWordIdUnderPointer: string | null = null
       let isPointerOverLookupWord = false
@@ -1467,7 +1316,7 @@ function App(): React.JSX.Element {
             }
           }
 
-          const priority = hitBox.kind === 'learning' ? 0 : hitBox.kind === 'word' ? 1 : 2
+          const priority = hitBox.kind === 'word' ? 0 : 1
           if (
             verticalDistance > bestVerticalDistance ||
             (verticalDistance === bestVerticalDistance && priority >= bestPriority)
@@ -1477,18 +1326,13 @@ function App(): React.JSX.Element {
 
           bestVerticalDistance = verticalDistance
           bestPriority = priority
-          if (hitBox.kind === 'learning') {
-            nextHint = learningView?.hintById.get(hitBox.id) ?? null
-            nextPairId = nextHint?.pairId ?? null
-          } else if (hitBox.kind === 'word') {
+          if (hitBox.kind === 'word') {
             const wordToken = sourceWordView?.tokenById.get(hitBox.id)
-            nextHint = null
             nextWordId = hitBox.id
             nextPairId = wordToken
               ? (alignmentView?.sourcePairBySegmentId.get(wordToken.segmentId) ?? null)
               : null
           } else {
-            nextHint = null
             nextPairId = hitBox.id
           }
         }
@@ -1497,7 +1341,6 @@ function App(): React.JSX.Element {
       setHoveredSourceWordId(nextWordId)
       if (!wordLookup) {
         setActiveAlignmentPairId((current) => (current === nextPairId ? current : nextPairId))
-        updateActiveLearningHint(nextHint, pointerX, pointerY)
         if (nextPairId) scrollResultToPair(nextPairId)
       } else if (isPointerOverLookupWord) {
         cancelWordLookupClose()
@@ -1505,16 +1348,11 @@ function App(): React.JSX.Element {
         closeWordLookup()
         setHoveredSourceWordId(hoveredWordIdUnderPointer)
         setActiveAlignmentPairId(nextPairId)
-        updateActiveLearningHint(nextHint, pointerX, pointerY)
         if (nextPairId) scrollResultToPair(nextPairId)
       } else {
         scheduleWordLookupClose()
       }
-      textarea.style.cursor = nextHint
-        ? 'help'
-        : hoveredWordIdUnderPointer || nextWordId
-          ? 'pointer'
-          : 'text'
+      textarea.style.cursor = hoveredWordIdUnderPointer || nextWordId ? 'pointer' : 'text'
     })
   }
 
@@ -1566,7 +1404,7 @@ function App(): React.JSX.Element {
       return
     }
 
-    const position = getLearningTooltipPosition(event.clientX, event.clientY)
+    const position = getWordLookupPosition(event.clientX, event.clientY)
     const sourceLanguagePrompt = resolvePromptLanguage(sourceLanguage, detectedInfo.detected)
     const targetLanguagePrompt = getLanguageInfo(effectiveTargetLang).promptName
     const cacheKey = JSON.stringify([
@@ -1582,33 +1420,7 @@ function App(): React.JSX.Element {
     cancelWordLookupClose()
     setActiveAlignmentPairId(pairId)
     setHoveredSourceWordId(token.id)
-    updateActiveLearningHint(null)
     scrollResultToPair(pairId)
-
-    const existingHintSpan = learningView?.sourceSpansBySegmentId
-      .get(segment.id)
-      ?.find((span) => token.start >= span.start && token.end <= span.end)
-    const existingHint = existingHintSpan
-      ? learningView?.hintById.get(existingHintSpan.hintId)
-      : null
-
-    if (existingHint) {
-      const result: WordLookupResult = {
-        lemma: existingHint.lemma,
-        meaning: existingHint.meaning,
-        targetText: existingHint.targetText
-      }
-      cacheWordLookupResult(cacheKey, result)
-      setWordLookup({
-        ...position,
-        sourceText: token.text,
-        sourceWordId: token.id,
-        pairId,
-        status: 'ready',
-        result
-      })
-      return
-    }
 
     const cachedResult = wordLookupCacheRef.current.get(cacheKey)
     if (cachedResult) {
@@ -1702,7 +1514,6 @@ function App(): React.JSX.Element {
       setHoveredSourceWordId(null)
       setActiveAlignmentPairId(null)
     }
-    updateActiveLearningHint(null)
   }
 
   // 查词浮层打开后，点击单词与浮层外的位置或按 Esc 即可立即关闭
@@ -1749,7 +1560,6 @@ function App(): React.JSX.Element {
 
     setActiveAlignmentPairId(null)
     setHoveredSourceWordId(null)
-    updateActiveLearningHint(null)
     measureSourceHitBoxes()
 
     if (sourceScrollSyncTimerRef.current !== null) {
@@ -1768,14 +1578,7 @@ function App(): React.JSX.Element {
       const pairId = findVisiblePairId(currentMirror, '[data-source-pair-id]')
       if (pairId) scrollResultToPair(pairId)
     }, PAIR_SCROLL_SYNC_DEBOUNCE_MS)
-  }, [
-    alignment,
-    closeWordLookup,
-    measureSourceHitBoxes,
-    scrollResultToPair,
-    updateActiveLearningHint,
-    useLearningLayout
-  ])
+  }, [alignment, closeWordLookup, measureSourceHitBoxes, scrollResultToPair, useLearningLayout])
 
   useEffect(() => {
     const textarea = sourceInputRef.current
@@ -1794,29 +1597,10 @@ function App(): React.JSX.Element {
     [scrollSourceToPair]
   )
 
-  /** 译文词片段悬停时显示学习提示，并同步高亮原文 */
-  const handleTargetLearningHintEnter = (
-    hintId: string,
-    event: React.MouseEvent<HTMLSpanElement>
-  ): void => {
-    const hint = learningView?.hintById.get(hintId)
-    if (!hint) return
-
-    setActiveAlignmentPairId(hint.pairId)
-    scrollSourceToPair(hint.pairId)
-    updateActiveLearningHint(hint, event.clientX, event.clientY)
-  }
-
-  /** 离开译文词片段后关闭浮层，但同句的整句关联继续保留 */
-  const handleTargetLearningHintLeave = (): void => {
-    updateActiveLearningHint(null)
-  }
-
   /** 清空所有悬停状态，供译文区滚动与鼠标离开时复用 */
   const clearHoverState = useCallback((): void => {
     setActiveAlignmentPairId(null)
-    updateActiveLearningHint(null)
-  }, [updateActiveLearningHint])
+  }, [])
 
   /** 用户手动滚动译文时清空悬停状态，程序化定位滚动则保持高亮 */
   const handleResultScroll = (): void => {
@@ -1913,15 +1697,6 @@ function App(): React.JSX.Element {
       setCopyState('error')
     }
   }
-
-  const activeLearningHint =
-    activeLearningHintId && learningView
-      ? (learningView.hintById.get(activeLearningHintId) ?? null)
-      : null
-  const shouldShowLemma =
-    Boolean(activeLearningHint) &&
-    activeLearningHint!.lemma.trim().toLowerCase() !==
-      activeLearningHint!.sourceText.trim().toLowerCase()
 
   return (
     <main
@@ -2118,8 +1893,6 @@ function App(): React.JSX.Element {
                     pairBySegmentId={alignmentView.sourcePairBySegmentId}
                     activePairId={activeAlignmentPairId}
                     sourceMode
-                    learningSpansBySegmentId={learningView?.sourceSpansBySegmentId}
-                    activeLearningHintId={activeLearningHintId}
                     sourceWordTokensBySegmentId={sourceWordView?.tokensBySegmentId}
                     activeSourceWordId={wordLookup?.sourceWordId ?? hoveredSourceWordId}
                   />
@@ -2173,10 +1946,6 @@ function App(): React.JSX.Element {
                     pairBySegmentId={alignmentView.targetPairBySegmentId}
                     activePairId={activeAlignmentPairId}
                     onPairEnter={handleTargetPairEnter}
-                    learningSpansBySegmentId={learningView?.targetSpansBySegmentId}
-                    activeLearningHintId={activeLearningHintId}
-                    onLearningHintEnter={handleTargetLearningHintEnter}
-                    onLearningHintLeave={handleTargetLearningHintLeave}
                   />
                 </p>
               ) : (
@@ -2249,7 +2018,7 @@ function App(): React.JSX.Element {
                     isLearningSupported
                       ? learningMode
                         ? '关闭学习模式'
-                        : '开启学习模式：悬停英文词查看上下文释义'
+                        : '开启学习模式：点击英文词查询上下文释义'
                       : '学习模式当前仅支持英语原文翻译为中文'
                   }
                   onClick={() => {
@@ -2391,33 +2160,10 @@ function App(): React.JSX.Element {
         ) : null}
       </section>
 
-      {activeLearningHint && learningTooltipPosition && !wordLookup ? (
-        <div
-          className={`learning-tooltip learning-tooltip-${learningTooltipPosition.placement}`}
-          style={{
-            left: `${learningTooltipPosition.x}px`,
-            top: `${learningTooltipPosition.y}px`
-          }}
-          role="tooltip"
-        >
-          <div className="learning-tooltip-word" lang="en">
-            {activeLearningHint.sourceText}
-          </div>
-          <div className="learning-tooltip-meaning">
-            <span>此处</span>
-            {activeLearningHint.meaning}
-          </div>
-          <div className="learning-tooltip-meta">
-            {shouldShowLemma ? <span>原形 {activeLearningHint.lemma}</span> : null}
-            <span>译文对应：{activeLearningHint.targetText}</span>
-          </div>
-        </div>
-      ) : null}
-
       {wordLookup ? (
         <div
           ref={wordLookupRef}
-          className={`learning-tooltip word-lookup-tooltip learning-tooltip-${wordLookup.placement}`}
+          className={`word-lookup-tooltip word-lookup-tooltip-${wordLookup.placement}`}
           style={{
             left: `${wordLookup.x}px`,
             top: `${wordLookup.y}px`
@@ -2427,7 +2173,7 @@ function App(): React.JSX.Element {
           onMouseEnter={cancelWordLookupClose}
           onMouseLeave={scheduleWordLookupClose}
         >
-          <div className="learning-tooltip-word" lang="en">
+          <div className="word-lookup-word" lang="en">
             {wordLookup.sourceText}
           </div>
 
@@ -2437,11 +2183,11 @@ function App(): React.JSX.Element {
 
           {wordLookup.status === 'ready' && wordLookup.result ? (
             <>
-              <div className="learning-tooltip-meaning">
+              <div className="word-lookup-meaning">
                 <span>此处</span>
                 {wordLookup.result.meaning}
               </div>
-              <div className="learning-tooltip-meta">
+              <div className="word-lookup-meta">
                 {wordLookup.result.lemma.trim().toLowerCase() !==
                 wordLookup.sourceText.trim().toLowerCase() ? (
                   <span>原形 {wordLookup.result.lemma}</span>

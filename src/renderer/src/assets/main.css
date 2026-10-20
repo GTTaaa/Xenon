@@ -463,59 +463,6 @@ body {
   box-shadow: inset 0 -1px 0 var(--app-association-edge);
 }
 
-/* 词级学习提示：只标记模型确认有上下文释义的内容词 */
-.learning-segment {
-  border-radius: 3px;
-  background: rgba(26, 127, 69, 0.07);
-  box-shadow: inset 0 -1px 0 rgba(26, 127, 69, 0.26);
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-  transition:
-    background-color 80ms ease,
-    box-shadow 80ms ease;
-}
-
-.learning-segment-source {
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: rgba(26, 127, 69, 0.58);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-}
-
-.result-text .learning-segment {
-  cursor: help;
-}
-
-.alignment-segment-active .learning-segment {
-  background: rgba(26, 127, 69, 0.18);
-  box-shadow:
-    inset 0 -1px 0 rgba(26, 127, 69, 0.68),
-    0 0 0 1px rgba(26, 127, 69, 0.2);
-}
-
-.learning-segment.learning-segment-active {
-  background: rgba(26, 127, 69, 0.24);
-  box-shadow:
-    inset 0 -1px 0 rgba(26, 127, 69, 0.84),
-    0 0 0 1px rgba(26, 127, 69, 0.32);
-}
-
-/*
- * 悬停某一组句子时，暂时收起其他句子的词级标记。
- * 否则同色虚线和整句底色叠在一起，会让用户误以为相邻句子也被关联。
- */
-.compose-mirror:has(.alignment-segment-active)
-  .alignment-segment:not(.alignment-segment-active)
-  .learning-segment,
-.result-text:has(.alignment-segment-active)
-  .alignment-segment:not(.alignment-segment-active)
-  .learning-segment {
-  background: transparent;
-  box-shadow: none;
-  text-decoration-color: transparent;
-}
-
 .result-placeholder {
   font-weight: 400;
   color: #b0b0b8;
@@ -724,8 +671,8 @@ body {
   cursor: default;
 }
 
-/* 词级提示卡：贴鼠标显示，不拦截鼠标事件，避免干扰原文选择与输入 */
-.learning-tooltip {
+/* 查词浮层：贴鼠标显示，并允许鼠标移入查看完整解释 */
+.word-lookup-tooltip {
   position: fixed;
   z-index: 40;
   box-sizing: border-box;
@@ -739,14 +686,14 @@ body {
     0 1px 2px rgba(23, 28, 25, 0.06);
   color: var(--app-fg-body);
   pointer-events: none;
-  animation: learningTooltipIn 90ms ease-out;
+  animation: wordLookupTooltipIn 90ms ease-out;
 }
 
-.learning-tooltip-above {
+.word-lookup-tooltip-above {
   transform: translateY(-100%);
 }
 
-@keyframes learningTooltipIn {
+@keyframes wordLookupTooltipIn {
   from {
     opacity: 0;
     transform: translateY(2px);
@@ -758,11 +705,11 @@ body {
   }
 }
 
-.learning-tooltip-above {
-  animation-name: learningTooltipInAbove;
+.word-lookup-tooltip-above {
+  animation-name: wordLookupTooltipInAbove;
 }
 
-@keyframes learningTooltipInAbove {
+@keyframes wordLookupTooltipInAbove {
   from {
     opacity: 0;
     transform: translateY(calc(-100% + 2px));
@@ -774,7 +721,7 @@ body {
   }
 }
 
-.learning-tooltip-word {
+.word-lookup-word {
   overflow-wrap: anywhere;
   color: var(--app-fg);
   font-size: 13px;
@@ -782,7 +729,7 @@ body {
   line-height: 1.35;
 }
 
-.learning-tooltip-meaning {
+.word-lookup-meaning {
   display: flex;
   align-items: baseline;
   gap: 5px;
@@ -792,7 +739,7 @@ body {
   line-height: 1.45;
 }
 
-.learning-tooltip-meaning span {
+.word-lookup-meaning span {
   flex: 0 0 auto;
   color: var(--app-accent);
   font-size: 9px;
@@ -800,7 +747,7 @@ body {
   letter-spacing: 0.5px;
 }
 
-.learning-tooltip-meta {
+.word-lookup-meta {
   display: flex;
   flex-direction: column;
   gap: 1px;

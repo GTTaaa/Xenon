@@ -26,7 +26,7 @@ export interface AlignmentToken {
   segmentId: string
 }
 
-/** 一组可悬停的上下文词汇提示 */
+/** 旧版对齐结果中的上下文词汇提示，仅保留用于兼容历史数据 */
 export interface LearningHint {
   /** 提示编号，例如 h0 */
   id: string
@@ -72,7 +72,7 @@ export interface TextAlignment {
   targetSegments: AlignmentSegment[]
   /** 源文与译文的语义对应组 */
   pairs: AlignmentPair[]
-  /** 可选的词级学习提示；仅在用户开启学习模式时生成 */
+  /** 旧版词级学习提示；新对齐请求不再生成 */
   learningHints?: LearningHint[]
 }
 
@@ -86,8 +86,6 @@ export interface AlignTextRequest {
   sourceLanguage: string
   /** 目标语言提示名 */
   targetLanguage: string
-  /** 是否在整句对齐之外生成词级学习提示 */
-  learningMode?: boolean
   /** 复用主翻译当前选中的服务商与模型 */
   options?: TranslateOptions
 }
@@ -557,7 +555,7 @@ const isContiguousSequence = (indexes: number[]): boolean => {
   return true
 }
 
-/** 词级解析参数：只有开启学习模式时才会传入 */
+/** 旧版词级解析参数：仅用于兼容历史对齐结果 */
 export interface AlignmentParseOptions {
   /** 完整英文原文，用于还原精确短语 */
   sourceText: string
