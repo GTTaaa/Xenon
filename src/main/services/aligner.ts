@@ -1,5 +1,4 @@
 import { net } from 'electron'
-import type { AppSettings, ProviderItem } from '../../shared/config'
 import {
   resolveAlignmentReasoningEffort,
   type AlignmentReasoningEffort
@@ -16,6 +15,7 @@ import {
   type TextAlignment
 } from '../../shared/textAlignment'
 import { getLLMConfig } from './configManager'
+import { resolveModelRoute, type ModelRoute } from './modelRoute'
 
 /** 单侧词片段上限：超出后只保留整句对齐，避免学习分析拖慢主界面 */
 const MAX_LEARNING_TOKENS = 320
@@ -28,19 +28,6 @@ class AlignmentServiceError extends Error {
     this.name = 'AlignmentServiceError'
     this.code = code
   }
-}
-
-interface ResolvedAlignmentRoute {
-  /** 当前服务商名称，用于错误提示与日志 */
-  provider: ProviderItem | undefined
-  /** 实际使用的服务商类型 */
-  providerType: NonNullable<AppSettings['provider']>
-  /** 实际使用的接口地址 */
-  baseUrl: string
-  /** 实际使用的访问密钥 */
-  apiKey: string
-  /** 实际使用的模型编号 */
-  model: string
 }
 
 /** 兼容服务商返回的 token 用量信息 */
@@ -87,53 +74,6 @@ interface AlignmentResponseBody {
 interface AlignmentHttpResult {
   response: Awaited<ReturnType<typeof net.fetch>>
   data: AlignmentResponseBody
-}
-
-/**
- * 按与翻译服务一致的规则解析当前服务商。
- * 这里单独实现而不改动翻译路由，确保主翻译链路的行为完全不受对齐功能影响。
- */
-const resolveAlignmentRoute = (
-  config: AppSettings,
-  request: AlignTextRequest
-): ResolvedAlignmentRoute => {
-  const targetModel =
-    request.options?.model || config.activeModelId || config.model || 'deepseek-chat'
-  const targetProviderId = request.options?.providerId
-  let targetProvider = config.providers?.find((provider) => provider.id === targetProviderId)
-
-  if (!targetProvider && targetModel) {
-    targetProvider = config.providers?.find((provider) =>
-      provider.models?.some((model) => model.id === targetModel)
-    )
-  }
-
-  if (!targetProvider && targetModel) {
-    if (targetModel.startsWith('cline-pass/') || targetModel.includes('cline')) {
-      targetProvider = config.providers?.find((provider) => provider.id === 'cline')
-    } else if (targetModel.includes('deepseek')) {
-      targetProvider = config.providers?.find((provider) => provider.id === 'deepseek')
-    }
-  }
-
-  if (!targetProvider) {
-    targetProvider =
-      config.providers?.find((provider) => provider.id === config.activeProviderId) ||
-      config.providers?.find((provider) => provider.enabled) ||
-      config.providers?.[0]
-  }
-
-  const baseUrl = (targetProvider?.baseUrl || config.baseUrl || '').trim()
-  const apiKey = (targetProvider?.apiKey || config.apiKey || '').trim()
-  const providerType = targetProvider?.providerType || config.provider || 'openai-compatible'
-
-  return {
-    provider: targetProvider,
-    providerType,
-    baseUrl,
-    apiKey,
-    model: targetModel
-  }
 }
 
 /** 构造只负责对齐、不允许改写文本的系统提示词 */
@@ -225,7 +165,7 @@ const getAlignmentErrorMessage = (result: AlignmentHttpResult): string => {
 /** 使用指定推理强度发送一次对齐请求 */
 const sendAlignmentRequest = async (
   request: AlignTextRequest,
-  route: ResolvedAlignmentRoute,
+  route: ModelRoute,
   sourceSegments: TextAlignment['sourceSegments'],
   targetSegments: TextAlignment['targetSegments'],
   sourceTokens?: AlignmentToken[],
@@ -289,7 +229,7 @@ const sendAlignmentRequest = async (
 /** 调用 OpenAI 兼容接口完成编号配对 */
 const requestAlignment = async (
   request: AlignTextRequest,
-  route: ResolvedAlignmentRoute,
+  route: ModelRoute,
   sourceSegments: TextAlignment['sourceSegments'],
   targetSegments: TextAlignment['targetSegments'],
   sourceTokens?: AlignmentToken[],
@@ -461,7 +401,7 @@ export const alignText = async (request: AlignTextRequest): Promise<AlignTextRes
       targetTokens.length <= MAX_LEARNING_TOKENS
 
     const config = getLLMConfig()
-    const route = resolveAlignmentRoute(config, request)
+    const route = resolveModelRoute(config, request.options)
 
     if (!route.apiKey) {
       return {

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { TranslateRequest, TranslateResponse } from '../shared/translate'
 import type { AlignTextRequest, AlignTextResponse } from '../shared/textAlignment'
+import type { WordLookupRequest, WordLookupResponse } from '../shared/wordLookup'
 import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
 
@@ -12,6 +13,9 @@ const api = {
   },
   alignText: (request: AlignTextRequest): Promise<AlignTextResponse> => {
     return ipcRenderer.invoke('translate:align', request)
+  },
+  lookupWord: (request: WordLookupRequest): Promise<WordLookupResponse> => {
+    return ipcRenderer.invoke('translate:lookup-word', request)
   },
   onFocusInput: (callback: () => void): (() => void) => {
     const listener = (): void => {

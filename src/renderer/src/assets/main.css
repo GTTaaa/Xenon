@@ -344,6 +344,21 @@ body {
   user-select: none;
 }
 
+/* 原文词片段的命中范围始终存在，但只在鼠标指向或固定查词时显示底色 */
+.source-word {
+  border-radius: 3px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition:
+    background-color 80ms ease,
+    box-shadow 80ms ease;
+}
+
+.source-word-active {
+  background: rgba(26, 127, 69, 0.16);
+  box-shadow: inset 0 -1px 0 rgba(26, 127, 69, 0.7);
+}
+
 /* 输入框本体就是一段普通文字：高度随内容长到 5 行（108.5px）封顶，再多交给它自己滚动 */
 .compose-input {
   position: relative;
@@ -793,6 +808,23 @@ body {
   color: var(--app-fg-muted);
   font-size: 10px;
   line-height: 1.45;
+}
+
+.word-lookup-tooltip {
+  min-height: 54px;
+  /* 查词浮层需要接收鼠标进入事件，鼠标从单词移入后不能立即消失 */
+  pointer-events: auto;
+}
+
+.word-lookup-status {
+  margin-top: 5px;
+  color: var(--app-fg-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.word-lookup-status-error {
+  color: var(--app-danger);
 }
 
 /* ==========================================================================

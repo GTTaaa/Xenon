@@ -18,6 +18,7 @@ import trayIconTemplate2x from '../../resources/trayTemplate@2x.png?asset'
 import trayIconColor2x from '../../resources/xenon.png?asset'
 import type { TranslateRequest } from '../shared/translate'
 import type { AlignTextRequest } from '../shared/textAlignment'
+import type { WordLookupRequest } from '../shared/wordLookup'
 import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
 import { DEFAULT_SHORTCUTS } from '../shared/config'
 import {
@@ -27,6 +28,7 @@ import {
 } from '../shared/windowLayout'
 import { translateText } from './services/translator'
 import { alignText } from './services/aligner'
+import { lookupWord } from './services/wordLookup'
 import {
   fetchProviderModels,
   getLLMConfig,
@@ -369,6 +371,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('translate:align', async (_, request: AlignTextRequest) => {
     return await alignText(request)
+  })
+
+  ipcMain.handle('translate:lookup-word', async (_, request: WordLookupRequest) => {
+    return await lookupWord(request)
   })
 
   ipcMain.handle('config:get', async () => {
