@@ -362,6 +362,7 @@ body {
 
 /* 学习高亮只使用淡彩下划线，避免正文出现大面积色块 */
 .learning-highlight {
+  position: relative;
   border-radius: 2px;
   cursor: pointer;
   text-decoration-line: underline;
@@ -390,6 +391,17 @@ body {
 
 .learning-highlight-target.learning-highlight-active {
   background: rgba(201, 127, 42, 0.09);
+}
+
+.learning-highlight-collected::after {
+  content: '★';
+  position: absolute;
+  top: -0.42em;
+  right: -0.55em;
+  color: #b87922;
+  font-size: 7px;
+  line-height: 1;
+  pointer-events: none;
 }
 
 /* 二次偶遇只留一条淡色点线与微型星标，和模型学习高亮明确区分 */

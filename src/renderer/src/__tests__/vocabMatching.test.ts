@@ -68,6 +68,18 @@ test('单词匹配大小写不敏感并支持多次偶遇', () => {
   )
 })
 
+test('实际词形与 lemmaLower 不同时仍能匹配最近词形', () => {
+  const item = createVocabItem('deprecate', {
+    surface: 'deprecated'
+  })
+  const text = 'The legacy API has been deprecated in the latest release.'
+  const matches = findVocabTextMatches(text, [item])
+
+  assert.equal(matches.length, 1)
+  assert.equal(matches[0].surface, 'deprecated')
+  assert.equal(matches[0].item.lemmaLower, 'deprecate')
+})
+
 test('闪卡拆分能定位真实词形并保留前后文本', () => {
   const parts = splitSentenceAroundVocab('She carefully crafted every sentence.', 'crafted')
 

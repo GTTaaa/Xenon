@@ -33,7 +33,7 @@ import {
   findCachedVocab,
   getPhraseVocabItems,
   getRandomVocabFlashcard,
-  getVocabItemsByLemma,
+  getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
   recordVocabEncounter,
   type VocabFlashcard,
@@ -415,12 +415,15 @@ function SegmentedText({
       if (highlight) {
         const end = Math.min(highlight.end, segment.end)
         const isHighlightActive = highlight.id === activeHighlightId
+        const hasLocalEncounter = segmentEncounterHighlights.some(
+          (item) => item.start < end && item.end > segmentCursor
+        )
         segmentNodes.push(
           <span
             key={`highlight-${highlight.id}-${segmentCursor}`}
             className={`learning-highlight learning-highlight-${side}${
               isHighlightActive ? ' learning-highlight-active' : ''
-            }`}
+            }${hasLocalEncounter ? ' learning-highlight-collected' : ''}`}
             data-source-highlight-id={side === 'source' ? highlight.id : undefined}
             data-target-highlight-id={side === 'target' ? highlight.id : undefined}
             onClick={onHighlightClick ? (event) => onHighlightClick(highlight, event) : undefined}
@@ -1633,7 +1636,7 @@ function App(): React.JSX.Element {
     const loadPassiveEncounters = async (): Promise<void> => {
       const words = collectUniqueEnglishWords(englishText)
       const [wordItems, phraseItems] = await Promise.all([
-        getVocabItemsByLemma(words),
+        getVocabItemsByWordForms(words),
         getPhraseVocabItems()
       ])
       const itemByLemma = new Map<string, VocabItem>()
@@ -2045,8 +2048,9 @@ function App(): React.JSX.Element {
       }
 
       // 悬停只预览；若本地已有词条，仅补充偶遇次数，不增加计数
-      void findCachedVocab(highlight.lemma)
-        .then((item) => {
+      void Promise.all([findCachedVocab(highlight.lemma), findCachedVocab(highlight.surface)])
+        .then(([itemByLemma, itemBySurface]) => {
+          const item = itemByLemma ?? itemBySurface
           if (!item) return
           setWordLookup((current) =>
             current && current.lookupAnchorId === highlight.id && current.side === highlight.side

@@ -66,18 +66,29 @@ const escapeRegExp = (value: string): string => {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** 把词条转换为可用于文本匹配的词元与最近词形集合 */
+const getItemMatchForms = (item: VocabItem): string[] => {
+  return Array.from(
+    new Set([item.lemmaLower, item.surface.trim().toLowerCase().replace(/’/g, "'")].filter(Boolean))
+  )
+}
+
 /**
  * 查找已收录多词短语的实际出现位置。
  * 长短语优先，并与已经占用的范围去重，避免嵌套高亮互相覆盖。
  */
 export const findVocabPhraseMatches = (text: string, items: VocabItem[]): VocabPhraseMatch[] => {
-  const phraseItems = items
-    .filter((item) => item.lemmaLower.includes(' '))
-    .sort((a, b) => b.lemmaLower.length - a.lemmaLower.length)
+  const phraseCandidates = items
+    .flatMap((item) =>
+      getItemMatchForms(item)
+        .filter((form) => form.includes(' '))
+        .map((form) => ({ item, form }))
+    )
+    .sort((a, b) => b.form.length - a.form.length)
   const matches: VocabPhraseMatch[] = []
 
-  for (const item of phraseItems) {
-    const phrasePattern = escapeRegExp(item.lemmaLower).replace(/\\?\s+/g, '\\s+')
+  for (const { item, form } of phraseCandidates) {
+    const phrasePattern = escapeRegExp(form).replace(/\\?\s+/g, '\\s+')
     const pattern = new RegExp(`(?<![A-Za-z])${phrasePattern}(?![A-Za-z])`, 'gi')
 
     for (const match of text.matchAll(pattern)) {
@@ -99,7 +110,12 @@ export const findVocabPhraseMatches = (text: string, items: VocabItem[]): VocabP
  */
 export const findVocabTextMatches = (text: string, items: VocabItem[]): VocabTextMatch[] => {
   const phraseMatches = findVocabPhraseMatches(text, items)
-  const itemByLemma = new Map(items.map((item) => [item.lemmaLower, item]))
+  const itemByForm = new Map<string, VocabItem>()
+  for (const item of items) {
+    for (const form of getItemMatchForms(item)) {
+      if (!itemByForm.has(form)) itemByForm.set(form, item)
+    }
+  }
   const matches: VocabTextMatch[] = phraseMatches.map((match) => ({
     item: match.item,
     surface: text.slice(match.start, match.end),
@@ -108,7 +124,7 @@ export const findVocabTextMatches = (text: string, items: VocabItem[]): VocabTex
   }))
 
   for (const occurrence of extractEnglishWordOccurrences(text)) {
-    const item = itemByLemma.get(occurrence.wordLower)
+    const item = itemByForm.get(occurrence.wordLower)
     if (!item) continue
 
     const overlaps = matches.some(

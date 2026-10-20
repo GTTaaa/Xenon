@@ -1,4 +1,4 @@
-import Dexie, { type Table } from 'dexie'
+import Dexie, { type Table, type Transaction } from 'dexie'
 import type { WordLookupSide } from '../../../shared/wordLookup'
 
 /** 本地生词主表记录 */
@@ -35,6 +35,8 @@ export interface VocabContext {
   lemmaLower: string
   /** 完整英文原句 */
   sourceSentence: string
+  /** 用于去重的规范化英文原句键 */
+  sourceSentenceKey: string
   /** 对应中文译句 */
   targetSentence: string
   /** 该句中的具体英文词形 */
@@ -76,9 +78,117 @@ export const normalizeVocabLemma = (lemma: string): string => {
   return lemma.trim().toLowerCase()
 }
 
-/** 清理句子首尾空白与连续空白，避免同一句仅因排版产生重复记录 */
+/** 清理句子首尾空白与连续空白，保留展示所需的原始大小写和标点 */
 const normalizeSentence = (sentence: string): string => {
   return sentence.trim().replace(/\s+/g, ' ')
+}
+
+/**
+ * 生成例句去重键。
+ * 对齐片段可能时而包含句末标点，因此忽略大小写、空白、Unicode 差异和句末标点。
+ */
+export const normalizeVocabSentence = (sentence: string): string => {
+  return sentence
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .replace(/[\s.,!?;:，。！？；：、…]+(?:["'”’）)\]】》」』]+)?$/u, '')
+}
+
+/** 合并历史重复的主词记录，保留最早编号并累计真实查词次数 */
+const migrateVocabItems = async (table: Table<VocabItem, number>): Promise<void> => {
+  const allItems = await table.toArray()
+  const itemsByLemma = new Map<string, VocabItem[]>()
+
+  for (const item of allItems) {
+    const lemmaLower = normalizeVocabLemma(item.lemmaLower || item.lemma)
+    const group = itemsByLemma.get(lemmaLower) ?? []
+    group.push(item)
+    itemsByLemma.set(lemmaLower, group)
+  }
+
+  for (const [lemmaLower, group] of itemsByLemma) {
+    const ordered = [...group].sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+    const canonical = ordered[0]
+    const latest = [...group].sort(
+      (a, b) => b.updatedAt - a.updatedAt || (b.id ?? 0) - (a.id ?? 0)
+    )[0]
+    if (!canonical || !latest || canonical.id === undefined) continue
+
+    const merged: VocabItem = {
+      ...latest,
+      id: canonical.id,
+      lemma: latest.lemma || canonical.lemma,
+      lemmaLower,
+      surface: latest.surface || canonical.surface,
+      meaning: latest.meaning || canonical.meaning,
+      targetText: latest.targetText || canonical.targetText,
+      ...(latest.note || canonical.note ? { note: latest.note || canonical.note } : {}),
+      side: latest.side || canonical.side,
+      encounterCount: group.reduce(
+        (total, item) => total + Math.max(1, item.encounterCount || 1),
+        0
+      ),
+      createdAt: Math.min(...group.map((item) => item.createdAt || Number.MAX_SAFE_INTEGER)),
+      updatedAt: Math.max(...group.map((item) => item.updatedAt || 0))
+    }
+
+    await table.put(merged)
+    for (const duplicate of ordered.slice(1)) {
+      if (duplicate.id !== undefined) await table.delete(duplicate.id)
+    }
+  }
+}
+
+/**
+ * 合并同一词下仅因标点、大小写或空白差异产生的重复语境。
+ * 同时为旧版本数据补齐 sourceSentenceKey，供后续唯一复合索引使用。
+ */
+const migrateVocabContexts = async (table: Table<VocabContext, number>): Promise<void> => {
+  const allContexts = await table.toArray()
+  const contextsByKey = new Map<string, VocabContext[]>()
+
+  for (const context of allContexts) {
+    const lemmaLower = normalizeVocabLemma(context.lemmaLower)
+    const sourceSentenceKey = normalizeVocabSentence(context.sourceSentence)
+    const groupKey = JSON.stringify([lemmaLower, sourceSentenceKey])
+    const group = contextsByKey.get(groupKey) ?? []
+    group.push({ ...context, lemmaLower, sourceSentenceKey })
+    contextsByKey.set(groupKey, group)
+  }
+
+  for (const group of contextsByKey.values()) {
+    const ordered = [...group].sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+    const canonical = ordered[0]
+    if (!canonical || canonical.id === undefined) continue
+
+    const bestDisplay = [...group].sort(
+      (a, b) =>
+        b.sourceSentence.length +
+          b.targetSentence.length -
+          (a.sourceSentence.length + a.targetSentence.length) || (a.id ?? 0) - (b.id ?? 0)
+    )[0]
+    const latest = [...group].sort(
+      (a, b) => b.createdAt - a.createdAt || (b.id ?? 0) - (a.id ?? 0)
+    )[0]
+    const merged: VocabContext = {
+      ...canonical,
+      lemmaLower: normalizeVocabLemma(canonical.lemmaLower),
+      sourceSentence: bestDisplay?.sourceSentence || canonical.sourceSentence,
+      sourceSentenceKey: normalizeVocabSentence(
+        bestDisplay?.sourceSentence || canonical.sourceSentence
+      ),
+      targetSentence: bestDisplay?.targetSentence || canonical.targetSentence,
+      surface: latest?.surface || canonical.surface,
+      createdAt: Math.min(...group.map((item) => item.createdAt || Number.MAX_SAFE_INTEGER))
+    }
+
+    await table.put(merged)
+    for (const duplicate of ordered.slice(1)) {
+      if (duplicate.id !== undefined) await table.delete(duplicate.id)
+    }
+  }
 }
 
 /** 渲染进程专用生词库 */
@@ -91,8 +201,22 @@ export class VocabDatabase extends Dexie {
   constructor(databaseName = 'xenon-vocab') {
     super(databaseName)
     this.version(1).stores({
-      vocab_items: '++id,&lemmaLower,updatedAt,createdAt',
+      // 旧版本可能因结构未升级而存在重复数据，先保持非唯一，留到迁移完成后再加回唯一约束。
+      vocab_items: '++id,lemmaLower,updatedAt,createdAt',
       vocab_contexts: '++id,lemmaLower,createdAt,[lemmaLower+sourceSentence]'
+    })
+    this.version(2)
+      .stores({
+        vocab_items: '++id,lemmaLower,updatedAt,createdAt',
+        vocab_contexts: '++id,lemmaLower,sourceSentenceKey,createdAt,[lemmaLower+sourceSentenceKey]'
+      })
+      .upgrade(async (transaction: Transaction) => {
+        await migrateVocabItems(transaction.table('vocab_items'))
+        await migrateVocabContexts(transaction.table('vocab_contexts'))
+      })
+    this.version(3).stores({
+      vocab_items: '++id,&lemmaLower,updatedAt,createdAt',
+      vocab_contexts: '++id,lemmaLower,createdAt,&[lemmaLower+sourceSentenceKey]'
     })
     this.vocabItems = this.table('vocab_items')
     this.vocabContexts = this.table('vocab_contexts')
@@ -116,6 +240,7 @@ export const recordVocabEncounter = async (
   const targetText = input.targetText.trim()
   const note = input.note?.trim() || undefined
   const englishSentence = normalizeSentence(input.englishSentence)
+  const sourceSentenceKey = normalizeVocabSentence(englishSentence)
   const chineseSentence = normalizeSentence(input.chineseSentence)
 
   if (!lemmaLower || !surface || !meaning || !englishSentence || !chineseSentence) {
@@ -154,18 +279,42 @@ export const recordVocabEncounter = async (
     }
 
     const existingContext = await database.vocabContexts
-      .where('[lemmaLower+sourceSentence]')
-      .equals([lemmaLower, englishSentence])
+      .where('[lemmaLower+sourceSentenceKey]')
+      .equals([lemmaLower, sourceSentenceKey])
       .first()
 
     if (!existingContext) {
       await database.vocabContexts.add({
         lemmaLower,
         sourceSentence: englishSentence,
+        sourceSentenceKey,
         targetSentence: chineseSentence,
         surface,
         createdAt: now
       })
+    } else if (existingContext.id !== undefined) {
+      // 同一语境再次出现时只更新更完整的展示文本，不新增第二条记录。
+      const sourceSentence =
+        englishSentence.length > existingContext.sourceSentence.length
+          ? englishSentence
+          : existingContext.sourceSentence
+      const targetSentence =
+        chineseSentence.length > existingContext.targetSentence.length
+          ? chineseSentence
+          : existingContext.targetSentence
+      if (
+        sourceSentence !== existingContext.sourceSentence ||
+        targetSentence !== existingContext.targetSentence ||
+        surface !== existingContext.surface
+      ) {
+        await database.vocabContexts.put({
+          ...existingContext,
+          sourceSentence,
+          sourceSentenceKey,
+          targetSentence,
+          surface
+        })
+      }
     }
 
     return item
@@ -204,6 +353,26 @@ export const getVocabItemsByLemma = async (
   if (uniqueLemmaLowers.length === 0) return []
 
   return database.vocabItems.where('lemmaLower').anyOf(uniqueLemmaLowers).toArray()
+}
+
+/**
+ * 按文本中的实际词形批量查询本地词条。
+ * 同时比对 lemmaLower 与最近词形 surface，解决 deprecated → deprecate 这类屈折变化。
+ */
+export const getVocabItemsByWordForms = async (
+  wordForms: string[],
+  database: VocabDatabase = vocabDatabase
+): Promise<VocabItem[]> => {
+  const uniqueWordForms = new Set(wordForms.map(normalizeVocabLemma).filter(Boolean))
+  if (uniqueWordForms.size === 0) return []
+
+  return database.vocabItems
+    .filter(
+      (item) =>
+        uniqueWordForms.has(item.lemmaLower) ||
+        uniqueWordForms.has(normalizeVocabLemma(item.surface))
+    )
+    .toArray()
 }
 
 /** 查询多词短语词条，供二次偶遇高亮补充匹配 */

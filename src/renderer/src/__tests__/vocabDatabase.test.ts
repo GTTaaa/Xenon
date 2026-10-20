@@ -5,9 +5,51 @@ import {
   VocabDatabase,
   findCachedVocab,
   getRandomVocabFlashcard,
+  getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
+  normalizeVocabSentence,
   recordVocabEncounter
 } from '../services/vocabDatabase.ts'
+import Dexie, { type Table } from 'dexie'
+
+/** 模拟旧版本生词库，用于验证升级迁移会清理历史重复记录 */
+interface LegacyVocabItem {
+  id?: number
+  lemma: string
+  lemmaLower: string
+  surface: string
+  meaning: string
+  targetText: string
+  side: 'source' | 'target'
+  encounterCount: number
+  createdAt: number
+  updatedAt: number
+}
+
+/** 旧版本语境记录尚未包含 sourceSentenceKey */
+interface LegacyVocabContext {
+  id?: number
+  lemmaLower: string
+  sourceSentence: string
+  targetSentence: string
+  surface: string
+  createdAt: number
+}
+
+class LegacyVocabDatabase extends Dexie {
+  vocabItems!: Table<LegacyVocabItem, number>
+  vocabContexts!: Table<LegacyVocabContext, number>
+
+  constructor(databaseName: string) {
+    super(databaseName)
+    this.version(1).stores({
+      vocab_items: '++id,lemmaLower,updatedAt,createdAt',
+      vocab_contexts: '++id,lemmaLower,createdAt,[lemmaLower+sourceSentence]'
+    })
+    this.vocabItems = this.table('vocab_items')
+    this.vocabContexts = this.table('vocab_contexts')
+  }
+}
 
 /** 每个测试使用独立数据库，避免并行执行时共享状态 */
 const createTestDatabase = (): VocabDatabase => {
@@ -78,6 +120,73 @@ test('重复遇到同一词会累加次数并更新最近词形', async (context
   assert.equal(await database.vocabContexts.count(), 1)
 })
 
+test('同一句仅大小写、空白和句末标点不同时不会重复写入语境', async (context) => {
+  const database = createTestDatabase()
+  context.after(() => database.delete())
+
+  await recordVocabEncounter(
+    {
+      lemma: 'deprecate',
+      surface: 'deprecated',
+      meaning: '已弃用',
+      targetText: '已弃用',
+      side: 'source',
+      englishSentence: 'The legacy API has been deprecated in the latest release.',
+      chineseSentence: '旧版 API 在最新版本中已被弃用。'
+    },
+    database
+  )
+  const updated = await recordVocabEncounter(
+    {
+      lemma: 'deprecate',
+      surface: 'deprecated',
+      meaning: '已弃用',
+      targetText: '已弃用',
+      side: 'source',
+      englishSentence: '  THE LEGACY API HAS BEEN DEPRECATED IN THE LATEST RELEASE ',
+      chineseSentence: '旧版 API 在最新版本中已被弃用'
+    },
+    database
+  )
+
+  assert.equal(updated.encounterCount, 2)
+  assert.equal(await database.vocabItems.count(), 1)
+  assert.equal(await database.vocabContexts.count(), 1)
+  assert.equal(
+    normalizeVocabSentence('The legacy API has been deprecated in the latest release.'),
+    normalizeVocabSentence(' THE LEGACY API HAS BEEN DEPRECATED IN THE LATEST RELEASE ')
+  )
+})
+
+test('唯一索引会拒绝重复的主词和同词同句语境', async (context) => {
+  const database = createTestDatabase()
+  context.after(() => database.delete())
+
+  const item = await recordVocabEncounter(
+    {
+      lemma: 'deprecate',
+      surface: 'deprecated',
+      meaning: '已弃用',
+      targetText: '已弃用',
+      side: 'source',
+      englishSentence: 'The legacy API has been deprecated in the latest release.',
+      chineseSentence: '旧版 API 在最新版本中已被弃用。'
+    },
+    database
+  )
+  const savedContext = await database.vocabContexts.toCollection().first()
+  assert.ok(savedContext)
+
+  await assert.rejects(
+    database.vocabItems.add({ ...item, id: undefined }),
+    (error: unknown) => error instanceof Error && error.name === 'ConstraintError'
+  )
+  await assert.rejects(
+    database.vocabContexts.add({ ...savedContext, id: undefined }),
+    (error: unknown) => error instanceof Error && error.name === 'ConstraintError'
+  )
+})
+
 test('同一个词遇到不同原句时会保留多个真实语境', async (context) => {
   const database = createTestDatabase()
   context.after(() => database.delete())
@@ -134,6 +243,32 @@ test('本地缓存既支持归一化词元，也兼容最近一次词形', async
   assert.equal(await findCachedVocab('walk', database), null)
 })
 
+test('批量偶遇扫描会同时按原形与最近词形命中词条', async (context) => {
+  const database = createTestDatabase()
+  context.after(() => database.delete())
+
+  await recordVocabEncounter(
+    {
+      lemma: 'deprecate',
+      surface: 'deprecated',
+      meaning: '已弃用的',
+      targetText: '已弃用',
+      side: 'source',
+      englishSentence: 'The legacy API has been deprecated in the latest release.',
+      chineseSentence: '旧版 API 在最新版本中已被弃用。'
+    },
+    database
+  )
+
+  const byLemma = await getVocabItemsByWordForms(['deprecate'], database)
+  const bySurface = await getVocabItemsByWordForms(['DEPRECATED'], database)
+
+  assert.equal(byLemma.length, 1)
+  assert.equal(bySurface.length, 1)
+  assert.equal(bySurface[0].lemmaLower, 'deprecate')
+  assert.equal(bySurface[0].surface, 'deprecated')
+})
+
 test('被动偶遇会批量增加计数且不会创建新词条', async (context) => {
   const database = createTestDatabase()
   context.after(() => database.delete())
@@ -181,4 +316,68 @@ test('随机闪卡会返回互相关联的主词与完整语境', async (context
   assert.equal(flashcard?.item.lemmaLower, 'craft')
   assert.equal(flashcard?.context.lemmaLower, 'craft')
   assert.equal(flashcard?.context.surface, 'crafted')
+})
+
+test('旧数据库升级时会合并重复主词与重复语境', async (context) => {
+  const databaseName = `xenon-vocab-legacy-${Date.now()}-${Math.random()}`
+  const legacyDatabase = new LegacyVocabDatabase(databaseName)
+  context.after(async () => {
+    legacyDatabase.close()
+    await Dexie.delete(databaseName)
+  })
+
+  const firstItemId = await legacyDatabase.vocabItems.add({
+    lemma: 'deprecate',
+    lemmaLower: 'deprecate',
+    surface: 'deprecated',
+    meaning: '已弃用',
+    targetText: '已弃用',
+    side: 'source',
+    encounterCount: 2,
+    createdAt: 100,
+    updatedAt: 200
+  })
+  await legacyDatabase.vocabItems.add({
+    lemma: 'deprecate',
+    lemmaLower: 'deprecate',
+    surface: 'deprecated',
+    meaning: '被弃用',
+    targetText: '已弃用',
+    side: 'source',
+    encounterCount: 3,
+    createdAt: 150,
+    updatedAt: 300
+  })
+  await legacyDatabase.vocabContexts.add({
+    lemmaLower: 'deprecate',
+    sourceSentence: 'The legacy API has been deprecated in the latest release.',
+    targetSentence: '旧版 API 在最新版本中已被弃用。',
+    surface: 'deprecated',
+    createdAt: 100
+  })
+  await legacyDatabase.vocabContexts.add({
+    lemmaLower: 'deprecate',
+    sourceSentence: 'The legacy API has been deprecated in the latest release',
+    targetSentence: '旧版 API 在最新版本中已被弃用',
+    surface: 'deprecated',
+    createdAt: 200
+  })
+  legacyDatabase.close()
+
+  const migratedDatabase = new VocabDatabase(databaseName)
+  context.after(() => migratedDatabase.delete())
+  await migratedDatabase.open()
+
+  const items = await migratedDatabase.vocabItems.toArray()
+  const contexts = await migratedDatabase.vocabContexts.toArray()
+  assert.equal(items.length, 1)
+  assert.equal(items[0].id, firstItemId)
+  assert.equal(items[0].encounterCount, 5)
+  assert.equal(items[0].meaning, '被弃用')
+  assert.equal(contexts.length, 1)
+  assert.equal(
+    contexts[0].sourceSentence,
+    'The legacy API has been deprecated in the latest release.'
+  )
+  assert.equal(contexts[0].sourceSentenceKey, normalizeVocabSentence(contexts[0].sourceSentence))
 })
