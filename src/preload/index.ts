@@ -1,6 +1,10 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { TranslateRequest, TranslateResponse } from '../shared/translate'
+import type {
+  TranslateRequest,
+  TranslateResponse,
+  TranslateStreamDeltaEvent
+} from '../shared/translate'
 import type { AlignTextRequest, AlignTextResponse } from '../shared/textAlignment'
 import type { WordLookupRequest, WordLookupResponse } from '../shared/wordLookup'
 import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
@@ -8,11 +12,25 @@ import type { OcrStatus } from '../shared/ocr'
 
 // 暴露给渲染进程的应用 API
 const api = {
-  translateText: (request: TranslateRequest): Promise<TranslateResponse> => {
-    return ipcRenderer.invoke('translate:text', request)
+  translateTextStream: (
+    requestId: string,
+    request: TranslateRequest,
+    onDelta: (delta: string) => void
+  ): Promise<TranslateResponse> => {
+    const listener = (_event: IpcRendererEvent, payload: TranslateStreamDeltaEvent): void => {
+      if (payload.requestId === requestId) onDelta(payload.delta)
+    }
+
+    ipcRenderer.on('translate:stream-delta', listener)
+    return ipcRenderer
+      .invoke('translate:text-stream', requestId, request)
+      .finally(() => ipcRenderer.removeListener('translate:stream-delta', listener))
   },
-  alignText: (request: AlignTextRequest): Promise<AlignTextResponse> => {
-    return ipcRenderer.invoke('translate:align', request)
+  alignText: (requestId: string, request: AlignTextRequest): Promise<AlignTextResponse> => {
+    return ipcRenderer.invoke('translate:align', requestId, request)
+  },
+  cancelTranslation: (requestId: string): void => {
+    ipcRenderer.send('translate:cancel', requestId)
   },
   lookupWord: (request: WordLookupRequest): Promise<WordLookupResponse> => {
     return ipcRenderer.invoke('translate:lookup-word', request)

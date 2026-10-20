@@ -16,7 +16,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import trayIconTemplate2x from '../../resources/trayTemplate@2x.png?asset'
 import trayIconColor2x from '../../resources/xenon.png?asset'
-import type { TranslateRequest } from '../shared/translate'
+import type { TranslateRequest, TranslateStreamDeltaEvent } from '../shared/translate'
 import type { AlignTextRequest } from '../shared/textAlignment'
 import type { WordLookupRequest } from '../shared/wordLookup'
 import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
@@ -50,6 +50,8 @@ let tray: Tray | null = null
 let trayMenu: Menu | null = null
 let mainWindow: BrowserWindow | null = null
 let configWindow: BrowserWindow | null = null
+const activeTranslationControllers = new Map<string, AbortController>()
+const activeAlignmentControllers = new Map<string, AbortController>()
 
 // 标记应用是否正在退出
 // app.quit() 同样会触发窗口的 close 事件，若 close 处理器继续拦截，
@@ -365,12 +367,48 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  ipcMain.handle('translate:text', async (_, request: TranslateRequest) => {
-    return await translateText(request)
+  ipcMain.handle(
+    'translate:text-stream',
+    async (event, requestId: string, request: TranslateRequest) => {
+      const controller = new AbortController()
+      activeTranslationControllers.get(requestId)?.abort()
+      activeTranslationControllers.set(requestId, controller)
+
+      try {
+        return await translateText(request, {
+          signal: controller.signal,
+          onDelta: (delta) => {
+            if (event.sender.isDestroyed()) return
+
+            const payload: TranslateStreamDeltaEvent = { requestId, delta }
+            event.sender.send('translate:stream-delta', payload)
+          }
+        })
+      } finally {
+        if (activeTranslationControllers.get(requestId) === controller) {
+          activeTranslationControllers.delete(requestId)
+        }
+      }
+    }
+  )
+
+  ipcMain.handle('translate:align', async (_, requestId: string, request: AlignTextRequest) => {
+    const controller = new AbortController()
+    activeAlignmentControllers.get(requestId)?.abort()
+    activeAlignmentControllers.set(requestId, controller)
+
+    try {
+      return await alignText(request, { signal: controller.signal })
+    } finally {
+      if (activeAlignmentControllers.get(requestId) === controller) {
+        activeAlignmentControllers.delete(requestId)
+      }
+    }
   })
 
-  ipcMain.handle('translate:align', async (_, request: AlignTextRequest) => {
-    return await alignText(request)
+  ipcMain.on('translate:cancel', (_, requestId: string) => {
+    activeTranslationControllers.get(requestId)?.abort()
+    activeAlignmentControllers.get(requestId)?.abort()
   })
 
   ipcMain.handle('translate:lookup-word', async (_, request: WordLookupRequest) => {

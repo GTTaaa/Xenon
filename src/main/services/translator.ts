@@ -1,5 +1,9 @@
 import { net } from 'electron'
 import type { TranslateRequest, TranslateResponse } from '../../shared/translate'
+import {
+  ChatCompletionStreamError,
+  consumeChatCompletionTextStream
+} from '../../shared/chatCompletionStream'
 import { getLLMConfig } from './configManager'
 import type { AppSettings } from '../../shared/config'
 
@@ -19,7 +23,30 @@ const sleep = (ms: number): Promise<void> => {
   })
 }
 
-const mockTranslate = async (request: TranslateRequest): Promise<TranslateResponse> => {
+/** 单次翻译执行时由 IPC 层注入的取消信号与增量回调 */
+export interface TranslateExecutionOptions {
+  /** 用户修改输入或发起新请求时用于中止网络请求 */
+  signal?: AbortSignal
+  /** 收到流式正文增量时回调渲染进程 */
+  onDelta?: (delta: string) => void
+}
+
+/** 判断异常是否由主动取消触发 */
+const isAbortError = (error: unknown, signal?: AbortSignal): boolean => {
+  return Boolean(signal?.aborted || (error as { name?: string })?.name === 'AbortError')
+}
+
+/** 在关键节点主动检查取消状态，避免已经取消的请求继续处理响应 */
+const throwIfAborted = (signal?: AbortSignal): void => {
+  if (signal?.aborted) {
+    throw new TranslateServiceError('ABORTED', '翻译请求已取消')
+  }
+}
+
+const mockTranslate = async (
+  request: TranslateRequest,
+  execution?: TranslateExecutionOptions
+): Promise<TranslateResponse> => {
   const { text, targetLanguage, sourceLanguage, options } = request
 
   if (!text.trim()) {
@@ -27,16 +54,20 @@ const mockTranslate = async (request: TranslateRequest): Promise<TranslateRespon
   }
 
   await sleep(400)
+  throwIfAborted(execution?.signal)
 
-  return {
+  const response: TranslateResponse = {
     ok: true,
     text: `[模拟翻译] (${sourceLanguage} -> ${targetLanguage} | 模型: ${options?.model ?? 'default'}):\n${text}`
   }
+  execution?.onDelta?.(response.text)
+  return response
 }
 
 const translateWithOpenAICompatible = async (
   request: TranslateRequest,
-  config: AppSettings
+  config: AppSettings,
+  execution?: TranslateExecutionOptions
 ): Promise<TranslateResponse> => {
   if (!config.apiKey) {
     throw new TranslateServiceError('CONFIG_MISSING_API_KEY', '缺少 API Key，请在设置中配置')
@@ -44,6 +75,7 @@ const translateWithOpenAICompatible = async (
   if (!config.baseUrl) {
     throw new TranslateServiceError('CONFIG_MISSING_BASE_URL', '缺少 Base URL，请在设置中配置')
   }
+  const apiKey = config.apiKey.trim()
   const cleanBaseUrl = config.baseUrl
     .trim()
     .replace(/\/chat\/completions\/?$/, '')
@@ -71,92 +103,88 @@ const translateWithOpenAICompatible = async (
   }
 
   try {
-    const requestBody: Record<string, unknown> = {
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: systemContent
-        },
-        {
-          role: 'user',
-          content: `Source language: ${request.sourceLanguage}\nTarget language: ${request.targetLanguage}\nText:${request.text}`
-        }
-      ]
+    const buildRequestBody = (stream: boolean): Record<string, unknown> => {
+      return {
+        model,
+        stream,
+        messages: [
+          {
+            role: 'system',
+            content: systemContent
+          },
+          {
+            role: 'user',
+            content: `Source language: ${request.sourceLanguage}\nTarget language: ${request.targetLanguage}\nText:${request.text}`
+          }
+        ]
+      }
     }
 
-    console.log('[main] translateWithOpenAICompatible 发起请求 ->', endpoint, '模型:', model)
+    const sendRequest = (stream: boolean): ReturnType<typeof net.fetch> => {
+      return net.fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'screenshot-translator/1.0'
+        },
+        body: JSON.stringify(buildRequestBody(stream)),
+        signal: execution?.signal
+      })
+    }
+
+    console.log('[main] translateWithOpenAICompatible 发起流式请求 ->', endpoint, '模型:', model)
+    throwIfAborted(execution?.signal)
 
     // 使用 Electron 的 net.fetch，自动继承 macOS 操作系统代理配置（支持 VPN、Clash 等网络环境）
-    const response = await net.fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiKey.trim()}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'screenshot-translator/1.0'
-      },
-      body: JSON.stringify(requestBody)
-    })
+    let response = await sendRequest(true)
 
-    const rawResponseText = await response.text()
+    // 少数兼容服务不支持 stream 参数，明确返回参数错误时回退普通请求以保持兼容
+    if (!response.ok && (response.status === 400 || response.status === 422)) {
+      const streamErrorText = await response.text()
+      console.warn('[main] 流式翻译被服务端拒绝，回退非流式请求:', {
+        status: response.status,
+        message: streamErrorText.slice(0, 150)
+      })
+      throwIfAborted(execution?.signal)
+      response = await sendRequest(false)
+    }
+
     console.log('[main] 模型响应状态码:', response.status)
 
-    let data: {
-      choices?: Array<{
-        message?: {
-          content?: string | Array<{ text?: string; content?: string }>
-        }
-        text?: string
-      }>
-      error?: {
-        message?: string
-      }
-    } = {}
-
-    try {
-      data = JSON.parse(rawResponseText)
-    } catch {
-      console.error('[main] 模型返回非 JSON 格式响应:', rawResponseText.slice(0, 150))
-      throw new TranslateServiceError(
-        `HTTP_${response.status}`,
-        `模型响应非 JSON: ${rawResponseText.slice(0, 100)}`
-      )
-    }
-
     if (!response.ok) {
-      const errorMsg =
-        data.error?.message ?? `模型请求失败：${response.status} (${rawResponseText.slice(0, 150)})`
-      console.error('[main] 模型返回错误状态码:', response.status, errorMsg)
-      throw new TranslateServiceError(`HTTP_${response.status}`, errorMsg)
+      const rawResponseText = await response.text()
+      let errorMessage = `模型请求失败：${response.status} (${rawResponseText.slice(0, 150)})`
+
+      try {
+        const data = JSON.parse(rawResponseText) as {
+          error?: { message?: string }
+        }
+        errorMessage = data.error?.message ?? errorMessage
+      } catch {
+        // 非 JSON 错误体直接使用截断后的原始文本
+      }
+
+      console.error('[main] 模型返回错误状态码:', response.status, errorMessage)
+      throw new TranslateServiceError(`HTTP_${response.status}`, errorMessage)
     }
 
-    let text = ''
-    // 兼容标准 OpenAI 格式 choices 以及 Cline API 等网关外层包裹的 data.choices 格式
-    const rawChoices =
-      (data as { data?: { choices?: typeof data.choices } }).data?.choices ?? data.choices
-    const firstChoice = rawChoices?.[0]
-
-    const messageContent = firstChoice?.message?.content
-    if (typeof messageContent === 'string') {
-      text = messageContent.trim()
-    } else if (Array.isArray(messageContent)) {
-      text = messageContent
-        .map((item) => (typeof item === 'object' ? item.text || item.content || '' : String(item)))
-        .join('')
-        .trim()
-    } else if (typeof firstChoice?.text === 'string') {
-      text = firstChoice.text.trim()
+    if (!response.body) {
+      throw new TranslateServiceError('EMPTY_RESPONSE', '模型响应不包含可读取的内容')
     }
+
+    const streamedResult = await consumeChatCompletionTextStream(response.body, execution?.onDelta)
+
+    throwIfAborted(execution?.signal)
+
+    // 防御性再清理一次，兼容整段 JSON 兜底或服务端拼接出的异常标签
+    const stripped = streamedResult.text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+    const text = stripped || streamedResult.text.trim()
 
     if (!text) {
-      console.error('[main] 模型返回成功但未提取到有效内容:', data)
+      console.error('[main] 模型完成流式输出但未提取到有效内容')
       throw new TranslateServiceError('EMPTY_RESPONSE', '模型返回内容为空')
     }
-
-    // 译文区只放翻译结果：模型若把推理过程包在 <think> 标签里返回，一律剥离
-    const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
-    // 若模型将所有内容均包裹在 think 标签内，剥离后为空时兜底使用原始内容，防止抛出空响应异常
-    text = stripped || text
 
     console.log('[main] 翻译提取成功，结果长度:', text.length)
 
@@ -169,6 +197,12 @@ const translateWithOpenAICompatible = async (
     if (error instanceof TranslateServiceError) {
       throw error
     }
+    if (isAbortError(error, execution?.signal)) {
+      throw new TranslateServiceError('ABORTED', '翻译请求已取消')
+    }
+    if (error instanceof ChatCompletionStreamError) {
+      throw new TranslateServiceError('STREAM_ERROR', error.message)
+    }
 
     const cause = (error as { cause?: unknown })?.cause
     const causeText = cause ? ` (${String(cause)})` : ''
@@ -179,7 +213,10 @@ const translateWithOpenAICompatible = async (
   }
 }
 
-export const translateText = async (request: TranslateRequest): Promise<TranslateResponse> => {
+export const translateText = async (
+  request: TranslateRequest,
+  execution?: TranslateExecutionOptions
+): Promise<TranslateResponse> => {
   try {
     const config = getLLMConfig()
     const targetModel =
@@ -252,11 +289,11 @@ export const translateText = async (request: TranslateRequest): Promise<Translat
     }
 
     if (effectiveProviderType === 'mock') {
-      return await mockTranslate(request)
+      return await mockTranslate(request, execution)
     }
 
     if (effectiveProviderType === 'openai-compatible') {
-      return await translateWithOpenAICompatible(request, effectiveConfig)
+      return await translateWithOpenAICompatible(request, effectiveConfig, execution)
     }
 
     return {
@@ -268,6 +305,15 @@ export const translateText = async (request: TranslateRequest): Promise<Translat
     }
   } catch (error) {
     console.error('[main] translateText 顶层捕获到失败:', error)
+    if (isAbortError(error, execution?.signal)) {
+      return {
+        ok: false,
+        error: {
+          code: 'ABORTED',
+          message: '翻译请求已取消'
+        }
+      }
+    }
     if (error instanceof TranslateServiceError) {
       return {
         ok: false,

@@ -18,6 +18,14 @@ export interface TranslateErrorResponse {
 }
 export type TranslateResponse = TranslateSuccessResponse | TranslateErrorResponse
 
+/** 主进程推送到渲染进程的流式译文增量 */
+export interface TranslateStreamDeltaEvent {
+  /** 本次翻译请求的唯一标识 */
+  requestId: string
+  /** 新增译文文本 */
+  delta: string
+}
+
 export interface TranslateOptions {
   /** 指定服务提供商 ID，如 'deepseek' 或 'cline' */
   providerId?: string

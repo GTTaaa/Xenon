@@ -447,6 +447,30 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* 流式输出期间在正文末尾显示轻量光标，明确模型仍在持续生成 */
+.result-text-streaming::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -0.12em;
+  background: currentColor;
+  animation: result-stream-caret 0.9s steps(1) infinite;
+}
+
+@keyframes result-stream-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+
+  46%,
+  100% {
+    opacity: 0.2;
+  }
+}
+
 /* 悬停时同一对齐组在输入与输出两侧共用同一种轻量底色 */
 .alignment-segment {
   border-radius: 3px;

@@ -69,6 +69,8 @@ const getUserFriendlyErrorMessage = (code: string): string => {
       return '无法连接到模型服务'
     case 'EMPTY_RESPONSE':
       return '模型没有返回可用结果'
+    case 'STREAM_ERROR':
+      return '模型流式响应异常，请重试'
     default:
       return '翻译失败，请重试'
   }
@@ -368,6 +370,9 @@ function App(): React.JSX.Element {
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const requestIdRef = useRef(0)
   const alignmentRequestIdRef = useRef(0)
+  const translationAbortRef = useRef<AbortController | null>(null)
+  const alignmentAbortRef = useRef<AbortController | null>(null)
+  const ipcRequestSequenceRef = useRef(0)
   const alignmentCacheRef = useRef<Map<string, TextAlignment>>(new Map())
   const wordLookupRequestIdRef = useRef(0)
   const wordLookupCacheRef = useRef<Map<string, WordLookupResult>>(new Map())
@@ -817,8 +822,38 @@ function App(): React.JSX.Element {
     })
   }, [clearActiveProviderSelection])
 
+  /** 生成仅用于 IPC 请求追踪的唯一 ID，避免多个窗口或连续请求互相串流 */
+  const createIpcRequestId = useCallback((scope: 'translate' | 'alignment'): string => {
+    ipcRequestSequenceRef.current += 1
+    return `${scope}-${Date.now()}-${ipcRequestSequenceRef.current}`
+  }, [])
+
+  /** 把渲染进程的 AbortController 连接到主进程取消通道 */
+  const bindAbortCancellation = useCallback(
+    (controller: AbortController, requestId: string): void => {
+      controller.signal.addEventListener(
+        'abort',
+        () => {
+          window.api.cancelTranslation(requestId)
+        },
+        { once: true }
+      )
+    },
+    []
+  )
+
+  /** 立即中止主翻译与学习对齐，供输入变化、清空和截图新请求统一调用 */
+  const abortActiveTranslationRequests = useCallback((): void => {
+    translationAbortRef.current?.abort()
+    translationAbortRef.current = null
+    alignmentAbortRef.current?.abort()
+    alignmentAbortRef.current = null
+  }, [])
+
   // 清除旧对齐结果，并让尚未返回的对齐请求失效
   const resetAlignment = useCallback((): void => {
+    alignmentAbortRef.current?.abort()
+    alignmentAbortRef.current = null
     alignmentRequestIdRef.current += 1
     wordLookupRequestIdRef.current += 1
     setAlignment(null)
@@ -840,6 +875,8 @@ function App(): React.JSX.Element {
   }, [])
 
   const resetTranslationState = (): void => {
+    translationAbortRef.current?.abort()
+    translationAbortRef.current = null
     setTargetText('')
     setErrorMessage('')
     setStatus('idle')
@@ -850,6 +887,9 @@ function App(): React.JSX.Element {
   const [translateTriggerToken, setTranslateTriggerToken] = useState(0)
 
   const markTranslationPending = useCallback((): void => {
+    translationAbortRef.current?.abort()
+    translationAbortRef.current = null
+    setTargetText('')
     setErrorMessage('')
     setStatus('translating')
     resetAlignment()
@@ -860,6 +900,14 @@ function App(): React.JSX.Element {
   // 否则全新安装首次截图要等 30~60s（模型编译），用户只会以为应用卡死
   useEffect(() => {
     return window.api.onOcrStatus((next) => {
+      if (next.phase === 'pending') {
+        // 截图翻译从按下快捷键就开始抢占当前会话，旧译文请求不应继续消耗 Token
+        abortActiveTranslationRequests()
+        requestIdRef.current += 1
+        setTargetText('')
+        resetAlignment()
+      }
+
       // 新一轮识别开始时清掉上一轮的「较慢」提示（在事件回调里重置，
       // 避免在 effect 体内同步 setState 触发级联渲染）
       setOcrSlowHint(false)
@@ -870,7 +918,7 @@ function App(): React.JSX.Element {
         setStatus('error')
       }
     })
-  }, [])
+  }, [abortActiveTranslationRequests, resetAlignment])
 
   // 识别超过 4 秒仍无结果时补一句说明：全新安装的首次识别要现场编译
   // Vision 模型（实测 30~60s），这属于预期行为而不是卡死，提前讲清楚
@@ -885,16 +933,18 @@ function App(): React.JSX.Element {
     return window.api.onApplySourceText((recognizedText) => {
       const trimmed = recognizedText.trim()
       if (!trimmed) {
+        abortActiveTranslationRequests()
         setErrorMessage('截图未识别到文字内容')
         setStatus('idle')
         return
       }
 
+      abortActiveTranslationRequests()
       setSourceText(recognizedText)
       setErrorMessage('')
       markTranslationPending()
     })
-  }, [markTranslationPending])
+  }, [abortActiveTranslationRequests, markTranslationPending])
 
   // 空态提示里的截图快捷键：跟随用户在设置里自定义的键位，读不到就退回默认值
   const [screenshotShortcut, setScreenshotShortcut] = useState('Alt+S')
@@ -971,15 +1021,35 @@ function App(): React.JSX.Element {
   // 核心翻译流程：基于动态检测的源语言与自适应目标语言触发模型翻译
   useEffect(() => {
     const trimmedSourceText = sourceText.trim()
-    if (!trimmedSourceText) return
+    if (!trimmedSourceText) {
+      translationAbortRef.current?.abort()
+      translationAbortRef.current = null
+      return
+    }
 
     requestIdRef.current += 1
     const currentRequestId = requestIdRef.current
     const effectiveSourcePrompt = resolvePromptLanguage(sourceLanguage, detectedInfo.detected)
     const effectiveTargetPrompt = getLanguageInfo(effectiveTargetLang).promptName
+    const controller = new AbortController()
+    const ipcRequestId = createIpcRequestId('translate')
+
+    // 新输入一出现就取消旧流，即使旧响应晚到也会被请求代次校验丢弃
+    translationAbortRef.current?.abort()
+    translationAbortRef.current = controller
+    alignmentAbortRef.current?.abort()
+    alignmentAbortRef.current = null
+    bindAbortCancellation(controller, ipcRequestId)
+
+    let pendingFrame: number | null = null
+    let streamedText = ''
+    let requestStarted = false
+    let requestSettled = false
 
     // 防抖处理，避免频繁调用翻译接口
     const timer = window.setTimeout(async () => {
+      if (currentRequestId !== requestIdRef.current || controller.signal.aborted) return
+
       // 没有启用的渠道就直接给反馈：空 providerId 会在主进程里回落到配置里的默认渠道，
       // 那可能正是用户刚停用的那个，等于"停用了却还在用"
       if (!selectedProviderId || !selectedModel) {
@@ -990,47 +1060,102 @@ function App(): React.JSX.Element {
         return
       }
 
-      const response = await window.api.translateText({
-        text: sourceText,
-        sourceLanguage: effectiveSourcePrompt,
-        targetLanguage: effectiveTargetPrompt,
-        options: {
-          providerId: selectedProviderId,
-          model: selectedModel
-        }
-      })
-      if (currentRequestId !== requestIdRef.current) return
-
-      if (response.ok) {
-        resetAlignment()
-        setTargetText(response.text)
-        setErrorMessage('')
-        setStatus('idle')
-
-        if (autoCopyRef.current && response.text.trim()) {
-          void navigator.clipboard
-            .writeText(response.text)
-            .then(() => {
-              setCopyState('done')
-            })
-            .catch((copyErr) => {
-              console.warn('[renderer] 自动复制剪贴板失败:', copyErr)
-            })
-        }
-        return
-      }
-
+      requestStarted = true
       setTargetText('')
-      resetAlignment()
-      setErrorMessage(getUserFriendlyErrorMessage(response.error.code))
-      console.error('[renderer] translate error', response.error.code, response.error.message)
-      setStatus('error')
+      setErrorMessage('')
+
+      try {
+        const response = await window.api.translateTextStream(
+          ipcRequestId,
+          {
+            text: sourceText,
+            sourceLanguage: effectiveSourcePrompt,
+            targetLanguage: effectiveTargetPrompt,
+            options: {
+              providerId: selectedProviderId,
+              model: selectedModel
+            }
+          },
+          (delta) => {
+            if (currentRequestId !== requestIdRef.current || controller.signal.aborted) return
+
+            streamedText += delta
+            // 高频 token 按动画帧合并刷新，既保持实时感，也避免每个分片都触发整棵组件树更新
+            if (pendingFrame !== null) return
+            pendingFrame = window.requestAnimationFrame(() => {
+              pendingFrame = null
+              if (currentRequestId !== requestIdRef.current || controller.signal.aborted) return
+              setTargetText(streamedText)
+            })
+          }
+        )
+
+        if (pendingFrame !== null) {
+          window.cancelAnimationFrame(pendingFrame)
+          pendingFrame = null
+        }
+        if (currentRequestId !== requestIdRef.current || controller.signal.aborted) return
+
+        if (response.ok) {
+          resetAlignment()
+          setTargetText(response.text)
+          setErrorMessage('')
+          setStatus('idle')
+
+          if (autoCopyRef.current && response.text.trim()) {
+            void navigator.clipboard
+              .writeText(response.text)
+              .then(() => {
+                setCopyState('done')
+              })
+              .catch((copyErr) => {
+                console.warn('[renderer] 自动复制剪贴板失败:', copyErr)
+              })
+          }
+          return
+        }
+
+        if (response.error.code === 'ABORTED') return
+
+        setTargetText('')
+        resetAlignment()
+        setErrorMessage(getUserFriendlyErrorMessage(response.error.code))
+        console.error('[renderer] translate error', response.error.code, response.error.message)
+        setStatus('error')
+      } catch (error) {
+        if (pendingFrame !== null) {
+          window.cancelAnimationFrame(pendingFrame)
+          pendingFrame = null
+        }
+        if (currentRequestId !== requestIdRef.current || controller.signal.aborted) return
+
+        console.error('[renderer] 翻译请求异常', error)
+        setTargetText('')
+        resetAlignment()
+        setErrorMessage('翻译失败，请重试')
+        setStatus('error')
+      } finally {
+        requestSettled = true
+        if (translationAbortRef.current === controller) {
+          translationAbortRef.current = null
+        }
+      }
     }, 500)
 
     return () => {
       window.clearTimeout(timer)
+      if (pendingFrame !== null) {
+        window.cancelAnimationFrame(pendingFrame)
+      }
+      // 尚未真正发出的防抖请求无需取消；已发出的流必须在输入变化时立刻中止
+      if (requestStarted && !requestSettled) controller.abort()
+      if (translationAbortRef.current === controller) {
+        translationAbortRef.current = null
+      }
     }
   }, [
+    bindAbortCancellation,
+    createIpcRequestId,
     selectedProviderId,
     selectedModel,
     sourceText,
@@ -1068,9 +1193,24 @@ function App(): React.JSX.Element {
 
     const currentAlignmentRequestId = alignmentRequestIdRef.current + 1
     alignmentRequestIdRef.current = currentAlignmentRequestId
+    const controller = new AbortController()
+    const ipcRequestId = createIpcRequestId('alignment')
+
+    // 新的对齐任务启动前先取消旧任务，避免切换模型或文本后旧结果回填
+    alignmentAbortRef.current?.abort()
+    alignmentAbortRef.current = controller
+    bindAbortCancellation(controller, ipcRequestId)
+
+    let requestStarted = false
+    let requestSettled = false
 
     const timer = window.setTimeout(async () => {
-      if (currentAlignmentRequestId !== alignmentRequestIdRef.current) return
+      if (
+        currentAlignmentRequestId !== alignmentRequestIdRef.current ||
+        controller.signal.aborted
+      ) {
+        return
+      }
 
       const cachedAlignment = alignmentCacheRef.current.get(alignmentCacheKey)
       if (cachedAlignment) {
@@ -1081,7 +1221,8 @@ function App(): React.JSX.Element {
       }
 
       try {
-        const response = await window.api.alignText({
+        requestStarted = true
+        const response = await window.api.alignText(ipcRequestId, {
           sourceText,
           targetText,
           sourceLanguage: effectiveSourcePrompt,
@@ -1092,7 +1233,12 @@ function App(): React.JSX.Element {
           }
         })
 
-        if (currentAlignmentRequestId !== alignmentRequestIdRef.current) return
+        if (
+          currentAlignmentRequestId !== alignmentRequestIdRef.current ||
+          controller.signal.aborted
+        ) {
+          return
+        }
 
         if (response.ok) {
           alignmentCacheRef.current.delete(alignmentCacheKey)
@@ -1107,22 +1253,40 @@ function App(): React.JSX.Element {
           return
         }
 
+        if (response.error.code === 'ABORTED') return
+
         setAlignment(null)
         console.info('[renderer] 悬停关联未启用:', response.error.code, response.error.message)
       } catch (error) {
-        if (currentAlignmentRequestId !== alignmentRequestIdRef.current) return
+        if (
+          currentAlignmentRequestId !== alignmentRequestIdRef.current ||
+          controller.signal.aborted
+        ) {
+          return
+        }
         setAlignment(null)
         console.warn('[renderer] 文本对齐请求失败，译文不受影响:', error)
+      } finally {
+        requestSettled = true
+        if (alignmentAbortRef.current === controller) {
+          alignmentAbortRef.current = null
+        }
       }
     }, 160)
 
     return () => {
       window.clearTimeout(timer)
+      if (requestStarted && !requestSettled) controller.abort()
+      if (alignmentAbortRef.current === controller) {
+        alignmentAbortRef.current = null
+      }
       if (alignmentRequestIdRef.current === currentAlignmentRequestId) {
         alignmentRequestIdRef.current += 1
       }
     }
   }, [
+    bindAbortCancellation,
+    createIpcRequestId,
     sourceText,
     targetText,
     status,
@@ -1655,6 +1819,7 @@ function App(): React.JSX.Element {
   const handleSourceTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
     // console.log('[renderer] source text changed', event.target.value)
     const nextText = event.target.value
+    abortActiveTranslationRequests()
     closeWordLookup()
 
     setSourceText(nextText)
@@ -1680,6 +1845,7 @@ function App(): React.JSX.Element {
   }
 
   const handleClearSource = (): void => {
+    abortActiveTranslationRequests()
     requestIdRef.current += 1
     setSourceText('')
     resetTranslationState()
@@ -1932,7 +2098,7 @@ function App(): React.JSX.Element {
                     </p>
                   ) : null}
                 </div>
-              ) : status === 'translating' ? (
+              ) : status === 'translating' && !targetText.trim() ? (
                 <div className="result-loader" aria-live="polite" aria-label="正在翻译">
                   <span />
                   <span />
@@ -1949,7 +2115,11 @@ function App(): React.JSX.Element {
                   />
                 </p>
               ) : (
-                <p className={`result-text${targetText ? '' : ' result-placeholder'}`}>
+                <p
+                  className={`result-text${targetText ? '' : ' result-placeholder'}${
+                    status === 'translating' && targetText ? ' result-text-streaming' : ''
+                  }`}
+                >
                   {targetText || '译文会显示在这里'}
                 </p>
               )}

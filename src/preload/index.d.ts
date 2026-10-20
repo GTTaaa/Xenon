@@ -6,8 +6,13 @@ import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../sh
 import type { OcrStatus } from '../shared/ocr'
 
 interface AppAPI {
-  translateText: (request: TranslateRequest) => Promise<TranslateResponse>
-  alignText: (request: AlignTextRequest) => Promise<AlignTextResponse>
+  translateTextStream: (
+    requestId: string,
+    request: TranslateRequest,
+    onDelta: (delta: string) => void
+  ) => Promise<TranslateResponse>
+  alignText: (requestId: string, request: AlignTextRequest) => Promise<AlignTextResponse>
+  cancelTranslation: (requestId: string) => void
   lookupWord: (request: WordLookupRequest) => Promise<WordLookupResponse>
   onFocusInput: (callback: () => void) => () => void
   getConfig: () => Promise<AppSettings>

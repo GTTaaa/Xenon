@@ -70,6 +70,24 @@ interface AlignmentHttpResult {
   data: AlignmentResponseBody
 }
 
+/** 学习模式二次对齐的执行选项 */
+export interface AlignExecutionOptions {
+  /** 输入变化、清空或发起新翻译时用于中止旧对齐请求 */
+  signal?: AbortSignal
+}
+
+/** 判断对齐异常是否由主动取消触发 */
+const isAlignmentAbortError = (error: unknown, signal?: AbortSignal): boolean => {
+  return Boolean(signal?.aborted || (error as { name?: string })?.name === 'AbortError')
+}
+
+/** 在关键节点检查取消状态，避免旧请求继续重试或解析 */
+const throwIfAlignmentAborted = (signal?: AbortSignal): void => {
+  if (signal?.aborted) {
+    throw new AlignmentServiceError('ABORTED', '文本对齐请求已取消')
+  }
+}
+
 /** 构造只负责句级对齐、不允许改写文本的系统提示词 */
 const buildAlignmentSystemPrompt = (): string => {
   const rules = [
@@ -142,13 +160,16 @@ const sendAlignmentRequest = async (
   route: ModelRoute,
   sourceSegments: TextAlignment['sourceSegments'],
   targetSegments: TextAlignment['targetSegments'],
-  reasoningEffort?: AlignmentReasoningEffort
+  reasoningEffort?: AlignmentReasoningEffort,
+  signal?: AbortSignal
 ): Promise<AlignmentHttpResult> => {
   const cleanBaseUrl = route.baseUrl
     .trim()
     .replace(/\/chat\/completions\/?$/, '')
     .replace(/\/$/, '')
   const endpoint = `${cleanBaseUrl}/chat/completions`
+
+  throwIfAlignmentAborted(signal)
 
   const response = await net.fetch(endpoint, {
     method: 'POST',
@@ -170,9 +191,11 @@ const sendAlignmentRequest = async (
           content: buildAlignmentUserMessage(request, sourceSegments, targetSegments)
         }
       ]
-    })
+    }),
+    signal
   })
 
+  throwIfAlignmentAborted(signal)
   const rawResponseText = await response.text()
   let data: AlignmentResponseBody
 
@@ -196,7 +219,8 @@ const requestAlignment = async (
   request: AlignTextRequest,
   route: ModelRoute,
   sourceSegments: TextAlignment['sourceSegments'],
-  targetSegments: TextAlignment['targetSegments']
+  targetSegments: TextAlignment['targetSegments'],
+  signal?: AbortSignal
 ): Promise<TextAlignment> => {
   const preferredReasoningEffort = resolveAlignmentReasoningEffort(route.model)
   const reasoningAttempts: Array<AlignmentReasoningEffort | undefined> = preferredReasoningEffort
@@ -205,15 +229,18 @@ const requestAlignment = async (
   let result: AlignmentHttpResult | null = null
 
   for (let index = 0; index < reasoningAttempts.length; index += 1) {
+    throwIfAlignmentAborted(signal)
     const reasoningEffort = reasoningAttempts[index]
     result = await sendAlignmentRequest(
       request,
       route,
       sourceSegments,
       targetSegments,
-      reasoningEffort
+      reasoningEffort,
+      signal
     )
 
+    throwIfAlignmentAborted(signal)
     if (result.response.ok) break
 
     const message = getAlignmentErrorMessage(result)
@@ -298,7 +325,10 @@ const buildMockAlignment = (
  * 对已完成的译文做二次编号对齐。
  * 该函数不会生成或修改译文；任何失败都只返回错误，由渲染层关闭悬停关联。
  */
-export const alignText = async (request: AlignTextRequest): Promise<AlignTextResponse> => {
+export const alignText = async (
+  request: AlignTextRequest,
+  execution?: AlignExecutionOptions
+): Promise<AlignTextResponse> => {
   try {
     if (!request.sourceText.trim() || !request.targetText.trim()) {
       return {
@@ -370,7 +400,13 @@ export const alignText = async (request: AlignTextRequest): Promise<AlignTextRes
       targetSegments: targetSegments.length
     })
 
-    const alignment = await requestAlignment(request, route, sourceSegments, targetSegments)
+    const alignment = await requestAlignment(
+      request,
+      route,
+      sourceSegments,
+      targetSegments,
+      execution?.signal
+    )
 
     console.log('[main] 文本对齐完成:', {
       pairs: alignment.pairs.length
@@ -382,6 +418,16 @@ export const alignText = async (request: AlignTextRequest): Promise<AlignTextRes
     }
   } catch (error) {
     console.error('[main] 文本对齐失败:', error)
+
+    if (isAlignmentAbortError(error, execution?.signal)) {
+      return {
+        ok: false,
+        error: {
+          code: 'ABORTED',
+          message: '文本对齐请求已取消'
+        }
+      }
+    }
 
     if (error instanceof AlignmentServiceError) {
       return {
