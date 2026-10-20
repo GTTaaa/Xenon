@@ -1,5 +1,8 @@
 import type { TranslateOptions } from './translate'
 
+/** 用户点击的英文词位于原文还是译文 */
+export type WordLookupSide = 'source' | 'target'
+
 /** 用户在原文中选中的英文单词及其精确偏移 */
 export interface EnglishWordSelection {
   /** 命中的英文单词 */
@@ -18,6 +21,8 @@ export interface WordLookupRequest {
   sourceSentence: string
   /** 与英文句段对应的完整中文译文 */
   targetSentence: string
+  /** 被点击英文词所在的一侧 */
+  wordSide: WordLookupSide
   /** 源语言提示名 */
   sourceLanguage: string
   /** 目标语言提示名 */
@@ -151,9 +156,10 @@ export const parseWordLookupResult = (
 
   if (!lemma || lemma.length > 80) return null
   if (!meaning || meaning.length > 80) return null
-  if (!/^[A-Za-z][A-Za-z' -]*$/.test(lemma)) return null
+  if (!/^[A-Za-z][A-Za-z'’ -]*$/.test(lemma)) return null
   if (!/[\u3400-\u9fff]/.test(meaning)) return null
   if (targetText.length > 120) return null
+  if (targetText && !/[\u3400-\u9fff]/.test(targetText)) return null
   if (targetText && !targetSentence.includes(targetText)) return null
 
   return {

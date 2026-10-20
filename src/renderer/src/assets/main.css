@@ -347,6 +347,7 @@ body {
 /* 原文词片段的命中范围始终存在，但只在鼠标指向或固定查词时显示底色 */
 .source-word {
   border-radius: 3px;
+  cursor: pointer;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
   transition:
@@ -357,6 +358,38 @@ body {
 .source-word-active {
   background: rgba(26, 127, 69, 0.16);
   box-shadow: inset 0 -1px 0 rgba(26, 127, 69, 0.7);
+}
+
+/* 学习高亮只使用淡彩下划线，避免正文出现大面积色块 */
+.learning-highlight {
+  border-radius: 2px;
+  cursor: pointer;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition:
+    background-color 80ms ease,
+    text-decoration-color 80ms ease,
+    text-decoration-thickness 80ms ease;
+}
+
+.learning-highlight-source {
+  text-decoration-color: rgba(24, 151, 128, 0.52);
+}
+
+.learning-highlight-target {
+  text-decoration-color: rgba(201, 127, 42, 0.5);
+}
+
+.learning-highlight-active {
+  background: rgba(24, 151, 128, 0.08);
+  text-decoration-thickness: 2px;
+}
+
+.learning-highlight-target.learning-highlight-active {
+  background: rgba(201, 127, 42, 0.09);
 }
 
 /* 输入框本体就是一段普通文字：高度随内容长到 5 行（108.5px）封顶，再多交给它自己滚动 */
@@ -779,6 +812,22 @@ body {
   color: var(--app-fg-muted);
   font-size: 10px;
   line-height: 1.45;
+}
+
+.word-lookup-note {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(201, 127, 42, 0.16);
+  color: var(--app-fg-body);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.word-lookup-note span {
+  margin-right: 5px;
+  color: #a36522;
+  font-size: 9px;
+  font-weight: 600;
 }
 
 .word-lookup-tooltip {

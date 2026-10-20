@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   filterLearningTokens,
   parseAlignmentPairs,
+  resolveLearningHighlightSide,
   segmentText,
   tokenizeTextWords
 } from '../textAlignment.ts'
@@ -226,241 +227,10 @@ test('学习候选词会过滤低价值虚词并重新连续编号', () => {
   )
 })
 
-test('合法的词级学习提示会附加到整句对齐结果', () => {
-  const sourceText = 'Please review the proposal.'
-  const targetText = '请审阅这份提案。'
-  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
-  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
-  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
-  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
-  const reviewToken = sourceTokens.find((token) => token.text === 'review')
-  const targetReviewToken = targetTokens.find((token) => token.text === '审阅')
-
-  assert.ok(reviewToken)
-  assert.ok(targetReviewToken)
-
-  const alignment = parseAlignmentPairs(
-    JSON.stringify({
-      pairs: [{ source: ['s0'], target: ['t0'] }],
-      learningHints: [
-        {
-          source: [reviewToken.id],
-          target: [targetReviewToken.id],
-          lemma: 'review',
-          meaning: '审阅',
-          confidence: 'high'
-        }
-      ]
-    }),
-    sourceSegments,
-    targetSegments,
-    { sourceText, targetText, sourceTokens, targetTokens }
-  )
-
-  assert.ok(alignment)
-  assert.equal(alignment.learningHints?.length, 1)
-  assert.equal(alignment.learningHints?.[0].pairId, 'p0')
-  assert.equal(alignment.learningHints?.[0].sourceText, 'review')
-  assert.equal(alignment.learningHints?.[0].targetText, '审阅')
-  assert.equal(alignment.learningHints?.[0].meaning, '审阅')
-})
-
-test('词级提示跨句对应时只丢弃错误项并保留合法项', () => {
-  const sourceText = 'Run. Walk.'
-  const targetText = '跑。走。'
-  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
-  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
-  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
-  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
-  const runToken = sourceTokens.find((token) => token.text === 'Run')
-  const walkToken = sourceTokens.find((token) => token.text === 'Walk')
-  const runTargetToken = targetTokens.find((token) => token.text === '跑')
-  const walkTargetToken = targetTokens.find((token) => token.text === '走')
-
-  assert.ok(runToken)
-  assert.ok(walkToken)
-  assert.ok(runTargetToken)
-  assert.ok(walkTargetToken)
-
-  const alignment = parseAlignmentPairs(
-    JSON.stringify({
-      pairs: [
-        { source: ['s0'], target: ['t0'] },
-        { source: ['s1'], target: ['t1'] }
-      ],
-      learningHints: [
-        {
-          source: [runToken.id],
-          target: [walkTargetToken.id],
-          lemma: 'run',
-          meaning: '走',
-          confidence: 'high'
-        },
-        {
-          source: [walkToken.id],
-          target: [walkTargetToken.id],
-          lemma: 'walk',
-          meaning: '走',
-          confidence: 'high'
-        }
-      ]
-    }),
-    sourceSegments,
-    targetSegments,
-    { sourceText, targetText, sourceTokens, targetTokens }
-  )
-
-  assert.ok(alignment)
-  assert.equal(alignment.pairs.length, 2)
-  assert.equal(alignment.learningHints?.length, 1)
-  assert.equal(alignment.learningHints?.[0].sourceText, 'Walk')
-})
-
-test('词级提示重复使用单词编号时只丢弃冲突项', () => {
-  const sourceText = 'Please review the proposal.'
-  const targetText = '请审阅这份提案。'
-  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
-  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
-  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
-  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
-  const reviewToken = sourceTokens.find((token) => token.text === 'review')
-  const proposalToken = sourceTokens.find((token) => token.text === 'proposal')
-  const targetReviewToken = targetTokens.find((token) => token.text === '审阅')
-  const targetProposalToken = targetTokens.find((token) => token.text === '提案')
-
-  assert.ok(reviewToken)
-  assert.ok(proposalToken)
-  assert.ok(targetReviewToken)
-  assert.ok(targetProposalToken)
-
-  const alignment = parseAlignmentPairs(
-    JSON.stringify({
-      pairs: [{ source: ['s0'], target: ['t0'] }],
-      learningHints: [
-        {
-          source: [reviewToken.id],
-          target: [targetReviewToken.id],
-          lemma: 'review',
-          meaning: '审阅',
-          confidence: 'high'
-        },
-        {
-          source: [reviewToken.id],
-          target: [targetReviewToken.id],
-          lemma: 'review',
-          meaning: '提案',
-          confidence: 'high'
-        },
-        {
-          source: [proposalToken.id],
-          target: [targetProposalToken.id],
-          lemma: 'proposal',
-          meaning: '提案',
-          confidence: 'high'
-        }
-      ]
-    }),
-    sourceSegments,
-    targetSegments,
-    { sourceText, targetText, sourceTokens, targetTokens }
-  )
-
-  assert.ok(alignment)
-  assert.deepEqual(
-    alignment.learningHints?.map((hint) => hint.sourceText),
-    ['review', 'proposal']
-  )
-})
-
-test('目标词没有中文译文时只丢弃该条提示', () => {
-  const sourceText = 'Please open the web UI.'
-  const targetText = '请打开 Web 界面。'
-  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
-  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
-  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
-  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
-  const webToken = sourceTokens.find((token) => token.text.toLowerCase() === 'web')
-  const uiToken = sourceTokens.find((token) => token.text === 'UI')
-  const webTargetToken = targetTokens.find((token) => token.text === 'Web')
-  const uiTargetToken = targetTokens.find((token) => token.text === '界面')
-
-  assert.ok(webToken)
-  assert.ok(uiToken)
-  assert.ok(webTargetToken)
-  assert.ok(uiTargetToken)
-
-  const alignment = parseAlignmentPairs(
-    JSON.stringify({
-      pairs: [{ source: ['s0'], target: ['t0'] }],
-      learningHints: [
-        {
-          source: [webToken.id],
-          target: [webTargetToken.id],
-          lemma: 'web',
-          meaning: '网页',
-          confidence: 'high'
-        },
-        {
-          source: [uiToken.id],
-          target: [uiTargetToken.id],
-          lemma: 'UI',
-          meaning: '界面',
-          confidence: 'high'
-        }
-      ]
-    }),
-    sourceSegments,
-    targetSegments,
-    { sourceText, targetText, sourceTokens, targetTokens }
-  )
-
-  assert.ok(alignment)
-  assert.equal(alignment.learningHints?.length, 1)
-  assert.equal(alignment.learningHints?.[0].sourceText, 'UI')
-})
-
-test('目标词编号不连续时只丢弃该条提示', () => {
-  const sourceText = 'local gateway.'
-  const targetText = '一个本地网关。'
-  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
-  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
-  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
-  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
-  const localToken = sourceTokens.find((token) => token.text === 'local')
-  const gatewayToken = sourceTokens.find((token) => token.text === 'gateway')
-
-  assert.ok(localToken)
-  assert.ok(gatewayToken)
-  assert.ok(targetTokens.length >= 3)
-
-  const alignment = parseAlignmentPairs(
-    JSON.stringify({
-      pairs: [{ source: ['s0'], target: ['t0'] }],
-      learningHints: [
-        {
-          source: [localToken.id],
-          target: [targetTokens[0].id, targetTokens[2].id],
-          lemma: 'local',
-          meaning: '本地',
-          confidence: 'high'
-        },
-        {
-          source: [gatewayToken.id],
-          target: [targetTokens[2].id],
-          lemma: 'gateway',
-          meaning: '网关',
-          confidence: 'high'
-        }
-      ]
-    }),
-    sourceSegments,
-    targetSegments,
-    { sourceText, targetText, sourceTokens, targetTokens }
-  )
-
-  assert.ok(alignment)
-  assert.equal(alignment.learningHints?.length, 1)
-  assert.equal(alignment.learningHints?.[0].sourceText, 'gateway')
+test('学习高亮方向只在中英双向翻译时启用', () => {
+  assert.equal(resolveLearningHighlightSide('ENGLISH', 'CHINESE (SIM)'), 'source')
+  assert.equal(resolveLearningHighlightSide('CHINESE (SIM)', 'ENGLISH'), 'target')
+  assert.equal(resolveLearningHighlightSide('ENGLISH', 'JAPANESE'), null)
 })
 
 test('学习模式 36 组候选词回归样例保持预期过滤结果', () => {
@@ -493,125 +263,342 @@ test('学习模式 36 组候选词回归样例保持预期过滤结果', () => {
   }
 })
 
-test('低置信度和缺少置信度的词级提示会被丢弃', () => {
-  const sourceText = 'Please review the proposal.'
-  const targetText = '请审阅这份提案。'
+test('英译中的学习高亮会校验并计算精确偏移', () => {
+  const sourceText = 'Please ramp up the review process.'
+  const targetText = '请加快审阅流程。'
   const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
   const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
-  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
-  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
-  const reviewToken = sourceTokens.find((token) => token.text === 'review')
-  const targetReviewToken = targetTokens.find((token) => token.text === '审阅')
-
-  assert.ok(reviewToken)
-  assert.ok(targetReviewToken)
 
   const alignment = parseAlignmentPairs(
     JSON.stringify({
       pairs: [{ source: ['s0'], target: ['t0'] }],
-      learningHints: [
+      highlights: [
         {
-          source: [reviewToken.id],
-          target: [targetReviewToken.id],
-          lemma: 'review',
-          meaning: '审阅',
-          confidence: 'low'
-        },
-        {
-          source: [reviewToken.id],
-          target: [targetReviewToken.id],
-          lemma: 'review',
-          meaning: '审阅'
+          pairId: 'p0',
+          side: 'source',
+          surface: 'ramp up',
+          lemma: 'ramp up',
+          meaning: '逐步加快',
+          targetText: '加快',
+          note: ''
         }
       ]
     }),
     sourceSegments,
     targetSegments,
-    { sourceText, targetText, sourceTokens, targetTokens }
+    {
+      sourceText,
+      targetText,
+      sourceLanguage: 'ENGLISH',
+      targetLanguage: 'CHINESE (SIM)'
+    }
   )
 
   assert.ok(alignment)
-  assert.deepEqual(alignment.learningHints, [])
+  assert.equal(alignment.highlights.length, 1)
+  assert.deepEqual(
+    {
+      pairId: alignment.highlights[0].pairId,
+      side: alignment.highlights[0].side,
+      surface: alignment.highlights[0].surface,
+      start: alignment.highlights[0].start,
+      end: alignment.highlights[0].end
+    },
+    {
+      pairId: 'p0',
+      side: 'source',
+      surface: 'ramp up',
+      start: sourceText.indexOf('ramp up'),
+      end: sourceText.indexOf('ramp up') + 'ramp up'.length
+    }
+  )
 })
 
-test('低置信度提示被丢弃时仍保留同组的高置信度提示', () => {
-  const sourceText = 'Please review the proposal.'
-  const targetText = '请审阅这份提案。'
-  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
-  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
-  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
-  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
-  const reviewToken = sourceTokens.find((token) => token.text === 'review')
-  const proposalToken = sourceTokens.find((token) => token.text === 'proposal')
-  const targetReviewToken = targetTokens.find((token) => token.text === '审阅')
-  const targetProposalToken = targetTokens.find((token) => token.text === '提案')
-
-  assert.ok(reviewToken)
-  assert.ok(proposalToken)
-  assert.ok(targetReviewToken)
-  assert.ok(targetProposalToken)
+test('中译英会高亮英文译文并保留地道表达说明', () => {
+  const sourceText = '请加快审阅流程。'
+  const targetText = 'Please ramp up the review process.'
+  const sourceSegments = segmentText(sourceText, 'CHINESE (SIM)', 's')
+  const targetSegments = segmentText(targetText, 'ENGLISH', 't')
 
   const alignment = parseAlignmentPairs(
     JSON.stringify({
       pairs: [{ source: ['s0'], target: ['t0'] }],
-      learningHints: [
+      highlights: [
         {
-          source: [reviewToken.id],
-          target: [targetReviewToken.id],
-          lemma: 'review',
-          meaning: '审阅',
-          confidence: 'medium'
-        },
-        {
-          source: [proposalToken.id],
-          target: [targetProposalToken.id],
-          lemma: 'proposal',
-          meaning: '提案',
-          confidence: 0.95
+          pairId: 0,
+          side: 'target',
+          surface: 'ramp up',
+          lemma: 'ramp up',
+          meaning: '加快、提升',
+          targetText: '加快',
+          note: 'ramp up 比 increase 更有逐步加码的力度感，更符合项目推进语境。'
         }
       ]
     }),
     sourceSegments,
     targetSegments,
-    { sourceText, targetText, sourceTokens, targetTokens }
+    {
+      sourceText,
+      targetText,
+      sourceLanguage: 'CHINESE (SIM)',
+      targetLanguage: 'ENGLISH'
+    }
   )
 
   assert.ok(alignment)
-  assert.equal(alignment.learningHints?.length, 1)
-  assert.equal(alignment.learningHints?.[0].sourceText, 'proposal')
+  assert.equal(alignment.highlights.length, 1)
+  assert.equal(alignment.highlights[0].pairId, 'p0')
+  assert.equal(alignment.highlights[0].side, 'target')
+  assert.equal(alignment.highlights[0].start, targetText.indexOf('ramp up'))
+  assert.ok(alignment.highlights[0].note.includes('力度感'))
 })
 
-test('高置信提示的释义必须包含简体中文', () => {
-  const sourceText = 'Please review the proposal.'
-  const targetText = '请审阅这份提案。'
+test('方向错误的侧、无效配对和非连续短语只丢弃单项', () => {
+  const sourceText = 'Please streamline the review process.'
+  const targetText = '请精简审阅流程。'
   const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
   const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
-  const sourceTokens = tokenizeTextWords(sourceText, 'ENGLISH', sourceSegments, 'sw')
-  const targetTokens = tokenizeTextWords(targetText, 'CHINESE (SIM)', targetSegments, 'tw')
-  const reviewToken = sourceTokens.find((token) => token.text === 'review')
-  const targetReviewToken = targetTokens.find((token) => token.text === '审阅')
-
-  assert.ok(reviewToken)
-  assert.ok(targetReviewToken)
 
   const alignment = parseAlignmentPairs(
     JSON.stringify({
       pairs: [{ source: ['s0'], target: ['t0'] }],
-      learningHints: [
+      highlights: [
         {
-          source: [reviewToken.id],
-          target: [targetReviewToken.id],
+          pairId: 'p0',
+          side: 'target',
+          surface: 'streamline',
+          lemma: 'streamline',
+          meaning: '精简',
+          targetText: '精简',
+          note: ''
+        },
+        {
+          pairId: 'p9',
+          side: 'source',
+          surface: 'review',
           lemma: 'review',
-          meaning: 'review',
-          confidence: 'high'
+          meaning: '审阅',
+          targetText: '审阅',
+          note: ''
+        },
+        {
+          pairId: 'p0',
+          side: 'source',
+          surface: 'stream line',
+          lemma: 'streamline',
+          meaning: '精简',
+          targetText: '精简',
+          note: ''
+        },
+        {
+          pairId: 'p0',
+          side: 'source',
+          surface: 'streamline',
+          lemma: 'streamline',
+          meaning: '精简',
+          targetText: '优化',
+          note: ''
+        },
+        {
+          pairId: 'p0',
+          side: 'source',
+          surface: 'streamline',
+          lemma: 'streamline',
+          meaning: '精简',
+          targetText: '精简',
+          note: ''
         }
       ]
     }),
     sourceSegments,
     targetSegments,
-    { sourceText, targetText, sourceTokens, targetTokens }
+    {
+      sourceText,
+      targetText,
+      sourceLanguage: 'ENGLISH',
+      targetLanguage: 'CHINESE (SIM)'
+    }
   )
 
   assert.ok(alignment)
-  assert.deepEqual(alignment.learningHints, [])
+  assert.deepEqual(
+    alignment.highlights.map((highlight) => highlight.surface),
+    ['streamline']
+  )
+})
+
+test('重叠高亮与基础虚词会被过滤', () => {
+  const sourceText = 'Please streamline the review process.'
+  const targetText = '请精简审阅流程。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+
+  const alignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      highlights: [
+        {
+          pairId: 'p0',
+          side: 'source',
+          surface: 'review process',
+          lemma: 'review process',
+          meaning: '审阅流程',
+          targetText: '审阅流程',
+          note: ''
+        },
+        {
+          pairId: 'p0',
+          side: 'source',
+          surface: 'review',
+          lemma: 'review',
+          meaning: '审阅',
+          targetText: '审阅',
+          note: ''
+        },
+        {
+          pairId: 'p0',
+          side: 'source',
+          surface: 'the',
+          lemma: 'the',
+          meaning: '定冠词',
+          targetText: '',
+          note: ''
+        }
+      ]
+    }),
+    sourceSegments,
+    targetSegments,
+    {
+      sourceText,
+      targetText,
+      sourceLanguage: 'ENGLISH',
+      targetLanguage: 'CHINESE (SIM)'
+    }
+  )
+
+  assert.ok(alignment)
+  assert.deepEqual(
+    alignment.highlights.map((highlight) => highlight.surface),
+    ['review process']
+  )
+})
+
+test('学习高亮会按翻译方向限制最大数量', () => {
+  const sourceText = 'Streamline and accelerate the review process.'
+  const targetText = '请精简并加快审阅流程。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+
+  const sourceAlignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      highlights: ['Streamline', 'accelerate', 'review', 'process'].map((surface) => ({
+        pairId: 'p0',
+        side: 'source',
+        surface,
+        lemma: surface.toLowerCase(),
+        meaning: '语境释义',
+        targetText: '',
+        note: ''
+      }))
+    }),
+    sourceSegments,
+    targetSegments,
+    {
+      sourceText,
+      targetText,
+      sourceLanguage: 'ENGLISH',
+      targetLanguage: 'CHINESE (SIM)'
+    }
+  )
+
+  assert.ok(sourceAlignment)
+  assert.equal(sourceAlignment.highlights.length, 3)
+
+  const targetSourceText = '请精简并加快审阅流程。'
+  const targetTextEnglish = 'Streamline and accelerate the review process.'
+  const targetSourceSegments = segmentText(targetSourceText, 'CHINESE (SIM)', 's')
+  const englishTargetSegments = segmentText(targetTextEnglish, 'ENGLISH', 't')
+  const targetAlignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      highlights: ['Streamline', 'accelerate', 'review'].map((surface) => ({
+        pairId: 'p0',
+        side: 'target',
+        surface,
+        lemma: surface.toLowerCase(),
+        meaning: '语境释义',
+        targetText: '',
+        note: '这个表达比基础词更贴合当前语境。'
+      }))
+    }),
+    targetSourceSegments,
+    englishTargetSegments,
+    {
+      sourceText: targetSourceText,
+      targetText: targetTextEnglish,
+      sourceLanguage: 'CHINESE (SIM)',
+      targetLanguage: 'ENGLISH'
+    }
+  )
+
+  assert.ok(targetAlignment)
+  assert.equal(targetAlignment.highlights.length, 2)
+})
+
+test('中译英高亮缺少中文地道说明时只丢弃该项', () => {
+  const sourceText = '请精简审阅流程。'
+  const targetText = 'Please streamline the review process.'
+  const sourceSegments = segmentText(sourceText, 'CHINESE (SIM)', 's')
+  const targetSegments = segmentText(targetText, 'ENGLISH', 't')
+
+  const alignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      highlights: [
+        {
+          pairId: 'p0',
+          side: 'target',
+          surface: 'streamline',
+          lemma: 'streamline',
+          meaning: '精简',
+          targetText: '精简',
+          note: ''
+        }
+      ]
+    }),
+    sourceSegments,
+    targetSegments,
+    {
+      sourceText,
+      targetText,
+      sourceLanguage: 'CHINESE (SIM)',
+      targetLanguage: 'ENGLISH'
+    }
+  )
+
+  assert.ok(alignment)
+  assert.deepEqual(alignment.highlights, [])
+})
+
+test('旧格式或缺少 highlights 字段时仍保留句级对齐', () => {
+  const sourceText = 'Hello.'
+  const targetText = '你好。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+
+  const alignment = parseAlignmentPairs(
+    JSON.stringify({ pairs: [{ source: ['s0'], target: ['t0'] }] }),
+    sourceSegments,
+    targetSegments,
+    {
+      sourceText,
+      targetText,
+      sourceLanguage: 'ENGLISH',
+      targetLanguage: 'CHINESE (SIM)'
+    }
+  )
+
+  assert.ok(alignment)
+  assert.deepEqual(alignment.highlights, [])
 })

@@ -26,32 +26,37 @@ export interface AlignmentToken {
   segmentId: string
 }
 
-/** 旧版对齐结果中的上下文词汇提示，仅保留用于兼容历史数据 */
-export interface LearningHint {
-  /** 提示编号，例如 h0 */
-  id: string
-  /** 该提示所属的整句对齐组编号 */
-  pairId: string
-  /** 英文原文中的单词或短语 */
-  sourceText: string
-  /** 中文译文中的对应表达 */
-  targetText: string
-  /** 英文词形还原后的原形；短语通常与原文一致 */
+/** 学习高亮所在的文本侧 */
+export type LearningHighlightSide = 'source' | 'target'
+
+/** 句级对齐响应中可直接展示的英文学习词条 */
+export interface LearningLexeme {
+  /** 英文原文词形或短语 */
+  surface: string
+  /** 英文词形还原后的原形 */
   lemma: string
   /** 当前上下文中的简体中文释义 */
   meaning: string
-  /** 原文片段的起始偏移 */
-  sourceStart: number
-  /** 原文片段的结束偏移 */
-  sourceEnd: number
-  /** 译文片段的起始偏移 */
-  targetStart: number
-  /** 译文片段的结束偏移 */
-  targetEnd: number
-  /** 原文片段所属自然句编号 */
-  sourceSegmentId: string
-  /** 译文片段所属自然句编号 */
-  targetSegmentId: string
+  /** 与英文片段对应的中文连续表达；没有可靠对应时为空字符串 */
+  targetText: string
+}
+
+/** 经过偏移校验、可直接绑定到原文或译文的学习高亮 */
+export interface LearningHighlight extends LearningLexeme {
+  /** 高亮编号，例如 h0 */
+  id: string
+  /** 所属句级对齐组编号 */
+  pairId: string
+  /** 英文片段位于原文还是译文 */
+  side: LearningHighlightSide
+  /** 为什么这样表达更地道；英译中时通常为空 */
+  note: string
+  /** 英文片段在完整原文或完整译文中的起始偏移 */
+  start: number
+  /** 英文片段在完整原文或完整译文中的结束偏移 */
+  end: number
+  /** 英文片段起始位置所属的自然句编号 */
+  segmentId: string
 }
 
 /** 一组语义对应的源文片段与译文片段 */
@@ -72,8 +77,8 @@ export interface TextAlignment {
   targetSegments: AlignmentSegment[]
   /** 源文与译文的语义对应组 */
   pairs: AlignmentPair[]
-  /** 旧版词级学习提示；新对齐请求不再生成 */
-  learningHints?: LearningHint[]
+  /** 句级对齐时顺带提取的学习高亮 */
+  highlights: LearningHighlight[]
 }
 
 /** 文本对齐请求 */
@@ -88,6 +93,18 @@ export interface AlignTextRequest {
   targetLanguage: string
   /** 复用主翻译当前选中的服务商与模型 */
   options?: TranslateOptions
+}
+
+/** 句级对齐解析所需的语言信息 */
+export interface AlignmentParseOptions {
+  /** 完整源文，用于还原高亮的精确偏移 */
+  sourceText: string
+  /** 完整译文，用于还原高亮的精确偏移 */
+  targetText: string
+  /** 源语言提示名 */
+  sourceLanguage: string
+  /** 目标语言提示名 */
+  targetLanguage: string
 }
 
 /** 文本对齐成功响应 */
@@ -555,159 +572,228 @@ const isContiguousSequence = (indexes: number[]): boolean => {
   return true
 }
 
-/** 旧版词级解析参数：仅用于兼容历史对齐结果 */
-export interface AlignmentParseOptions {
-  /** 完整英文原文，用于还原精确短语 */
-  sourceText: string
-  /** 完整中文译文，用于还原精确短语 */
-  targetText: string
-  /** 英文原文词片段 */
-  sourceTokens: AlignmentToken[]
-  /** 中文译文词片段 */
-  targetTokens: AlignmentToken[]
+/** 判断语言提示名是否代表英语或简体中文 */
+const isEnglishLanguage = (language: string): boolean => {
+  const normalized = language.trim().toUpperCase()
+  return normalized === 'EN' || normalized === 'ENGLISH'
 }
 
-/** 把模型返回的词片段编号统一成 sw0、tw0 形式 */
-const normalizeTokenId = (value: unknown, prefix: 'sw' | 'tw'): string | null => {
-  if (typeof value === 'number' && Number.isInteger(value)) return `${prefix}${value}`
-  if (typeof value === 'string' && value.trim()) return value.trim()
-  return null
-}
-
-/** 只接受模型明确标记为高置信度的结果，避免把猜测包装成学习提示 */
-const isHighConfidenceHint = (value: unknown): boolean => {
-  if (typeof value === 'string') return value.trim().toLowerCase() === 'high'
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0.9
+const isChineseLanguage = (language: string): boolean => {
+  const normalized = language.trim().toUpperCase()
+  return normalized === 'ZH' || normalized.startsWith('CHINESE')
 }
 
 /**
- * 校验模型返回的词级学习提示。
- * 单条提示不可靠时只丢弃该提示，保留其他高置信结果；
- * 只有词级提示整体结构异常时才返回 null。
+ * 根据当前翻译方向确定学习高亮应落在哪一侧。
+ * 英译中标记英文原文，中译英标记生成的英文译文；其他方向不启用学习高亮。
  */
-const parseLearningHints = (
+export const resolveLearningHighlightSide = (
+  sourceLanguage: string,
+  targetLanguage: string
+): LearningHighlightSide | null => {
+  if (isEnglishLanguage(sourceLanguage) && isChineseLanguage(targetLanguage)) return 'source'
+  if (isChineseLanguage(sourceLanguage) && isEnglishLanguage(targetLanguage)) return 'target'
+  return null
+}
+
+/** 把模型返回的配对引用统一成 p0、p1 形式 */
+const normalizePairReference = (value: unknown): string | null => {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return `p${value}`
+  if (typeof value !== 'string') return null
+
+  const normalized = value.trim()
+  if (!normalized) return null
+  if (/^\d+$/.test(normalized)) return `p${normalized}`
+  return normalized
+}
+
+/** 判断英文短语两端是否落在完整单词边界上 */
+const isEnglishWordBoundary = (text: string, start: number, end: number): boolean => {
+  const before = start > 0 ? text[start - 1] : ''
+  const after = end < text.length ? text[end] : ''
+  return !/[A-Za-z]/.test(before) && !/[A-Za-z]/.test(after)
+}
+
+/** 在限定文本范围内查找精确连续片段 */
+const findExactRange = (
+  text: string,
+  value: string,
+  rangeStart: number,
+  rangeEnd: number,
+  requireEnglishBoundary = false
+): { start: number; end: number } | null => {
+  let searchFrom = rangeStart
+
+  while (searchFrom <= rangeEnd - value.length) {
+    const start = text.indexOf(value, searchFrom)
+    if (start < 0 || start + value.length > rangeEnd) return null
+    const end = start + value.length
+
+    if (!requireEnglishBoundary || isEnglishWordBoundary(text, start, end)) {
+      return { start, end }
+    }
+    searchFrom = start + 1
+  }
+
+  return null
+}
+
+/** 获取一对句级片段在完整文本中的连续起止范围 */
+const getPairTextRange = (
+  pairIds: string[],
+  segmentsById: ReadonlyMap<string, AlignmentSegment>
+): { start: number; end: number; segmentIds: string[] } | null => {
+  const pairSegments = pairIds
+    .map((id) => segmentsById.get(id))
+    .filter((segment): segment is AlignmentSegment => Boolean(segment))
+    .sort((a, b) => a.start - b.start)
+
+  if (pairSegments.length !== pairIds.length || pairSegments.length === 0) return null
+
+  return {
+    start: pairSegments[0].start,
+    end: pairSegments[pairSegments.length - 1].end,
+    segmentIds: pairSegments.map((segment) => segment.id)
+  }
+}
+
+/**
+ * 校验模型顺带返回的学习高亮。
+ * 单项数据不可靠时只丢弃该项，不影响已经通过校验的句级对齐。
+ */
+const parseLearningHighlights = (
   parsed: unknown,
   pairs: AlignmentPair[],
   sourceText: string,
   targetText: string,
-  sourceTokens: AlignmentToken[],
-  targetTokens: AlignmentToken[]
-): LearningHint[] | null => {
-  const rawHints = (parsed as { learningHints?: unknown } | null)?.learningHints
-  if (!Array.isArray(rawHints) || rawHints.length > 80) return null
+  sourceSegments: AlignmentSegment[],
+  targetSegments: AlignmentSegment[],
+  sourceLanguage: string,
+  targetLanguage: string
+): LearningHighlight[] => {
+  const expectedSide = resolveLearningHighlightSide(sourceLanguage, targetLanguage)
+  if (!expectedSide) return []
 
-  const sourceTokenIndexById = new Map(sourceTokens.map((token, index) => [token.id, index]))
-  const targetTokenIndexById = new Map(targetTokens.map((token, index) => [token.id, index]))
-  const targetSegmentIdsBySourceSegmentId = new Map<string, Set<string>>()
-  const pairIdBySourceSegmentId = new Map<string, string>()
+  const rawHighlights = Array.isArray((parsed as { highlights?: unknown } | null)?.highlights)
+    ? ((parsed as { highlights: unknown[] }).highlights as unknown[])
+    : []
 
-  for (const pair of pairs) {
-    const targetSegmentIds = new Set(pair.targetIds)
-    for (const sourceSegmentId of pair.sourceIds) {
-      targetSegmentIdsBySourceSegmentId.set(sourceSegmentId, targetSegmentIds)
-      pairIdBySourceSegmentId.set(sourceSegmentId, pair.id)
-    }
-  }
+  const maximumHighlightCount = expectedSide === 'source' ? 3 : 2
+  const sourceSegmentsById = new Map(sourceSegments.map((segment) => [segment.id, segment]))
+  const targetSegmentsById = new Map(targetSegments.map((segment) => [segment.id, segment]))
+  const highlights: LearningHighlight[] = []
+  const usedSurfaces = new Set<string>()
 
-  const usedSourceTokenIds = new Set<string>()
-  const usedTargetTokenIds = new Set<string>()
-  const hints: LearningHint[] = []
+  for (const rawHighlight of rawHighlights.slice(0, 24)) {
+    if (highlights.length >= maximumHighlightCount) break
+    if (!rawHighlight || typeof rawHighlight !== 'object') continue
 
-  for (const rawHint of rawHints) {
-    if (!rawHint || typeof rawHint !== 'object') continue
-
-    const hintItem = rawHint as {
-      source?: unknown
-      target?: unknown
-      sourceIds?: unknown
-      targetIds?: unknown
+    const highlightItem = rawHighlight as {
+      pairId?: unknown
+      side?: unknown
+      surface?: unknown
       lemma?: unknown
       meaning?: unknown
-      confidence?: unknown
+      targetText?: unknown
+      note?: unknown
     }
+    const pairId = normalizePairReference(highlightItem.pairId)
+    const side =
+      highlightItem.side === 'source' || highlightItem.side === 'target' ? highlightItem.side : null
+    if (!pairId || side !== expectedSide) continue
 
-    // 低置信和未标记置信度的结果直接丢弃
-    if (!isHighConfidenceHint(hintItem.confidence)) continue
+    const pair = pairs.find((item) => item.id === pairId)
+    if (!pair) continue
 
-    const rawSourceIds = hintItem.source ?? hintItem.sourceIds
-    const rawTargetIds = hintItem.target ?? hintItem.targetIds
-    if (!Array.isArray(rawSourceIds) || !Array.isArray(rawTargetIds)) continue
-    if (rawSourceIds.length === 0 || rawSourceIds.length > 8) continue
-    if (rawTargetIds.length === 0 || rawTargetIds.length > 12) continue
+    const englishIds = side === 'source' ? pair.sourceIds : pair.targetIds
+    const chineseIds = side === 'source' ? pair.targetIds : pair.sourceIds
+    const englishText = side === 'source' ? sourceText : targetText
+    const chineseText = side === 'source' ? targetText : sourceText
+    const englishSegmentsById = side === 'source' ? sourceSegmentsById : targetSegmentsById
+    const chineseSegmentsById = side === 'source' ? targetSegmentsById : sourceSegmentsById
+    const englishRange = getPairTextRange(englishIds, englishSegmentsById)
+    const chineseRange = getPairTextRange(chineseIds, chineseSegmentsById)
+    if (!englishRange || !chineseRange) continue
 
-    const sourceIds = rawSourceIds
-      .map((value) => normalizeTokenId(value, 'sw'))
-      .filter((value): value is string => Boolean(value))
-    const targetIds = rawTargetIds
-      .map((value) => normalizeTokenId(value, 'tw'))
-      .filter((value): value is string => Boolean(value))
-
-    if (sourceIds.length !== rawSourceIds.length) continue
-    if (targetIds.length !== rawTargetIds.length) continue
-
-    // 同一条提示内部出现重复编号时，只丢弃这一条不稳定结果
-    if (new Set(sourceIds).size !== sourceIds.length) continue
-    if (new Set(targetIds).size !== targetIds.length) continue
-
-    const sourceIndexes = sourceIds.map((id) => sourceTokenIndexById.get(id))
-    const targetIndexes = targetIds.map((id) => targetTokenIndexById.get(id))
-    if (sourceIndexes.some((value) => value === undefined)) continue
-    if (targetIndexes.some((value) => value === undefined)) continue
-
-    const normalizedSourceIndexes = (sourceIndexes as number[]).sort((a, b) => a - b)
-    const normalizedTargetIndexes = (targetIndexes as number[]).sort((a, b) => a - b)
-    if (!isContiguousSequence(normalizedSourceIndexes)) continue
-    if (!isContiguousSequence(normalizedTargetIndexes)) continue
-
-    const sourceTokensInHint = normalizedSourceIndexes.map((index) => sourceTokens[index])
-    const targetTokensInHint = normalizedTargetIndexes.map((index) => targetTokens[index])
-    const sourceSegmentId = sourceTokensInHint[0].segmentId
-    const targetSegmentId = targetTokensInHint[0].segmentId
-    if (sourceTokensInHint.some((token) => token.segmentId !== sourceSegmentId)) continue
-    if (targetTokensInHint.some((token) => token.segmentId !== targetSegmentId)) continue
-
-    const allowedTargetSegments = targetSegmentIdsBySourceSegmentId.get(sourceSegmentId)
-    if (!allowedTargetSegments?.has(targetSegmentId)) continue
-    if (sourceIds.some((id) => usedSourceTokenIds.has(id))) continue
-    if (targetIds.some((id) => usedTargetTokenIds.has(id))) continue
-
-    const sourceStart = Math.min(...sourceTokensInHint.map((token) => token.start))
-    const sourceEnd = Math.max(...sourceTokensInHint.map((token) => token.end))
-    const targetStart = Math.min(...targetTokensInHint.map((token) => token.start))
-    const targetEnd = Math.max(...targetTokensInHint.map((token) => token.end))
-    const sourceRawText = sourceText.slice(sourceStart, sourceEnd)
-    const targetRawText = targetText.slice(targetStart, targetEnd)
-    const lemma = typeof hintItem.lemma === 'string' ? hintItem.lemma.trim() : ''
+    const surface =
+      typeof highlightItem.surface === 'string'
+        ? highlightItem.surface.trim().replace(/\s+/g, ' ')
+        : ''
+    const lemma =
+      typeof highlightItem.lemma === 'string' ? highlightItem.lemma.trim().replace(/\s+/g, ' ') : ''
     const meaning =
-      typeof hintItem.meaning === 'string' ? hintItem.meaning.trim().replace(/\s+/g, ' ') : ''
+      typeof highlightItem.meaning === 'string'
+        ? highlightItem.meaning.trim().replace(/\s+/g, ' ')
+        : ''
+    const correspondingText =
+      typeof highlightItem.targetText === 'string'
+        ? highlightItem.targetText.trim().replace(/\s+/g, ' ')
+        : ''
+    const note =
+      typeof highlightItem.note === 'string' ? highlightItem.note.trim().replace(/\s+/g, ' ') : ''
 
+    if (!surface || surface.length > 120) continue
     if (!lemma || lemma.length > 80) continue
-    if (!meaning || meaning.length > 80) continue
-    if (!/^[A-Za-z][A-Za-z' -]*$/.test(lemma)) continue
+    if (!meaning || meaning.length > 120) continue
+    if (!/^[A-Za-z][A-Za-z'’ -]*$/.test(surface)) continue
+    if (!/^[A-Za-z][A-Za-z'’ -]*$/.test(lemma)) continue
     if (!/[\u3400-\u9fff]/.test(meaning)) continue
-    if (!/[\u3400-\u9fff]/.test(targetRawText)) continue
-    if (sourceEnd - sourceStart > 120 || targetEnd - targetStart > 120) continue
+    if (correspondingText && correspondingText.length > 120) continue
+    if (correspondingText && !/[\u3400-\u9fff]/.test(correspondingText)) continue
+    if (note.length > 160) continue
+    if (side === 'target' && (!note || !/[\u3400-\u9fff]/.test(note))) continue
+    if (note && !/[\u3400-\u9fff]/.test(note)) continue
 
-    for (const id of sourceIds) usedSourceTokenIds.add(id)
-    for (const id of targetIds) usedTargetTokenIds.add(id)
+    const normalizedSurface = surface.toLowerCase().replace(/’/g, "'")
+    if (!surface.includes(' ') && ENGLISH_LOW_VALUE_WORDS.has(normalizedSurface)) continue
+    if (usedSurfaces.has(normalizedSurface)) continue
 
-    hints.push({
-      id: `h${hints.length}`,
-      pairId: pairIdBySourceSegmentId.get(sourceSegmentId) as string,
-      sourceText: sourceRawText,
-      targetText: targetRawText,
+    const surfaceRange = findExactRange(
+      englishText,
+      surface,
+      englishRange.start,
+      englishRange.end,
+      true
+    )
+    if (!surfaceRange) continue
+
+    const correspondingRange =
+      correspondingText.length > 0
+        ? findExactRange(chineseText, correspondingText, chineseRange.start, chineseRange.end)
+        : null
+    if (correspondingText && !correspondingRange) continue
+
+    const segmentId =
+      englishRange.segmentIds.find((id) => {
+        const segment = englishSegmentsById.get(id)
+        return (
+          segment !== undefined &&
+          surfaceRange.start >= segment.start &&
+          surfaceRange.start < segment.end
+        )
+      }) ?? englishRange.segmentIds[0]
+    const overlapsExisting = highlights.some(
+      (highlight) => surfaceRange.start < highlight.end && surfaceRange.end > highlight.start
+    )
+    if (overlapsExisting) continue
+
+    usedSurfaces.add(normalizedSurface)
+    highlights.push({
+      id: `h${highlights.length}`,
+      pairId,
+      side,
+      surface,
       lemma,
       meaning,
-      sourceStart,
-      sourceEnd,
-      targetStart,
-      targetEnd,
-      sourceSegmentId,
-      targetSegmentId
+      targetText: correspondingText,
+      note,
+      start: surfaceRange.start,
+      end: surfaceRange.end,
+      segmentId
     })
   }
 
-  return hints.sort((a, b) => a.sourceStart - b.sourceStart)
+  return highlights.sort((a, b) => a.start - b.start)
 }
 
 /**
@@ -816,21 +902,21 @@ export const parseAlignmentPairs = (
     sourceIds: pair.sourceIndexes.map((sourceIndex) => sourceSegments[sourceIndex].id),
     targetIds: pair.targetIndexes.map((targetIndex) => targetSegments[targetIndex].id)
   }))
-  const learningHints = learningOptions
-    ? parseLearningHints(
-        parsed,
-        pairs,
-        learningOptions.sourceText,
-        learningOptions.targetText,
-        learningOptions.sourceTokens,
-        learningOptions.targetTokens
-      )
-    : undefined
+  const highlights = parseLearningHighlights(
+    parsed,
+    pairs,
+    learningOptions?.sourceText ?? '',
+    learningOptions?.targetText ?? '',
+    sourceSegments,
+    targetSegments,
+    learningOptions?.sourceLanguage ?? '',
+    learningOptions?.targetLanguage ?? ''
+  )
 
   return {
     sourceSegments,
     targetSegments,
     pairs,
-    ...(learningHints ? { learningHints } : {})
+    highlights
   }
 }

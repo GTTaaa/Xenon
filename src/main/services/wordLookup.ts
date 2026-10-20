@@ -3,7 +3,8 @@ import { resolveAlignmentReasoningEffort } from '../../shared/alignmentReasoning
 import {
   parseWordLookupResult,
   type WordLookupRequest,
-  type WordLookupResponse
+  type WordLookupResponse,
+  type WordLookupSide
 } from '../../shared/wordLookup'
 import { getLLMConfig } from './configManager'
 import { resolveModelRoute, type ModelRoute } from './modelRoute'
@@ -58,24 +59,29 @@ interface WordLookupUsage {
   }
 }
 
-/** 单词释义系统提示词：只解释点击词，不改写翻译 */
-const WORD_LOOKUP_SYSTEM_PROMPT = [
-  'You are a concise English-to-Simplified-Chinese contextual vocabulary assistant.',
-  'Return only strict JSON in this exact shape:',
-  '{"lemma":"base form","meaning":"简体中文语境释义","targetText":"译文中的对应表达","confidence":"high"}',
-  'Rules:',
-  '- Analyze only the clicked word inside sourceSentence and its paired targetSentence.',
-  '- lemma must be the concise English base form.',
-  '- meaning must be a short Simplified Chinese explanation of the word as used in this exact context.',
-  '- For a grammar word, describe its grammatical function rather than inventing a lexical meaning.',
-  '- targetText must be an exact contiguous substring of targetSentence that directly corresponds to the clicked word.',
-  '- Use an empty targetText when no direct correspondence can be established.',
-  '- Never reuse a generic dictionary meaning when the translation indicates a different contextual meaning.',
-  '- Return confidence exactly "high" only when the contextual meaning is directly supported.',
-  '- If no reliable contextual meaning can be determined, return {"error":"NO_RELIABLE_MEANING"}.',
-  '- Do not translate or explain the whole sentence.',
-  '- Do not include Markdown fences, headings, explanations, or extra keys.'
-].join('\n')
+/** 构造只解释点击词、不改写翻译的系统提示词 */
+const buildWordLookupSystemPrompt = (wordSide: WordLookupSide): string => {
+  const clickedSentence = wordSide === 'source' ? 'sourceSentence' : 'targetSentence'
+  const correspondingSentence = wordSide === 'source' ? 'targetSentence' : 'sourceSentence'
+
+  return [
+    'You are a concise English-to-Simplified-Chinese contextual vocabulary assistant.',
+    'Return only strict JSON in this exact shape:',
+    '{"lemma":"base form","meaning":"简体中文语境释义","targetText":"对应中文片段","confidence":"high"}',
+    'Rules:',
+    `- Analyze only the clicked English word inside ${clickedSentence} and its paired text in ${correspondingSentence}.`,
+    '- lemma must be the concise English base form.',
+    '- meaning must be a short Simplified Chinese explanation of the word as used in this exact context.',
+    '- For a grammar word, describe its grammatical function rather than inventing a lexical meaning.',
+    `- targetText must be an exact contiguous Simplified Chinese substring of ${correspondingSentence}.`,
+    '- Use an empty targetText when no direct correspondence can be established.',
+    '- Never reuse a generic dictionary meaning when the translation indicates a different contextual meaning.',
+    '- Return confidence exactly "high" only when the contextual meaning is directly supported.',
+    '- If no reliable contextual meaning can be determined, return {"error":"NO_RELIABLE_MEANING"}.',
+    '- Do not translate or explain the whole sentence.',
+    '- Do not include Markdown fences, headings, explanations, or extra keys.'
+  ].join('\n')
+}
 
 /** 从兼容 OpenAI 的响应中提取正文 */
 const extractMessageText = (data: WordLookupResponseBody): string => {
@@ -127,7 +133,7 @@ const requestWordLookup = async (
       messages: [
         {
           role: 'system',
-          content: WORD_LOOKUP_SYSTEM_PROMPT
+          content: buildWordLookupSystemPrompt(request.wordSide === 'target' ? 'target' : 'source')
         },
         {
           role: 'user',
@@ -135,6 +141,7 @@ const requestWordLookup = async (
             sourceLanguage: request.sourceLanguage,
             targetLanguage: request.targetLanguage,
             word: request.word,
+            wordSide: request.wordSide === 'target' ? 'target' : 'source',
             sourceSentence: request.sourceSentence,
             targetSentence: request.targetSentence
           })
@@ -177,7 +184,10 @@ const requestWordLookup = async (
     throw new WordLookupServiceError('EMPTY_RESPONSE', '单词查询没有返回可用内容')
   }
 
-  return parseWordLookupResult(rawResult, request.targetSentence)
+  const correspondingSentence =
+    request.wordSide === 'target' ? request.sourceSentence : request.targetSentence
+
+  return parseWordLookupResult(rawResult, correspondingSentence)
 }
 
 /** 查询任意英文单词在当前上下文中的中文释义 */
@@ -186,6 +196,8 @@ export const lookupWord = async (request: WordLookupRequest): Promise<WordLookup
     const word = request.word.trim()
     const sourceSentence = request.sourceSentence.trim()
     const targetSentence = request.targetSentence.trim()
+    const wordSide: WordLookupSide = request.wordSide === 'target' ? 'target' : 'source'
+    const clickedSentence = wordSide === 'target' ? targetSentence : sourceSentence
 
     if (!word || !sourceSentence || !targetSentence) {
       return {
@@ -197,12 +209,12 @@ export const lookupWord = async (request: WordLookupRequest): Promise<WordLookup
       }
     }
 
-    if (!sourceSentence.toLowerCase().includes(word.toLowerCase())) {
+    if (!clickedSentence.toLowerCase().includes(word.toLowerCase())) {
       return {
         ok: false,
         error: {
           code: 'WORD_NOT_IN_SENTENCE',
-          message: '点击的单词不在当前原文句段中'
+          message: '点击的单词不在当前句段中'
         }
       }
     }
@@ -255,6 +267,7 @@ export const lookupWord = async (request: WordLookupRequest): Promise<WordLookup
       providerId: route.provider?.id,
       model: route.model,
       word,
+      wordSide,
       sourceLength: sourceSentence.length,
       targetLength: targetSentence.length
     })
@@ -263,6 +276,7 @@ export const lookupWord = async (request: WordLookupRequest): Promise<WordLookup
       {
         ...request,
         word,
+        wordSide,
         sourceSentence,
         targetSentence
       },
