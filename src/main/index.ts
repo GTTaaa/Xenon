@@ -20,6 +20,11 @@ import type { TranslateRequest } from '../shared/translate'
 import type { AlignTextRequest } from '../shared/textAlignment'
 import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
 import { DEFAULT_SHORTCUTS } from '../shared/config'
+import {
+  MAIN_WINDOW_HEIGHT_MAX,
+  MAIN_WINDOW_HEIGHT_MIN,
+  MAIN_WINDOW_WIDTH
+} from '../shared/windowLayout'
 import { translateText } from './services/translator'
 import { alignText } from './services/aligner'
 import {
@@ -126,10 +131,15 @@ function createWindow(): void {
   const primaryDisplay = screen.getPrimaryDisplay()
   const { workArea } = primaryDisplay
 
-  const windowWidth = 358
-  // 主窗口高度浮动：330 是"一行输入"的紧凑机身，530 是"五行输入"的封顶高度
+  const windowWidth = MAIN_WINDOW_WIDTH
+  // 主窗口高度按内容浮动，上限需容纳学习模式的双栏 15 行与底部工具行
   // 初始高度按空态算：1 行输入 + 译文区保底 4 行，渲染进程挂载后会再校准一次
-  const windowHeight = 240
+  const windowHeight = MAIN_WINDOW_HEIGHT_MIN
+  // 小屏幕以系统可用工作区为硬上限，避免 15 行布局把底部工具行推到屏幕外
+  const maxWindowHeight = Math.max(
+    MAIN_WINDOW_HEIGHT_MIN,
+    Math.min(MAIN_WINDOW_HEIGHT_MAX, workArea.height)
+  )
 
   // 计算屏幕右上角坐标（完全贴合在屏幕工作区右上角，无缝紧贴右侧与顶部）
   const x = Math.max(workArea.x, Math.round(workArea.x + workArea.width - windowWidth))
@@ -141,10 +151,10 @@ function createWindow(): void {
     useContentSize: true,
     width: windowWidth,
     height: windowHeight,
-    minWidth: 358,
-    maxWidth: 358,
-    minHeight: 240,
-    maxHeight: 530,
+    minWidth: MAIN_WINDOW_WIDTH,
+    maxWidth: MAIN_WINDOW_WIDTH,
+    minHeight: MAIN_WINDOW_HEIGHT_MIN,
+    maxHeight: maxWindowHeight,
     resizable: false,
     frame: false,
     show: false,
@@ -404,11 +414,15 @@ app.whenReady().then(async () => {
     return mainWindow.isAlwaysOnTop()
   })
 
-  // 窗口高度实时同步设置（下限 240px 紧凑机身，上限 530px 后交给译文区内部滚动）
+  // 窗口高度实时同步设置，上限跟随创建窗口时为当前屏幕计算出的可用高度
   ipcMain.handle('window:set-height', (_, targetHeight: number) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     const [width, currentHeight] = mainWindow.getContentSize()
-    const clampedTargetHeight = Math.max(240, Math.min(Math.round(targetHeight), 530))
+    const [, maxHeight] = mainWindow.getMaximumSize()
+    const clampedTargetHeight = Math.max(
+      MAIN_WINDOW_HEIGHT_MIN,
+      Math.min(Math.round(targetHeight), maxHeight)
+    )
     if (Math.abs(currentHeight - clampedTargetHeight) >= 2) {
       mainWindow.setContentSize(width, clampedTargetHeight, false)
     }

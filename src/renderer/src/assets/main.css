@@ -336,24 +336,24 @@ body {
   margin: 0;
   color: transparent;
   font-family: inherit;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   pointer-events: none;
   user-select: none;
 }
 
-/* 输入框本体就是一段普通文字：高度随内容长到 5 行（97.5px）封顶，再多交给它自己滚动 */
+/* 输入框本体就是一段普通文字：高度随内容长到 5 行（108.5px）封顶，再多交给它自己滚动 */
 .compose-input {
   position: relative;
   z-index: 0;
   display: block;
   width: 100%;
-  height: 20px;
-  min-height: 20px;
-  /* 留 2.5px 余量：5 行内容正好 97.5px，卡着上限会因次像素舍入冒出滚动条 */
-  max-height: 100px;
+  height: 22px;
+  min-height: 22px;
+  /* 留 2.5px 余量：5 行内容正好 108.5px，卡着上限会因次像素舍入冒出滚动条 */
+  max-height: 111px;
   overflow-y: auto;
   padding: 0;
   margin: 0;
@@ -361,8 +361,8 @@ body {
   background: transparent;
   color: var(--app-fg-body);
   font-family: inherit;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.55;
   resize: none;
   caret-color: var(--app-fg);
   -webkit-app-region: no-drag;
@@ -420,10 +420,10 @@ body {
   border-radius: 3px;
 }
 
-/* 译文：全屏字号最大的一档，也是唯一用到 500 字重的地方 */
+/* 译文：比原文稍大，但缩小到 16px，避免普通模式上下字号跨度过于突兀 */
 .result-text {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1.6;
   letter-spacing: -0.2px;
@@ -513,7 +513,7 @@ body {
 .learning-layout .compose-mirror,
 .learning-layout .compose-input,
 .learning-layout .result-text {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 400;
   line-height: 1.6;
   letter-spacing: 0;
@@ -538,7 +538,7 @@ body {
 
 /* 截图 OCR 进行中的占位提示：与译文同字号，避免识别时译文区空白导致误判为卡死 */
 .result-pending {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 400;
   line-height: 1.6;
   color: #b0b0b8;

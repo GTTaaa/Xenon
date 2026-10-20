@@ -16,22 +16,24 @@ import {
   type ScrollRectBoundary,
   type VisiblePairBox
 } from './scrollAlignment'
+import {
+  MAIN_WINDOW_HEIGHT_MAX,
+  MAIN_WINDOW_HEIGHT_MIN,
+  NORMAL_WINDOW_HEIGHT_MAX
+} from '../../shared/windowLayout'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
 const INITIAL_SOURCE_TEXT = ''
-// 输入区字号 13px × 行高 1.5，用来把输入框内容高度换算成行数（与 .compose-input 保持一致）
-const INPUT_LINE_HEIGHT = 19.5
+// 普通模式输入字号 14px × 行高 1.55，用来把输入框内容高度换算成行数
+const INPUT_LINE_HEIGHT = 21.7
 // 输入区最多长到 5 行，再多交给输入框自己滚动
 const MAX_INPUT_LINES = 5
-// 学习模式两侧统一显示 3～5 行：短文本不留下过多空白，长文本也不把窗口撑满
-const LEARNING_MIN_VISIBLE_LINES = 3
-const LEARNING_MAX_VISIBLE_LINES = 5
-// 译文区最少铺 4 行（译文 18px 字号 × 1.6 行高）：空态和短内容靠它撑住，窗口才不会空一大截
-const RESULT_MIN_HEIGHT = 18 * 1.6 * 4
-// 窗口高度只在这两档之间浮动：240px 紧凑机身，530px 封顶
-const WINDOW_HEIGHT_MIN = 240
-const WINDOW_HEIGHT_MAX = 530
+// 学习模式两侧统一显示 4～15 行：短文本按内容收敛，长文本提供更充足的对照阅读空间
+const LEARNING_MIN_VISIBLE_LINES = 4
+const LEARNING_MAX_VISIBLE_LINES = 15
+// 普通模式译文最少铺 3 行（16px 字号 × 1.6 行高），短内容不再留下过多空白
+const RESULT_MIN_HEIGHT = 16 * 1.6 * 3
 // 学习对齐结果只保留当前会话内最近使用的少量文本，避免缓存无限增长
 const MAX_ALIGNMENT_CACHE_ENTRIES = 8
 // 调整对齐规则或提示词后递增缓存版本，主动淘汰旧结果
@@ -663,9 +665,9 @@ function App(): React.JSX.Element {
 
     const nextWindowHeight = Math.round(
       Math.min(
-        WINDOW_HEIGHT_MAX,
+        useLearningLayout ? MAIN_WINDOW_HEIGHT_MAX : NORMAL_WINDOW_HEIGHT_MAX,
         Math.max(
-          WINDOW_HEIGHT_MIN,
+          MAIN_WINDOW_HEIGHT_MIN,
           lead +
             scrollPadding +
             resultHeight +
