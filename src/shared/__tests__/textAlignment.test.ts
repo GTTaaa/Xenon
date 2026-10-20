@@ -2,10 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   filterLearningTokens,
+  getAlignmentPairSentences,
   parseAlignmentPairs,
   resolveLearningHighlightSide,
   segmentText,
-  tokenizeTextWords
+  tokenizeTextWords,
+  type TextAlignment
 } from '../textAlignment.ts'
 import { alignmentRegressionCases } from './fixtures/alignmentRegressionCases.ts'
 import { learningRegressionCases } from './fixtures/learningRegressionCases.ts'
@@ -601,4 +603,41 @@ test('旧格式或缺少 highlights 字段时仍保留句级对齐', () => {
 
   assert.ok(alignment)
   assert.deepEqual(alignment.highlights, [])
+})
+
+test('按 pairId 会聚合一个对齐组内的完整双语原句', () => {
+  const sourceText =
+    'The first sentence continues here. It spans another segment. The final sentence stands alone.'
+  const targetText = '第一句从这里继续。最后一句独立成句。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+  const alignment: TextAlignment = {
+    sourceSegments,
+    targetSegments,
+    pairs: [
+      {
+        id: 'p0',
+        sourceIds: [sourceSegments[0].id, sourceSegments[1].id],
+        targetIds: [targetSegments[0].id]
+      },
+      {
+        id: 'p1',
+        sourceIds: [sourceSegments[2].id],
+        targetIds: [targetSegments[1].id]
+      }
+    ],
+    highlights: []
+  }
+
+  const pairSentences = getAlignmentPairSentences(alignment, sourceText, targetText, 'p0', 'source')
+
+  assert.deepEqual(pairSentences, {
+    pairId: 'p0',
+    sourceSentence: 'The first sentence continues here. It spans another segment.',
+    targetSentence: '第一句从这里继续。',
+    englishSentence: 'The first sentence continues here. It spans another segment.',
+    chineseSentence: '第一句从这里继续。',
+    sourceSegmentIds: ['s0', 's1'],
+    targetSegmentIds: ['t0']
+  })
 })

@@ -392,6 +392,63 @@ body {
   background: rgba(201, 127, 42, 0.09);
 }
 
+/* 二次偶遇只留一条淡色点线与微型星标，和模型学习高亮明确区分 */
+.encounter-highlight {
+  border-radius: 2px;
+  cursor: pointer;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition:
+    background-color 80ms ease,
+    text-decoration-color 80ms ease;
+}
+
+.encounter-highlight::after {
+  content: '*';
+  display: inline-block;
+  margin-left: 1px;
+  color: currentColor;
+  font-size: 7px;
+  line-height: 1;
+  vertical-align: super;
+  opacity: 0.55;
+}
+
+.encounter-highlight-source {
+  text-decoration-color: rgba(77, 111, 130, 0.38);
+}
+
+.encounter-highlight-source::after {
+  color: rgba(77, 111, 130, 0.72);
+}
+
+.encounter-highlight-target {
+  text-decoration-color: rgba(125, 104, 75, 0.38);
+}
+
+.encounter-highlight-target::after {
+  color: rgba(125, 104, 75, 0.72);
+}
+
+/* 输入框透明测量层不能给词后追加星标，否则会改变换行位置并让命中框错位 */
+.compose-mirror .encounter-highlight::after {
+  content: none;
+}
+
+.encounter-highlight-active {
+  background: rgba(77, 111, 130, 0.07);
+  text-decoration-color: rgba(77, 111, 130, 0.7);
+}
+
+.encounter-highlight-target.encounter-highlight-active {
+  background: rgba(125, 104, 75, 0.08);
+  text-decoration-color: rgba(125, 104, 75, 0.68);
+}
+
 /* 输入框本体就是一段普通文字：高度随内容长到 5 行（108.5px）封顶，再多交给它自己滚动 */
 .compose-input {
   position: relative;
@@ -553,6 +610,102 @@ body {
 
 .learning-layout .result-placeholder {
   color: #b0b0b8;
+}
+
+/* 学习模式空状态：用一张轻量闪卡替代空白译文区 */
+.vocab-flashcard {
+  position: relative;
+  padding: 10px 11px 9px 13px;
+  border: 1px solid rgba(77, 111, 130, 0.14);
+  border-left: 2px solid rgba(77, 111, 130, 0.46);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(77, 111, 130, 0.045), transparent 58%), rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+}
+
+.vocab-flashcard-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #78909d;
+  font-family: var(--app-mono);
+  font-size: 8.5px;
+  line-height: 1.2;
+  letter-spacing: 0.4px;
+}
+
+.vocab-flashcard-sentence {
+  margin: 9px 0 0;
+  color: var(--app-fg-read);
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: -0.05px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.vocab-flashcard-sentence mark {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: rgba(77, 111, 130, 0.11);
+  color: #355b6d;
+  font-weight: 600;
+}
+
+.vocab-flashcard-answer {
+  margin-top: 7px;
+  color: var(--app-fg-body);
+  filter: blur(4px);
+  opacity: 0.55;
+  transition:
+    filter 170ms ease,
+    opacity 170ms ease;
+}
+
+.vocab-flashcard-answer p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.vocab-flashcard-answer p + p {
+  margin-top: 2px;
+  color: var(--app-fg-muted);
+}
+
+.vocab-flashcard-revealed .vocab-flashcard-answer {
+  filter: blur(0);
+  opacity: 1;
+}
+
+.vocab-flashcard-hint {
+  margin-top: 7px;
+  color: var(--app-fg-faint);
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.vocab-flashcard-loading,
+.vocab-flashcard-empty {
+  color: var(--app-fg-faint);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.vocab-flashcard-empty {
+  padding-top: 4px;
+}
+
+.vocab-flashcard-empty span {
+  font-family: var(--app-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.4px;
+}
+
+.vocab-flashcard-empty p {
+  margin: 5px 0 0;
 }
 
 /* 截图 OCR 进行中的占位提示：与译文同字号，避免识别时译文区空白导致误判为卡死 */
@@ -845,6 +998,43 @@ body {
 
 .word-lookup-status-error {
   color: var(--app-danger);
+}
+
+.word-lookup-origin {
+  margin-top: 3px;
+  color: #6f8794;
+  font-family: var(--app-mono);
+  font-size: 8.5px;
+  line-height: 1.3;
+}
+
+.word-lookup-encounter {
+  margin-top: 6px;
+  color: #6f8794;
+  font-size: 9.5px;
+  line-height: 1.4;
+}
+
+.word-lookup-save {
+  margin-top: 7px;
+  padding: 3px 7px;
+  border: 1px solid rgba(77, 111, 130, 0.24);
+  border-radius: 5px;
+  background: rgba(77, 111, 130, 0.06);
+  color: #4d6f82;
+  font-family: inherit;
+  font-size: 9.5px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.word-lookup-save:hover:not(:disabled) {
+  background: rgba(77, 111, 130, 0.11);
+}
+
+.word-lookup-save:disabled {
+  color: var(--app-fg-faint);
+  cursor: default;
 }
 
 /* ==========================================================================

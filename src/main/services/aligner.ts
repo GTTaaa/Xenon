@@ -401,8 +401,6 @@ export const alignText = async (
       alignment
     }
   } catch (error) {
-    console.error('[main] 文本对齐失败:', error)
-
     if (isAlignmentAbortError(error, execution?.signal)) {
       return {
         ok: false,
@@ -412,6 +410,8 @@ export const alignText = async (
         }
       }
     }
+
+    console.error('[main] 文本对齐失败:', error)
 
     if (error instanceof AlignmentServiceError) {
       return {

@@ -195,6 +195,11 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  // 开发模式使用独立窗口打开 DevTools，避免占用 358px 主界面的可视空间
+  if (is.dev && mainWindow) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
+  }
+
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {

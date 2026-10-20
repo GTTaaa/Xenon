@@ -81,6 +81,24 @@ export interface TextAlignment {
   highlights: LearningHighlight[]
 }
 
+/** 一个对齐组还原后的完整双语原句 */
+export interface AlignmentPairSentences {
+  /** 对齐组编号 */
+  pairId: string
+  /** 当前对齐组对应的完整源文 */
+  sourceSentence: string
+  /** 当前对齐组对应的完整译文 */
+  targetSentence: string
+  /** 按当前翻译方向确定的完整英文句子 */
+  englishSentence: string
+  /** 按当前翻译方向确定的完整中文句子 */
+  chineseSentence: string
+  /** 组成源文句子的片段编号 */
+  sourceSegmentIds: string[]
+  /** 组成译文句子的片段编号 */
+  targetSegmentIds: string[]
+}
+
 /** 文本对齐请求 */
 export interface AlignTextRequest {
   /** 已翻译的源文 */
@@ -123,6 +141,65 @@ export interface AlignTextErrorResponse {
 }
 
 export type AlignTextResponse = AlignTextSuccessResponse | AlignTextErrorResponse
+
+/**
+ * 根据 pairId 聚合完整句对。
+ * 一个对齐组可能包含多个连续片段，因此不能只读取高亮所在的单个片段。
+ */
+export const getAlignmentPairSentences = (
+  alignment: TextAlignment,
+  sourceText: string,
+  targetText: string,
+  pairId: string,
+  englishSide: LearningHighlightSide | null
+): AlignmentPairSentences | null => {
+  const pair = alignment.pairs.find((item) => item.id === pairId)
+  if (!pair) return null
+
+  const sourceSegmentsById = new Map(
+    alignment.sourceSegments.map((segment) => [segment.id, segment])
+  )
+  const targetSegmentsById = new Map(
+    alignment.targetSegments.map((segment) => [segment.id, segment])
+  )
+  const sourceSegments = pair.sourceIds
+    .map((id) => sourceSegmentsById.get(id))
+    .filter((segment): segment is AlignmentSegment => Boolean(segment))
+    .sort((a, b) => a.start - b.start)
+  const targetSegments = pair.targetIds
+    .map((id) => targetSegmentsById.get(id))
+    .filter((segment): segment is AlignmentSegment => Boolean(segment))
+    .sort((a, b) => a.start - b.start)
+
+  if (
+    sourceSegments.length !== pair.sourceIds.length ||
+    targetSegments.length !== pair.targetIds.length ||
+    sourceSegments.length === 0 ||
+    targetSegments.length === 0
+  ) {
+    return null
+  }
+
+  const sourceSentence = sourceText
+    .slice(sourceSegments[0].start, sourceSegments[sourceSegments.length - 1].end)
+    .trim()
+  const targetSentence = targetText
+    .slice(targetSegments[0].start, targetSegments[targetSegments.length - 1].end)
+    .trim()
+  if (!sourceSentence || !targetSentence) return null
+
+  return {
+    pairId,
+    sourceSentence,
+    targetSentence,
+    englishSentence:
+      englishSide === 'source' ? sourceSentence : englishSide === 'target' ? targetSentence : '',
+    chineseSentence:
+      englishSide === 'source' ? targetSentence : englishSide === 'target' ? sourceSentence : '',
+    sourceSegmentIds: sourceSegments.map((segment) => segment.id),
+    targetSegmentIds: targetSegments.map((segment) => segment.id)
+  }
+}
 
 /** 语言代码或提示名到句段分析区域的映射 */
 const SEGMENTER_LOCALE_MAP: Record<string, string> = {
