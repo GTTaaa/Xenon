@@ -15,7 +15,6 @@ import {
   type WordLookupSide
 } from '../../shared/wordLookup'
 import {
-  buildSentenceSyntaxCardModel,
   splitSentenceSyntaxText,
   type SentenceSyntaxAnalysis,
   type SentenceSyntaxSegment
@@ -561,17 +560,21 @@ interface SentenceSyntaxViewProps {
   onClose: () => void
 }
 
-/** 以低噪原文和下方结构卡展示单句主谓宾骨架 */
+const SYNTAX_ROLE_LABELS: Record<'subject' | 'predicate' | 'object', string> = {
+  subject: '主',
+  predicate: '谓',
+  object: '宾'
+}
+
+/** 在不改变输入区高度的行内视图中展示 S-V-O 语义胶囊与次要补充 */
 function SentenceSyntaxView({ analysis, onClose }: SentenceSyntaxViewProps): React.JSX.Element {
   const [tooltip, setTooltip] = useState<{
-    role: string
-    isCore: boolean
+    tip: string
     x: number
     y: number
   } | null>(null)
   const [isClosing, setIsClosing] = useState(false)
   const closeTimerRef = useRef<number | null>(null)
-  const cardModel = useMemo(() => buildSentenceSyntaxCardModel(analysis), [analysis])
 
   useEffect(() => {
     return () => {
@@ -585,10 +588,10 @@ function SentenceSyntaxView({ analysis, onClose }: SentenceSyntaxViewProps): Rea
     segment: SentenceSyntaxSegment,
     event: React.MouseEvent<HTMLSpanElement>
   ): void => {
+    if (!segment.plainTip) return
     setTooltip({
-      role: segment.role,
-      isCore: segment.isCore,
-      x: Math.max(8, Math.min(event.clientX + 9, window.innerWidth - 112)),
+      tip: segment.plainTip,
+      x: Math.max(8, Math.min(event.clientX + 9, window.innerWidth - 238)),
       y: Math.max(8, event.clientY - 27)
     })
   }
@@ -601,20 +604,17 @@ function SentenceSyntaxView({ analysis, onClose }: SentenceSyntaxViewProps): Rea
 
   return (
     <div className={`sentence-syntax-view${isClosing ? ' sentence-syntax-view-closing' : ''}`}>
-      <div className="sentence-syntax-heading">
-        <span>语法透视</span>
-        <button
-          type="button"
-          className="sentence-syntax-toggle sentence-syntax-toggle-active"
-          title="收起主干拆解"
-          aria-label="收起主干拆解"
-          aria-expanded="true"
-          disabled={isClosing}
-          onClick={handleClose}
-        >
-          <SyntaxStructureIcon />
-        </button>
-      </div>
+      <button
+        type="button"
+        className="sentence-syntax-toggle"
+        title="收起语法透视"
+        aria-label="收起语法透视"
+        aria-expanded="true"
+        disabled={isClosing}
+        onClick={handleClose}
+      >
+        <SyntaxStructureIcon />
+      </button>
 
       <div
         className="sentence-syntax-sentence-shell"
@@ -623,43 +623,106 @@ function SentenceSyntaxView({ analysis, onClose }: SentenceSyntaxViewProps): Rea
       >
         <p className="sentence-syntax-sentence" lang="en">
           {analysis.segments.flatMap((segment, segmentIndex) =>
-            splitSentenceSyntaxText(segment.text).map((run, runIndex) => {
-              const tokenKind = run.isNeutral ? 'neutral' : segment.isCore ? 'core' : 'modifier'
+            splitSentenceSyntaxText(segment.text).flatMap((run, runIndex) => {
+              // 模型切片可能重复，索引与长度组合足以在当前句内保持稳定
+              const key = `${segmentIndex}-${runIndex}-${run.text.length}`
 
-              return (
-                <span
-                  // 模型切片可能重复，索引与长度组合足以在当前句内保持稳定
-                  key={`${segmentIndex}-${runIndex}-${run.text.length}`}
-                  className={`sentence-syntax-token sentence-syntax-token-${tokenKind}`}
-                  data-syntax-role={run.isNeutral ? undefined : segment.role}
-                  onMouseEnter={run.isNeutral ? undefined : (event) => showTooltip(segment, event)}
-                >
+              // 标点永远独立渲染，即使模型错误地把它放进了某个语义角色
+              if (run.kind === 'punctuation') {
+                return [
+                  <span key={key} className="sentence-syntax-punctuation">
+                    {run.text}
+                  </span>
+                ]
+              }
+
+              const canShowTip = segment.role !== 'other' && Boolean(segment.plainTip)
+              const showTip = canShowTip
+                ? (event: React.MouseEvent<HTMLSpanElement>) => showTooltip(segment, event)
+                : undefined
+              const hideTip = canShowTip ? () => setTooltip(null) : undefined
+              // 首尾空格留在胶囊外，语义文本内部空格完整保留，角标只出现一次
+              const [, leadingSpace = '', content = run.text, trailingSpace = ''] =
+                run.text.match(/^(\s*)([\s\S]*?)(\s*)$/) ?? []
+
+              if (!content) {
+                return [
+                  <span key={`${key}-space`} className="sentence-syntax-whitespace">
+                    {run.text}
+                  </span>
+                ]
+              }
+
+              if (
+                segment.role === 'subject' ||
+                segment.role === 'predicate' ||
+                segment.role === 'object'
+              ) {
+                return [
+                  ...(leadingSpace
+                    ? [
+                        <span key={`${key}-leading`} className="sentence-syntax-whitespace">
+                          {leadingSpace}
+                        </span>
+                      ]
+                    : []),
+                  <span
+                    key={`${key}-capsule`}
+                    className={`sentence-syntax-capsule sentence-syntax-role-${segment.role}`}
+                    onMouseEnter={showTip}
+                    onMouseLeave={hideTip}
+                  >
+                    {content}
+                    <span className="sentence-syntax-role-badge" aria-hidden="true">
+                      {SYNTAX_ROLE_LABELS[segment.role]}
+                    </span>
+                  </span>,
+                  ...(trailingSpace
+                    ? [
+                        <span key={`${key}-trailing`} className="sentence-syntax-whitespace">
+                          {trailingSpace}
+                        </span>
+                      ]
+                    : [])
+                ]
+              }
+
+              if (segment.role === 'modifier') {
+                return [
+                  ...(leadingSpace
+                    ? [
+                        <span key={`${key}-leading`} className="sentence-syntax-whitespace">
+                          {leadingSpace}
+                        </span>
+                      ]
+                    : []),
+                  <span
+                    key={`${key}-modifier`}
+                    className="sentence-syntax-modifier"
+                    onMouseEnter={showTip}
+                    onMouseLeave={hideTip}
+                  >
+                    {content}
+                  </span>,
+                  ...(trailingSpace
+                    ? [
+                        <span key={`${key}-trailing`} className="sentence-syntax-whitespace">
+                          {trailingSpace}
+                        </span>
+                      ]
+                    : [])
+                ]
+              }
+
+              return [
+                <span key={key} className="sentence-syntax-other">
                   {run.text}
                 </span>
-              )
+              ]
             })
           )}
         </p>
       </div>
-
-      <section className="sentence-syntax-structure-card" aria-label="语法结构摘要">
-        <dl className="sentence-syntax-kv">
-          <div className="sentence-syntax-kv-row">
-            <dt>主干</dt>
-            <dd className="sentence-syntax-kv-core">{cardModel.core}</dd>
-          </div>
-          {cardModel.modifier && cardModel.modifierLabel ? (
-            <div className="sentence-syntax-kv-row">
-              <dt>{cardModel.modifierLabel}</dt>
-              <dd>{cardModel.modifier}</dd>
-            </div>
-          ) : null}
-          <div className="sentence-syntax-kv-row">
-            <dt>点拨</dt>
-            <dd className="sentence-syntax-kv-note">{cardModel.note}</dd>
-          </div>
-        </dl>
-      </section>
 
       {tooltip ? (
         <div
@@ -667,8 +730,7 @@ function SentenceSyntaxView({ analysis, onClose }: SentenceSyntaxViewProps): Rea
           style={{ left: `${tooltip.x}px`, top: `${tooltip.y}px` }}
           role="tooltip"
         >
-          <span>{tooltip.role}</span>
-          <small>{tooltip.isCore ? '核心成分' : '修饰成分'}</small>
+          {tooltip.tip}
         </div>
       ) : null}
     </div>
@@ -708,9 +770,9 @@ function App(): React.JSX.Element {
   const [syntaxLoadingPairId, setSyntaxLoadingPairId] = useState<string | null>(null)
   // 当前进入语法透视视图的句子
   const [syntaxViewPairId, setSyntaxViewPairId] = useState<string | null>(null)
-  // 主干拆解按钮当前指向的句子，由悬停句自动更新
+  // 语法透视按钮当前指向的句子，由悬停句自动更新
   const [syntaxTargetPairId, setSyntaxTargetPairId] = useState<string | null>(null)
-  // 最近一次主干拆解的轻量错误提示
+  // 最近一次语法透视的轻量错误提示
   const [syntaxErrorMessage, setSyntaxErrorMessage] = useState('')
   // 学习模式空状态展示的随机复习闪卡
   const [vocabFlashcard, setVocabFlashcard] = useState<VocabFlashcard | null>(null)
@@ -1249,7 +1311,6 @@ function App(): React.JSX.Element {
     status,
     errorMessage,
     syncWindowHeight,
-    activeSentenceSyntax,
     isVocabFlashcardVisible,
     vocabFlashcardState,
     isVocabFlashcardRevealed
@@ -2408,7 +2469,7 @@ function App(): React.JSX.Element {
     ]
   )
 
-  /** 按需分析当前悬停句的英文主干，并缓存结果供再次展开 */
+  /** 按需分析当前悬停句的核心内容，并缓存结果供再次展开 */
   const handleToggleSentenceSyntax = useCallback((): void => {
     const pairId = activeAlignmentPairId ?? syntaxTargetPairId
     if (
@@ -2465,7 +2526,7 @@ function App(): React.JSX.Element {
       .then((response) => {
         if (sentenceSyntaxRequestIdRef.current !== requestId) return
         if (!response.ok) {
-          setSyntaxErrorMessage(response.error.message || '主干拆解失败，请稍后再试')
+          setSyntaxErrorMessage(response.error.message || '语法透视失败，请稍后再试')
           return
         }
 
@@ -2477,8 +2538,8 @@ function App(): React.JSX.Element {
       })
       .catch((error) => {
         if (sentenceSyntaxRequestIdRef.current !== requestId) return
-        console.warn('[renderer] 长难句主干拆解失败:', error)
-        setSyntaxErrorMessage('主干拆解失败，请稍后再试')
+        console.warn('[renderer] 语法透视失败:', error)
+        setSyntaxErrorMessage('语法透视失败，请稍后再试')
       })
       .finally(() => {
         if (sentenceSyntaxRequestIdRef.current === requestId) {
@@ -3495,9 +3556,11 @@ function App(): React.JSX.Element {
                   }`}
                   disabled={Boolean(syntaxLoadingPairId)}
                   title={
-                    syntaxLoadingPairId ? '正在拆解当前句主干' : '主干拆解（悬停英文句可切换目标）'
+                    syntaxLoadingPairId
+                      ? '正在分析当前句的核心内容'
+                      : '语法透视（悬停英文句可切换目标）'
                   }
-                  aria-label="分析当前英文句的主干"
+                  aria-label="分析当前英文句的核心内容"
                   aria-expanded="false"
                   onClick={handleToggleSentenceSyntax}
                 >

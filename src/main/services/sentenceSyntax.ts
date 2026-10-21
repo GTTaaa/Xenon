@@ -83,10 +83,10 @@ const getErrorMessage = (data: SentenceSyntaxResponseBody, status: number): stri
   const error = data.error
   if (typeof error === 'string' && error.trim()) return error.trim()
   if (error && typeof error === 'object' && error.message?.trim()) return error.message.trim()
-  return `主干拆解请求失败：${status}`
+  return `语法透视请求失败：${status}`
 }
 
-/** 请求当前模型把英文长句切成连续语法片段 */
+/** 请求当前模型把英文文本切成核心内容与次要补充 */
 const requestSentenceSyntax = async (
   sentence: string,
   targetTranslation: string,
@@ -135,7 +135,7 @@ const requestSentenceSyntax = async (
   } catch {
     throw new SentenceSyntaxServiceError(
       `HTTP_${response.status}`,
-      `主干拆解服务返回非 JSON 响应: ${rawResponseText.slice(0, 100)}`
+      `语法透视服务返回非 JSON 响应: ${rawResponseText.slice(0, 100)}`
     )
   }
 
@@ -148,7 +148,7 @@ const requestSentenceSyntax = async (
 
   const usage = data.data?.usage ?? data.usage
   if (usage) {
-    console.log('[main] 主干拆解 token 用量:', {
+    console.log('[main] 语法透视 token 用量:', {
       promptTokens: usage.prompt_tokens ?? 0,
       completionTokens: usage.completion_tokens ?? 0,
       reasoningTokens: usage.completion_tokens_details?.reasoning_tokens ?? 0,
@@ -158,21 +158,21 @@ const requestSentenceSyntax = async (
 
   const rawAnalysis = extractMessageText(data)
   if (!rawAnalysis) {
-    throw new SentenceSyntaxServiceError('EMPTY_RESPONSE', '主干拆解没有返回可用内容')
+    throw new SentenceSyntaxServiceError('EMPTY_RESPONSE', '语法透视没有返回可用内容')
   }
 
   const analysis = parseSentenceSyntaxAnalysis(rawAnalysis, sentence)
   if (!analysis) {
     throw new SentenceSyntaxServiceError(
       'INVALID_SYNTAX_ANALYSIS',
-      '主干拆解结果未能严格覆盖原句，已拒绝展示'
+      '语法透视结果未能严格覆盖原句，已拒绝展示'
     )
   }
 
   return analysis
 }
 
-/** 按需分析一个英文长句的主谓宾骨架与修饰成分 */
+/** 按需分析英文文本，供学习模式做行内视觉降噪 */
 export const analyzeSentenceSyntax = async (
   sentence: string,
   targetTranslation = '',
@@ -217,16 +217,14 @@ export const analyzeSentenceSyntax = async (
       return {
         ok: true,
         analysis: {
-          coreSpine: normalizedSentence,
           segments: [
             {
               text: normalizedSentence,
+              role: 'subject',
               isCore: true,
-              role: '主干',
-              type: 'predicate'
+              plainTip: '核心内容'
             }
-          ],
-          note: '模拟模式仅展示完整句子主干'
+          ]
         }
       }
     }
@@ -236,7 +234,7 @@ export const analyzeSentenceSyntax = async (
         ok: false,
         error: {
           code: 'UNSUPPORTED_PROVIDER',
-          message: '当前服务商不支持长难句主干拆解'
+          message: '当前服务商不支持语法透视'
         }
       }
     }
@@ -251,7 +249,7 @@ export const analyzeSentenceSyntax = async (
       analysis
     }
   } catch (error) {
-    console.error('[main] 长难句主干拆解失败:', error)
+    console.error('[main] 语法透视失败:', error)
     if (error instanceof SentenceSyntaxServiceError) {
       return {
         ok: false,
@@ -266,7 +264,7 @@ export const analyzeSentenceSyntax = async (
       ok: false,
       error: {
         code: 'SYNTAX_NETWORK_ERROR',
-        message: error instanceof Error ? error.message : '主干拆解服务发生未知错误'
+        message: error instanceof Error ? error.message : '语法透视服务发生未知错误'
       }
     }
   }

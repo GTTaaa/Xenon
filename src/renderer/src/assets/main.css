@@ -434,20 +434,13 @@ body {
 .syntax-source-active .compose-mirror,
 .syntax-source-active .compose-input {
   visibility: hidden;
-}
-
-/* 为原文和下方结构卡保留足够的窄窗阅读高度 */
-.compose-stage.syntax-source-active {
-  min-height: 190px;
+  pointer-events: none;
 }
 
 .sentence-syntax-view {
   position: absolute;
   inset: 0;
   z-index: 3;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
   overflow: hidden;
   padding: 1px 0 3px;
   background: var(--app-bg);
@@ -486,10 +479,9 @@ body {
 }
 
 .sentence-syntax-sentence-shell {
-  flex: 1 1 auto;
-  min-height: 0;
+  height: 100%;
   overflow-y: auto;
-  padding-right: 2px;
+  padding-right: 22px;
 }
 
 .sentence-syntax-sentence-shell::-webkit-scrollbar {
@@ -501,129 +493,96 @@ body {
   border-radius: 3px;
 }
 
-.sentence-syntax-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 18px;
-  margin-bottom: 3px;
-  color: #87928d;
-  font-family: var(--app-mono);
-  font-size: 8px;
-  line-height: 1;
-  letter-spacing: 0.55px;
-}
-
-.sentence-syntax-heading .sentence-syntax-toggle {
-  position: static;
-  flex: 0 0 auto;
-}
-
 .sentence-syntax-sentence {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 400;
-  line-height: 1.6;
+  line-height: 1.7;
   letter-spacing: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.sentence-syntax-token {
-  background: transparent;
+.sentence-syntax-whitespace {
+  white-space: pre;
+}
+
+.sentence-syntax-capsule {
+  display: inline-block;
+  max-width: calc(100% - 4px);
+  margin: 1px 2px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  vertical-align: baseline;
   cursor: help;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
-  transition:
-    opacity 100ms ease,
-    color 100ms ease;
 }
 
-.sentence-syntax-token-core {
-  color: #27342e;
+.sentence-syntax-role-subject {
+  background: #e0f2fe;
+  color: #075985;
   font-weight: 600;
-  opacity: 1;
 }
 
-.sentence-syntax-token-core:hover {
-  color: var(--app-accent);
+.sentence-syntax-role-predicate {
+  background: #ffedd5;
+  color: #9a3412;
+  font-weight: 600;
 }
 
-.sentence-syntax-token-modifier {
+.sentence-syntax-role-object {
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 500;
+}
+
+.sentence-syntax-role-badge {
+  margin-left: 2px;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  opacity: 0.8;
+  vertical-align: baseline;
+}
+
+.sentence-syntax-role-subject .sentence-syntax-role-badge {
+  background: rgba(14, 165, 233, 0.12);
+  color: #0369a1;
+}
+
+.sentence-syntax-role-predicate .sentence-syntax-role-badge {
+  background: rgba(249, 115, 22, 0.13);
+  color: #c2410c;
+}
+
+.sentence-syntax-role-object .sentence-syntax-role-badge {
+  background: rgba(34, 197, 94, 0.13);
+  color: #15803d;
+}
+
+.sentence-syntax-modifier {
   color: var(--app-fg-muted);
-  font-weight: 400;
   opacity: 0.4;
+  cursor: help;
+  transition: opacity 100ms ease;
 }
 
-.sentence-syntax-token-modifier:hover {
+.sentence-syntax-modifier:hover {
   opacity: 0.68;
 }
 
-.sentence-syntax-token-neutral {
+.sentence-syntax-other,
+.sentence-syntax-punctuation {
   color: var(--app-fg-muted);
   font-weight: 400;
-  opacity: 0.56;
+  opacity: 0.72;
   cursor: default;
-}
-
-.sentence-syntax-structure-card {
-  flex: 0 0 auto;
-  width: 100%;
-  margin-top: 6px;
-  padding: 6px 10px;
-  border: 1px solid rgba(67, 84, 76, 0.12);
-  border-radius: 6px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(77, 111, 130, 0.055)),
-    rgba(246, 247, 243, 0.74);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    0 3px 12px rgba(32, 43, 38, 0.035);
-  -webkit-backdrop-filter: blur(12px) saturate(115%);
-  backdrop-filter: blur(12px) saturate(115%);
-}
-
-.sentence-syntax-kv {
-  display: grid;
-  gap: 3px;
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.sentence-syntax-kv-row {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  align-items: start;
-  column-gap: 7px;
-}
-
-.sentence-syntax-kv dt {
-  color: #77837d;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.45;
-  letter-spacing: 0.2px;
-}
-
-.sentence-syntax-kv dd {
-  min-width: 0;
-  margin: 0;
-  color: var(--app-fg-body);
-  font-size: 11px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.sentence-syntax-kv .sentence-syntax-kv-core {
-  color: var(--app-fg);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.sentence-syntax-kv .sentence-syntax-kv-note {
-  color: var(--app-fg-muted);
-  font-size: 11px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -639,25 +598,19 @@ body {
 .sentence-syntax-tooltip {
   position: fixed;
   z-index: 60;
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  max-width: 104px;
-  padding: 3px 6px;
+  max-width: min(230px, calc(100vw - 16px));
+  overflow: hidden;
+  padding: 4px 7px;
   border: 1px solid rgba(77, 111, 130, 0.16);
-  border-radius: 5px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 4px 12px rgba(23, 28, 25, 0.1);
   color: var(--app-fg-body);
   font-size: 9.5px;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   pointer-events: none;
-}
-
-.sentence-syntax-tooltip small {
-  flex: 0 0 auto;
-  color: #9a855d;
-  font-size: 7.5px;
 }
 
 /* 原文词片段的命中范围始终存在，但只在鼠标指向或固定查词时显示底色 */
