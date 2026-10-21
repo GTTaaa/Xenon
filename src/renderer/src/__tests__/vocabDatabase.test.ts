@@ -8,7 +8,8 @@ import {
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
   normalizeVocabSentence,
-  recordVocabEncounter
+  recordVocabEncounter,
+  removeVocabItem
 } from '../services/vocabDatabase.ts'
 import Dexie, { type Table } from 'dexie'
 
@@ -85,7 +86,7 @@ test('首次主动查词会同时写入主词与完整双语语境', async (cont
   assert.equal(savedContext?.surface, 'resilient')
 })
 
-test('重复遇到同一词会累加次数并更新最近词形', async (context) => {
+test('重复收藏同一词的同一例句不会累加次数，只更新最近词形', async (context) => {
   const database = createTestDatabase()
   context.after(() => database.delete())
 
@@ -113,9 +114,22 @@ test('重复遇到同一词会累加次数并更新最近词形', async (context
     },
     database
   )
+  const repeated = await recordVocabEncounter(
+    {
+      lemma: 'run',
+      surface: 'running',
+      meaning: '跑步',
+      targetText: '跑',
+      side: 'source',
+      englishSentence: 'I run every morning.',
+      chineseSentence: '我每天早上跑步。'
+    },
+    database
+  )
 
-  assert.equal(updated.encounterCount, 2)
+  assert.equal(updated.encounterCount, 1)
   assert.equal(updated.surface, 'running')
+  assert.equal(repeated.encounterCount, 1)
   assert.equal(await database.vocabItems.count(), 1)
   assert.equal(await database.vocabContexts.count(), 1)
 })
@@ -149,7 +163,7 @@ test('同一句仅大小写、空白和句末标点不同时不会重复写入�
     database
   )
 
-  assert.equal(updated.encounterCount, 2)
+  assert.equal(updated.encounterCount, 1)
   assert.equal(await database.vocabItems.count(), 1)
   assert.equal(await database.vocabContexts.count(), 1)
   assert.equal(
@@ -219,6 +233,44 @@ test('同一个词遇到不同原句时会保留多个真实语境', async (cont
 
   assert.equal(updated.encounterCount, 2)
   assert.equal(await database.vocabContexts.count(), 2)
+})
+
+test('移出生词库会级联删除主词及其全部语境', async (context) => {
+  const database = createTestDatabase()
+  context.after(() => database.delete())
+
+  const baseInput = {
+    lemma: 'Deprecate',
+    surface: 'deprecated',
+    meaning: '已弃用',
+    targetText: '已弃用',
+    side: 'source' as const
+  }
+
+  await recordVocabEncounter(
+    {
+      ...baseInput,
+      englishSentence: 'The legacy API has been deprecated in the latest release.',
+      chineseSentence: '旧版 API 在最新版本中已被弃用。'
+    },
+    database
+  )
+  await recordVocabEncounter(
+    {
+      ...baseInput,
+      surface: 'deprecates',
+      englishSentence: 'The team deprecates unsafe defaults.',
+      chineseSentence: '团队会弃用不安全的默认设置。'
+    },
+    database
+  )
+
+  assert.equal(await database.vocabItems.count(), 1)
+  assert.equal(await database.vocabContexts.count(), 2)
+  assert.equal(await removeVocabItem('  DEPRECATE ', database), true)
+  assert.equal(await database.vocabItems.count(), 0)
+  assert.equal(await database.vocabContexts.count(), 0)
+  assert.equal(await removeVocabItem('deprecate', database), false)
 })
 
 test('本地缓存既支持归一化词元，也兼容最近一次词形', async (context) => {

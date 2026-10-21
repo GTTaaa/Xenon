@@ -7,6 +7,7 @@ import type {
 } from '../shared/translate'
 import type { AlignTextRequest, AlignTextResponse } from '../shared/textAlignment'
 import type { WordLookupRequest, WordLookupResponse } from '../shared/wordLookup'
+import type { SentenceSyntaxRequest, SentenceSyntaxResponse } from '../shared/sentenceSyntax'
 import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
 
@@ -34,6 +35,9 @@ const api = {
   },
   lookupWord: (request: WordLookupRequest): Promise<WordLookupResponse> => {
     return ipcRenderer.invoke('translate:lookup-word', request)
+  },
+  analyzeSentenceSyntax: (request: SentenceSyntaxRequest): Promise<SentenceSyntaxResponse> => {
+    return ipcRenderer.invoke('translate:analyze-syntax', request)
   },
   onFocusInput: (callback: () => void): (() => void) => {
     const listener = (): void => {

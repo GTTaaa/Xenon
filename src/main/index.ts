@@ -19,6 +19,7 @@ import trayIconColor2x from '../../resources/xenon.png?asset'
 import type { TranslateRequest, TranslateStreamDeltaEvent } from '../shared/translate'
 import type { AlignTextRequest } from '../shared/textAlignment'
 import type { WordLookupRequest } from '../shared/wordLookup'
+import type { SentenceSyntaxRequest } from '../shared/sentenceSyntax'
 import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
 import { DEFAULT_SHORTCUTS } from '../shared/config'
 import {
@@ -29,6 +30,7 @@ import {
 import { translateText } from './services/translator'
 import { alignText } from './services/aligner'
 import { lookupWord } from './services/wordLookup'
+import { analyzeSentenceSyntax } from './services/sentenceSyntax'
 import {
   fetchProviderModels,
   getLLMConfig,
@@ -418,6 +420,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('translate:lookup-word', async (_, request: WordLookupRequest) => {
     return await lookupWord(request)
+  })
+
+  ipcMain.handle('translate:analyze-syntax', async (_, request: SentenceSyntaxRequest) => {
+    return await analyzeSentenceSyntax(request.sentence, request.targetTranslation, request.options)
   })
 
   ipcMain.handle('config:get', async () => {

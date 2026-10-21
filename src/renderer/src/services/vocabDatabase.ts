@@ -228,6 +228,7 @@ export const vocabDatabase = new VocabDatabase()
 /**
  * 写入一次主动查词或收藏。
  * 主词与语境放在同一个事务中，避免只更新一半后留下孤立数据。
+ * 相同词元与相同例句重复调用时只更新展示信息，不再累加遇到次数。
  */
 export const recordVocabEncounter = async (
   input: VocabEncounterInput,
@@ -250,6 +251,11 @@ export const recordVocabEncounter = async (
   const now = Date.now()
 
   return database.transaction('rw', database.vocabItems, database.vocabContexts, async () => {
+    const existingContext = await database.vocabContexts
+      .where('[lemmaLower+sourceSentenceKey]')
+      .equals([lemmaLower, sourceSentenceKey])
+      .first()
+    const isNewContext = !existingContext
     const existing = await database.vocabItems.where('lemmaLower').equals(lemmaLower).first()
     let item: VocabItem
 
@@ -257,7 +263,7 @@ export const recordVocabEncounter = async (
       item = {
         ...existing,
         surface,
-        encounterCount: existing.encounterCount + 1,
+        encounterCount: existing.encounterCount + (isNewContext ? 1 : 0),
         updatedAt: now
       }
       await database.vocabItems.put(item)
@@ -277,11 +283,6 @@ export const recordVocabEncounter = async (
       const id = await database.vocabItems.add(item)
       item = { ...item, id }
     }
-
-    const existingContext = await database.vocabContexts
-      .where('[lemmaLower+sourceSentenceKey]')
-      .equals([lemmaLower, sourceSentenceKey])
-      .first()
 
     if (!existingContext) {
       await database.vocabContexts.add({
@@ -318,6 +319,31 @@ export const recordVocabEncounter = async (
     }
 
     return item
+  })
+}
+
+/**
+ * 从本地词库彻底移除一个词条及其全部语境。
+ * 主词和语境必须在同一事务内删除，避免留下无法从界面清理的孤立例句。
+ */
+export const removeVocabItem = async (
+  lemma: string,
+  database: VocabDatabase = vocabDatabase
+): Promise<boolean> => {
+  const lemmaLower = normalizeVocabLemma(lemma)
+  if (!lemmaLower) return false
+
+  return database.transaction('rw', database.vocabItems, database.vocabContexts, async () => {
+    const deletedContextCount = await database.vocabContexts
+      .where('lemmaLower')
+      .equals(lemmaLower)
+      .delete()
+    const deletedItemCount = await database.vocabItems
+      .where('lemmaLower')
+      .equals(lemmaLower)
+      .delete()
+
+    return deletedItemCount > 0 || deletedContextCount > 0
   })
 }
 

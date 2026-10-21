@@ -14,6 +14,12 @@ import {
   type WordLookupResult,
   type WordLookupSide
 } from '../../shared/wordLookup'
+import {
+  buildSentenceSyntaxCardModel,
+  splitSentenceSyntaxText,
+  type SentenceSyntaxAnalysis,
+  type SentenceSyntaxSegment
+} from '../../shared/sentenceSyntax'
 
 import {
   detectLanguage,
@@ -35,7 +41,9 @@ import {
   getRandomVocabFlashcard,
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
+  normalizeVocabLemma,
   recordVocabEncounter,
+  removeVocabItem,
   type VocabFlashcard,
   type VocabItem
 } from './services/vocabDatabase'
@@ -271,10 +279,16 @@ interface WordLookupDisplay extends WordLookupPosition {
   note?: string
   /** 本地词库中记录的累计偶遇次数 */
   encounterCount?: number
+  /** 当前词是否已经确认收录到本地词库 */
+  isPersisted?: boolean
   /** 当前浮层是否仍提供主动收藏入口 */
   canPersist?: boolean
   /** 当前浮层是否正在写入本地词库 */
   isPersisting?: boolean
+  /** 当前浮层是否正在检查本地词库状态 */
+  isCheckingPersistence?: boolean
+  /** 当前浮层是否正在从本地词库移除 */
+  isRemoving?: boolean
   /** 查询失败时的界面说明 */
   errorMessage?: string
 }
@@ -530,6 +544,137 @@ function SegmentedText({
   return <>{nodes}</>
 }
 
+/** 轻量骨架图标，用于进入和退出语法透视视图 */
+function SyntaxStructureIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3 4.25h4v3H3zM9 4.25h4v3H9zM6 10.25h4v3H6z" />
+      <path d="M7 5.75h2M8 7.25v3" />
+    </svg>
+  )
+}
+
+interface SentenceSyntaxViewProps {
+  /** 已通过连续切片校验的语法分析 */
+  analysis: SentenceSyntaxAnalysis
+  /** 返回常规英文句子视图 */
+  onClose: () => void
+}
+
+/** 以低噪原文和下方结构卡展示单句主谓宾骨架 */
+function SentenceSyntaxView({ analysis, onClose }: SentenceSyntaxViewProps): React.JSX.Element {
+  const [tooltip, setTooltip] = useState<{
+    role: string
+    isCore: boolean
+    x: number
+    y: number
+  } | null>(null)
+  const [isClosing, setIsClosing] = useState(false)
+  const closeTimerRef = useRef<number | null>(null)
+  const cardModel = useMemo(() => buildSentenceSyntaxCardModel(analysis), [analysis])
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        window.clearTimeout(closeTimerRef.current)
+      }
+    }
+  }, [])
+
+  const showTooltip = (
+    segment: SentenceSyntaxSegment,
+    event: React.MouseEvent<HTMLSpanElement>
+  ): void => {
+    setTooltip({
+      role: segment.role,
+      isCore: segment.isCore,
+      x: Math.max(8, Math.min(event.clientX + 9, window.innerWidth - 112)),
+      y: Math.max(8, event.clientY - 27)
+    })
+  }
+
+  const handleClose = (): void => {
+    if (isClosing) return
+    setIsClosing(true)
+    closeTimerRef.current = window.setTimeout(onClose, 150)
+  }
+
+  return (
+    <div className={`sentence-syntax-view${isClosing ? ' sentence-syntax-view-closing' : ''}`}>
+      <div className="sentence-syntax-heading">
+        <span>语法透视</span>
+        <button
+          type="button"
+          className="sentence-syntax-toggle sentence-syntax-toggle-active"
+          title="收起主干拆解"
+          aria-label="收起主干拆解"
+          aria-expanded="true"
+          disabled={isClosing}
+          onClick={handleClose}
+        >
+          <SyntaxStructureIcon />
+        </button>
+      </div>
+
+      <div
+        className="sentence-syntax-sentence-shell"
+        onMouseLeave={() => setTooltip(null)}
+        onScroll={() => setTooltip(null)}
+      >
+        <p className="sentence-syntax-sentence" lang="en">
+          {analysis.segments.flatMap((segment, segmentIndex) =>
+            splitSentenceSyntaxText(segment.text).map((run, runIndex) => {
+              const tokenKind = run.isNeutral ? 'neutral' : segment.isCore ? 'core' : 'modifier'
+
+              return (
+                <span
+                  // 模型切片可能重复，索引与长度组合足以在当前句内保持稳定
+                  key={`${segmentIndex}-${runIndex}-${run.text.length}`}
+                  className={`sentence-syntax-token sentence-syntax-token-${tokenKind}`}
+                  data-syntax-role={run.isNeutral ? undefined : segment.role}
+                  onMouseEnter={run.isNeutral ? undefined : (event) => showTooltip(segment, event)}
+                >
+                  {run.text}
+                </span>
+              )
+            })
+          )}
+        </p>
+      </div>
+
+      <section className="sentence-syntax-structure-card" aria-label="语法结构摘要">
+        <dl className="sentence-syntax-kv">
+          <div className="sentence-syntax-kv-row">
+            <dt>主干</dt>
+            <dd className="sentence-syntax-kv-core">{cardModel.core}</dd>
+          </div>
+          {cardModel.modifier && cardModel.modifierLabel ? (
+            <div className="sentence-syntax-kv-row">
+              <dt>{cardModel.modifierLabel}</dt>
+              <dd>{cardModel.modifier}</dd>
+            </div>
+          ) : null}
+          <div className="sentence-syntax-kv-row">
+            <dt>点拨</dt>
+            <dd className="sentence-syntax-kv-note">{cardModel.note}</dd>
+          </div>
+        </dl>
+      </section>
+
+      {tooltip ? (
+        <div
+          className="sentence-syntax-tooltip"
+          style={{ left: `${tooltip.x}px`, top: `${tooltip.y}px` }}
+          role="tooltip"
+        >
+          <span>{tooltip.role}</span>
+          <small>{tooltip.isCore ? '核心成分' : '修饰成分'}</small>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function App(): React.JSX.Element {
   const [sourceText, setSourceText] = useState(INITIAL_SOURCE_TEXT)
   // const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
@@ -555,6 +700,18 @@ function App(): React.JSX.Element {
   const [wordLookup, setWordLookup] = useState<WordLookupDisplay | null>(null)
   // 当前英文句子里命中的本地词条，用于二次偶遇高亮与悬停解析
   const [encounterVocabItems, setEncounterVocabItems] = useState<VocabItem[]>([])
+  // 按对齐组缓存的语法分析，重复展开同一句不会再次消耗 Token
+  const [sentenceSyntaxByPairId, setSentenceSyntaxByPairId] = useState<
+    Record<string, SentenceSyntaxAnalysis>
+  >({})
+  // 当前正在请求语法分析的句子
+  const [syntaxLoadingPairId, setSyntaxLoadingPairId] = useState<string | null>(null)
+  // 当前进入语法透视视图的句子
+  const [syntaxViewPairId, setSyntaxViewPairId] = useState<string | null>(null)
+  // 主干拆解按钮当前指向的句子，由悬停句自动更新
+  const [syntaxTargetPairId, setSyntaxTargetPairId] = useState<string | null>(null)
+  // 最近一次主干拆解的轻量错误提示
+  const [syntaxErrorMessage, setSyntaxErrorMessage] = useState('')
   // 学习模式空状态展示的随机复习闪卡
   const [vocabFlashcard, setVocabFlashcard] = useState<VocabFlashcard | null>(null)
   // 区分闪卡加载中、数据库为空与正常展示三种状态
@@ -581,6 +738,12 @@ function App(): React.JSX.Element {
   // 同一次翻译只累计一次被动偶遇，避免状态刷新造成重复计数
   const passiveEncounterSignatureRef = useRef('')
   const wordLookupRequestIdRef = useRef(0)
+  // 同一词条写入尚未完成时，阻止快速连点产生并发请求
+  const persistenceInFlightRef = useRef(new Set<string>())
+  // 同一词条删除尚未完成时，阻止快速连点产生并发事务
+  const vocabRemovalInFlightRef = useRef(new Set<string>())
+  // 输入切换或新翻译开始时，让旧的语法分析结果失效
+  const sentenceSyntaxRequestIdRef = useRef(0)
   const wordLookupCacheRef = useRef<Map<string, WordLookupResult>>(new Map())
   const wordLookupRef = useRef<HTMLDivElement | null>(null)
   const wordLookupCloseTimerRef = useRef<number | null>(null)
@@ -776,6 +939,41 @@ function App(): React.JSX.Element {
       highlightById: new Map(alignment.highlights.map((highlight) => [highlight.id, highlight]))
     }
   }, [alignment])
+
+  // 当前视图只对英文原文提供语法透视，中译英仍保留原有学习高亮流程
+  const canUseSourceSentenceSyntax =
+    isLearningActive && learningHighlightSide === 'source' && Boolean(alignment && alignmentView)
+  const activeSentenceSyntax =
+    syntaxViewPairId && canUseSourceSentenceSyntax
+      ? (sentenceSyntaxByPairId[syntaxViewPairId] ?? null)
+      : null
+
+  // 学习模式下默认分析第一句；悬停其他句后按钮会自动切换到对应句
+  useEffect(() => {
+    if (!alignment || !isLearningActive || learningHighlightSide !== 'source') {
+      setSyntaxTargetPairId(null)
+      setSyntaxViewPairId(null)
+      return
+    }
+
+    const pairIds = new Set(alignment.pairs.map((pair) => pair.id))
+    setSyntaxTargetPairId((current) => {
+      if (current && pairIds.has(current)) return current
+      return alignment.pairs[0]?.id ?? null
+    })
+  }, [alignment, isLearningActive, learningHighlightSide])
+
+  useEffect(() => {
+    if (
+      syntaxViewPairId ||
+      !activeAlignmentPairId ||
+      !alignment?.pairs.some((pair) => pair.id === activeAlignmentPairId)
+    ) {
+      return
+    }
+    setSyntaxTargetPairId(activeAlignmentPairId)
+    setSyntaxErrorMessage('')
+  }, [activeAlignmentPairId, alignment, syntaxViewPairId])
 
   // 原文中所有英文词都参与点击查词；分词结果与透明测量层共用同一套偏移
   const sourceWordView = useMemo(() => {
@@ -1051,6 +1249,7 @@ function App(): React.JSX.Element {
     status,
     errorMessage,
     syncWindowHeight,
+    activeSentenceSyntax,
     isVocabFlashcardVisible,
     vocabFlashcardState,
     isVocabFlashcardRevealed
@@ -1176,6 +1375,12 @@ function App(): React.JSX.Element {
     setHoveredTargetWordId(null)
     setHoveredTargetHighlightId(null)
     setWordLookup(null)
+    sentenceSyntaxRequestIdRef.current += 1
+    setSentenceSyntaxByPairId({})
+    setSyntaxLoadingPairId(null)
+    setSyntaxViewPairId(null)
+    setSyntaxTargetPairId(null)
+    setSyntaxErrorMessage('')
     sourceHitBoxesRef.current = []
     isAutoScrollingSourceRef.current = false
     isAutoScrollingResultRef.current = false
@@ -1912,12 +2117,27 @@ function App(): React.JSX.Element {
       result: WordLookupResult
       note?: string
     }): Promise<VocabItem | null> => {
+      const persistenceKey = [
+        params.lookupAnchorId,
+        params.side,
+        params.pairId,
+        params.result.lemma.trim().toLowerCase(),
+        params.surface.trim().toLowerCase()
+      ].join('\u0000')
+      if (persistenceInFlightRef.current.has(persistenceKey)) return null
+
       if (!alignment || !learningHighlightSide || params.side !== learningHighlightSide) {
         setWordLookup((current) =>
           current &&
           current.lookupAnchorId === params.lookupAnchorId &&
           current.side === params.side
-            ? { ...current, isPersisting: false, canPersist: true }
+            ? {
+                ...current,
+                isPersisted: false,
+                isPersisting: false,
+                canPersist: true,
+                isCheckingPersistence: false
+              }
             : current
         )
         return null
@@ -1935,15 +2155,28 @@ function App(): React.JSX.Element {
           current &&
           current.lookupAnchorId === params.lookupAnchorId &&
           current.side === params.side
-            ? { ...current, isPersisting: false, canPersist: true }
+            ? {
+                ...current,
+                isPersisted: false,
+                isPersisting: false,
+                canPersist: true,
+                isCheckingPersistence: false
+              }
             : current
         )
         return null
       }
 
+      persistenceInFlightRef.current.add(persistenceKey)
       setWordLookup((current) =>
         current && current.lookupAnchorId === params.lookupAnchorId && current.side === params.side
-          ? { ...current, isPersisting: true, canPersist: false }
+          ? {
+              ...current,
+              isPersisting: true,
+              isPersisted: false,
+              canPersist: false,
+              isCheckingPersistence: false
+            }
           : current
       )
 
@@ -1967,8 +2200,10 @@ function App(): React.JSX.Element {
             ? {
                 ...current,
                 encounterCount: item.encounterCount,
+                isPersisted: true,
                 isPersisting: false,
-                canPersist: false
+                canPersist: false,
+                isCheckingPersistence: false
               }
             : current
         )
@@ -1979,10 +2214,18 @@ function App(): React.JSX.Element {
           current &&
           current.lookupAnchorId === params.lookupAnchorId &&
           current.side === params.side
-            ? { ...current, isPersisting: false, canPersist: true }
+            ? {
+                ...current,
+                isPersisted: false,
+                isPersisting: false,
+                canPersist: true,
+                isCheckingPersistence: false
+              }
             : current
         )
         return null
+      } finally {
+        persistenceInFlightRef.current.delete(persistenceKey)
       }
     },
     [alignment, learningHighlightSide, sourceText, targetText, upsertEncounterVocabItem]
@@ -2027,39 +2270,73 @@ function App(): React.JSX.Element {
         },
         note: highlight.note || undefined,
         origin: 'highlight',
-        canPersist: !options?.persist,
-        isPersisting: Boolean(options?.persist)
+        isPersisted: false,
+        canPersist: false,
+        isPersisting: false,
+        isCheckingPersistence: true
       })
 
-      if (options?.persist) {
-        void persistLookupData({
-          lookupAnchorId: highlight.id,
-          pairId: highlight.pairId,
-          side: highlight.side,
-          surface: highlight.surface,
-          result: {
-            lemma: highlight.lemma,
-            meaning: highlight.meaning,
-            targetText: highlight.targetText
-          },
-          ...(highlight.note ? { note: highlight.note } : {})
-        })
-        return
-      }
-
-      // 悬停只预览；若本地已有词条，仅补充偶遇次数，不增加计数
+      const requestId = wordLookupRequestIdRef.current
       void Promise.all([findCachedVocab(highlight.lemma), findCachedVocab(highlight.surface)])
         .then(([itemByLemma, itemBySurface]) => {
+          if (wordLookupRequestIdRef.current !== requestId) return
           const item = itemByLemma ?? itemBySurface
-          if (!item) return
+          if (!item) {
+            if (options?.persist) {
+              void persistLookupData({
+                lookupAnchorId: highlight.id,
+                pairId: highlight.pairId,
+                side: highlight.side,
+                surface: highlight.surface,
+                result: {
+                  lemma: highlight.lemma,
+                  meaning: highlight.meaning,
+                  targetText: highlight.targetText
+                },
+                ...(highlight.note ? { note: highlight.note } : {})
+              })
+              return
+            }
+
+            setWordLookup((current) =>
+              current && current.lookupAnchorId === highlight.id && current.side === highlight.side
+                ? {
+                    ...current,
+                    isPersisted: false,
+                    canPersist: true,
+                    isCheckingPersistence: false
+                  }
+                : current
+            )
+            return
+          }
+
           setWordLookup((current) =>
             current && current.lookupAnchorId === highlight.id && current.side === highlight.side
-              ? { ...current, encounterCount: item.encounterCount }
+              ? {
+                  ...current,
+                  encounterCount: item.encounterCount,
+                  isPersisted: true,
+                  canPersist: false,
+                  isPersisting: false,
+                  isCheckingPersistence: false
+                }
               : current
           )
         })
         .catch((error) => {
           console.warn('[renderer] 读取学习高亮词库状态失败:', error)
+          if (wordLookupRequestIdRef.current !== requestId) return
+          setWordLookup((current) =>
+            current && current.lookupAnchorId === highlight.id && current.side === highlight.side
+              ? {
+                  ...current,
+                  isPersisted: false,
+                  canPersist: true,
+                  isCheckingPersistence: false
+                }
+              : current
+          )
         })
     },
     [cancelWordLookupClose, persistLookupData, scrollResultToPair, scrollSourceToPair]
@@ -2116,6 +2393,7 @@ function App(): React.JSX.Element {
         },
         note: match.item.note,
         encounterCount: match.item.encounterCount,
+        isPersisted: true,
         canPersist: false
       })
     },
@@ -2129,6 +2407,104 @@ function App(): React.JSX.Element {
       targetText
     ]
   )
+
+  /** 按需分析当前悬停句的英文主干，并缓存结果供再次展开 */
+  const handleToggleSentenceSyntax = useCallback((): void => {
+    const pairId = activeAlignmentPairId ?? syntaxTargetPairId
+    if (
+      !pairId ||
+      !alignment ||
+      !isLearningActive ||
+      learningHighlightSide !== 'source' ||
+      syntaxLoadingPairId
+    ) {
+      return
+    }
+
+    if (syntaxViewPairId === pairId) {
+      setSyntaxViewPairId(null)
+      window.requestAnimationFrame(() => sourceInputRef.current?.focus())
+      return
+    }
+
+    const cachedAnalysis = sentenceSyntaxByPairId[pairId]
+    if (cachedAnalysis) {
+      setSyntaxErrorMessage('')
+      setSyntaxViewPairId(pairId)
+      sourceInputRef.current?.blur()
+      return
+    }
+
+    const pairSentences = getAlignmentPairSentences(
+      alignment,
+      sourceText,
+      targetText,
+      pairId,
+      learningHighlightSide
+    )
+    if (!pairSentences?.englishSentence || !pairSentences.chineseSentence) {
+      setSyntaxErrorMessage('当前句缺少完整的双语上下文')
+      return
+    }
+
+    const requestId = sentenceSyntaxRequestIdRef.current + 1
+    sentenceSyntaxRequestIdRef.current = requestId
+    setSyntaxLoadingPairId(pairId)
+    setSyntaxErrorMessage('')
+    sourceInputRef.current?.blur()
+
+    void window.api
+      .analyzeSentenceSyntax({
+        sentence: pairSentences.englishSentence,
+        targetTranslation: pairSentences.chineseSentence,
+        options: {
+          providerId: selectedProviderId,
+          model: selectedModel
+        }
+      })
+      .then((response) => {
+        if (sentenceSyntaxRequestIdRef.current !== requestId) return
+        if (!response.ok) {
+          setSyntaxErrorMessage(response.error.message || '主干拆解失败，请稍后再试')
+          return
+        }
+
+        setSentenceSyntaxByPairId((current) => ({
+          ...current,
+          [pairId]: response.analysis
+        }))
+        setSyntaxViewPairId(pairId)
+      })
+      .catch((error) => {
+        if (sentenceSyntaxRequestIdRef.current !== requestId) return
+        console.warn('[renderer] 长难句主干拆解失败:', error)
+        setSyntaxErrorMessage('主干拆解失败，请稍后再试')
+      })
+      .finally(() => {
+        if (sentenceSyntaxRequestIdRef.current === requestId) {
+          setSyntaxLoadingPairId(null)
+        }
+      })
+  }, [
+    activeAlignmentPairId,
+    alignment,
+    isLearningActive,
+    learningHighlightSide,
+    selectedModel,
+    selectedProviderId,
+    sentenceSyntaxByPairId,
+    sourceText,
+    syntaxLoadingPairId,
+    syntaxTargetPairId,
+    syntaxViewPairId,
+    targetText
+  ])
+
+  /** 关闭语法透视并恢复输入框焦点 */
+  const handleCloseSentenceSyntax = useCallback((): void => {
+    setSyntaxViewPairId(null)
+    window.requestAnimationFrame(() => sourceInputRef.current?.focus())
+  }, [])
 
   /** 对未被学习高亮覆盖的英文词发起单点上下文查词 */
   const requestContextualWordLookup = useCallback(
@@ -2184,8 +2560,11 @@ function App(): React.JSX.Element {
       const applyReadyResult = (
         result: WordLookupResult,
         origin: 'database' | 'llm',
-        encounterCount?: number,
-        note?: string
+        options?: {
+          encounterCount?: number
+          note?: string
+          isPersisted?: boolean
+        }
       ): void => {
         if (wordLookupRequestIdRef.current !== requestId) return
         setWordLookup({
@@ -2197,19 +2576,12 @@ function App(): React.JSX.Element {
           status: 'ready',
           origin,
           result,
-          encounterCount,
-          canPersist: false,
-          isPersisting: true,
-          ...(note ? { note } : {})
-        })
-
-        void persistLookupData({
-          lookupAnchorId: params.anchorId,
-          pairId: params.pairId,
-          side: params.side,
-          surface: params.word,
-          result,
-          ...(note ? { note } : {})
+          encounterCount: options?.encounterCount,
+          isPersisted: Boolean(options?.isPersisted),
+          canPersist: !options?.isPersisted,
+          isPersisting: false,
+          isCheckingPersistence: false,
+          ...(options?.note ? { note: options.note } : {})
         })
       }
 
@@ -2237,8 +2609,11 @@ function App(): React.JSX.Element {
               targetText: contextualTargetText
             },
             'database',
-            cachedItem.encounterCount,
-            cachedItem.note
+            {
+              encounterCount: cachedItem.encounterCount,
+              note: cachedItem.note,
+              isPersisted: true
+            }
           )
           return
         }
@@ -2246,7 +2621,7 @@ function App(): React.JSX.Element {
         const cachedResult = wordLookupCacheRef.current.get(cacheKey)
         if (cachedResult) {
           cacheWordLookupResult(cacheKey, cachedResult)
-          applyReadyResult(cachedResult, 'database')
+          applyReadyResult(cachedResult, 'llm')
           return
         }
 
@@ -2300,7 +2675,6 @@ function App(): React.JSX.Element {
       cancelWordLookupClose,
       detectedInfo.detected,
       effectiveTargetLang,
-      persistLookupData,
       scrollResultToPair,
       scrollSourceToPair,
       selectedModel,
@@ -2613,7 +2987,15 @@ function App(): React.JSX.Element {
 
   /** 浮层中的收藏按钮用于把仅预览的学习高亮主动写入本地词库 */
   const handlePersistCurrentLookup = (): void => {
-    if (!wordLookup?.result || !wordLookup.canPersist || wordLookup.isPersisting) return
+    if (
+      !wordLookup?.result ||
+      !wordLookup.canPersist ||
+      wordLookup.isPersisted ||
+      wordLookup.isPersisting ||
+      wordLookup.isCheckingPersistence
+    ) {
+      return
+    }
 
     void persistLookupData({
       lookupAnchorId: wordLookup.lookupAnchorId,
@@ -2623,6 +3005,54 @@ function App(): React.JSX.Element {
       result: wordLookup.result,
       ...(wordLookup.note ? { note: wordLookup.note } : {})
     })
+  }
+
+  /** 从气泡中移出当前词条，并同步清理文本中的偶遇标记 */
+  const handleRemoveCurrentLookup = (): void => {
+    if (!wordLookup?.result || !wordLookup.isPersisted || wordLookup.isRemoving) return
+
+    const lemmaLower = normalizeVocabLemma(wordLookup.result.lemma)
+    if (!lemmaLower || vocabRemovalInFlightRef.current.has(lemmaLower)) return
+
+    vocabRemovalInFlightRef.current.add(lemmaLower)
+    setWordLookup((current) =>
+      current?.result && normalizeVocabLemma(current.result.lemma) === lemmaLower
+        ? { ...current, isRemoving: true }
+        : current
+    )
+
+    void removeVocabItem(wordLookup.result.lemma)
+      .then(() => {
+        // 偶遇高亮完全由该状态派生，移除词条后下划线与星标会立即消失。
+        setEncounterVocabItems((current) =>
+          current.filter((item) => item.lemmaLower !== lemmaLower)
+        )
+        setWordLookup((current) =>
+          current?.result && normalizeVocabLemma(current.result.lemma) === lemmaLower
+            ? {
+                ...current,
+                origin: undefined,
+                encounterCount: undefined,
+                isPersisted: false,
+                canPersist: true,
+                isPersisting: false,
+                isCheckingPersistence: false,
+                isRemoving: false
+              }
+            : current
+        )
+      })
+      .catch((error) => {
+        console.warn('[renderer] 从本地生词库移除词条失败:', error)
+        setWordLookup((current) =>
+          current?.result && normalizeVocabLemma(current.result.lemma) === lemmaLower
+            ? { ...current, isRemoving: false }
+            : current
+        )
+      })
+      .finally(() => {
+        vocabRemovalInFlightRef.current.delete(lemmaLower)
+      })
   }
 
   /** 离开译文词条后按原有延迟关闭浮层 */
@@ -3006,7 +3436,11 @@ function App(): React.JSX.Element {
 
         <div className="device-body">
           <div className="compose">
-            <div className="compose-stage">
+            <div
+              className={`compose-stage${
+                canUseSourceSentenceSyntax ? ' compose-stage-with-syntax' : ''
+              }${activeSentenceSyntax ? ' syntax-source-active' : ''}`}
+            >
               {isLearningActive && alignment && alignmentView ? (
                 <div className="compose-mirror" aria-hidden="true" ref={sourceMirrorRef}>
                   <SegmentedText
@@ -3052,6 +3486,41 @@ function App(): React.JSX.Element {
                 spellCheck={false}
                 aria-label="源文本输入框"
               />
+
+              {canUseSourceSentenceSyntax && !activeSentenceSyntax ? (
+                <button
+                  type="button"
+                  className={`sentence-syntax-toggle${
+                    syntaxErrorMessage ? ' sentence-syntax-toggle-error' : ''
+                  }`}
+                  disabled={Boolean(syntaxLoadingPairId)}
+                  title={
+                    syntaxLoadingPairId ? '正在拆解当前句主干' : '主干拆解（悬停英文句可切换目标）'
+                  }
+                  aria-label="分析当前英文句的主干"
+                  aria-expanded="false"
+                  onClick={handleToggleSentenceSyntax}
+                >
+                  {syntaxLoadingPairId ? (
+                    <span className="sentence-syntax-spinner" aria-hidden="true" />
+                  ) : (
+                    <SyntaxStructureIcon />
+                  )}
+                </button>
+              ) : null}
+
+              {syntaxErrorMessage && canUseSourceSentenceSyntax && !activeSentenceSyntax ? (
+                <div className="sentence-syntax-error" role="alert">
+                  {syntaxErrorMessage}
+                </div>
+              ) : null}
+
+              {activeSentenceSyntax ? (
+                <SentenceSyntaxView
+                  analysis={activeSentenceSyntax}
+                  onClose={handleCloseSentenceSyntax}
+                />
+              ) : null}
             </div>
           </div>
 
@@ -3436,19 +3905,42 @@ function App(): React.JSX.Element {
                   {wordLookup.note}
                 </div>
               ) : null}
-              {wordLookup.encounterCount !== undefined ? (
-                <div className="word-lookup-encounter">
-                  已在本地词库偶遇 {wordLookup.encounterCount} 次
-                </div>
-              ) : null}
-              {wordLookup.canPersist || wordLookup.isPersisting ? (
+              {wordLookup.isPersisted ? (
+                <button
+                  type="button"
+                  className="word-lookup-save word-lookup-save-persisted"
+                  disabled={wordLookup.isRemoving}
+                  onClick={handleRemoveCurrentLookup}
+                >
+                  {wordLookup.isRemoving ? (
+                    '正在移出…'
+                  ) : (
+                    <>
+                      <span className="word-lookup-save-persisted-label">
+                        ★ 已在生词库
+                        {wordLookup.encounterCount !== undefined
+                          ? ` (第 ${wordLookup.encounterCount} 次遇到)`
+                          : ''}
+                      </span>
+                      <span className="word-lookup-save-remove-label">✕ 移出生词库</span>
+                    </>
+                  )}
+                </button>
+              ) : wordLookup.isCheckingPersistence ? (
+                <button type="button" className="word-lookup-save" disabled>
+                  正在检查词库…
+                </button>
+              ) : wordLookup.isPersisting ? (
+                <button type="button" className="word-lookup-save" disabled>
+                  正在收录…
+                </button>
+              ) : wordLookup.canPersist ? (
                 <button
                   type="button"
                   className="word-lookup-save"
-                  disabled={wordLookup.isPersisting}
                   onClick={handlePersistCurrentLookup}
                 >
-                  {wordLookup.isPersisting ? '正在收录…' : '收藏到生词库'}
+                  ☆ 收藏到生词库
                 </button>
               ) : null}
             </>
