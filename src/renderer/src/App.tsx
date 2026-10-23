@@ -164,8 +164,8 @@ function getShortLanguageLabel(code: SupportedLanguage): string {
 /** 输入框透明测量层缓存的命中区域 */
 interface SourceHitBox {
   /** 命中类型：生词偶遇优先于普通单词 */
-  kind: 'encounter' | 'word' | 'sentence'
-  /** 生词偶遇编号、单词编号或整句对齐组编号 */
+  kind: 'encounter' | 'word'
+  /** 生词偶遇编号或单词编号 */
   id: string
   /** 片段在屏幕上的所有行矩形 */
   rects: DOMRect[]
@@ -335,7 +335,7 @@ const GRAMMAR_CONTRACTION_LABELS: Record<string, string> = {
   "mustn't": '否定'
 }
 
-/** 主行只保留最短、最容易扫读的本句词义 */
+/** 摘要区只保留最短、最容易扫读的本句词义 */
 const getCompactLookupMeaning = (result: WordLookupResult, lookupText: string): string => {
   if (result.kind === 'lexical') return result.meaning
 
@@ -363,7 +363,7 @@ const getCompactLookupHint = (result: WordLookupResult, lookupText: string): str
   return hints.join(' · ')
 }
 
-/** 两行布局只给出一条最有解释力的原因，避免多个近义栏目重复占空间 */
+/** 解释区只给出一条最有解释力的原因，避免多个近义栏目重复占空间 */
 const getCompactLookupReason = (lookup: WordLookupDisplay): string => {
   if (!lookup.result) return ''
 
@@ -384,7 +384,7 @@ interface WordLookupCompactViewProps {
   onRemove: () => void
 }
 
-/** 加载、成功和失败始终复用同一套两行词义布局，避免查询完成后界面突然变样 */
+/** 加载、成功和失败始终复用同一套纵向词义层级，避免查询完成后界面突然变样 */
 function WordLookupCompactView({
   lookup,
   onClose,
@@ -410,28 +410,10 @@ function WordLookupCompactView({
 
   return (
     <div className="word-compact-view">
-      <div className="word-compact-row">
-        <div className="word-compact-answer">
-          <strong lang="en">{lookup.lookupText}</strong>
-          <span
-            className={`word-compact-state${
-              lookup.status === 'error' ? ' word-compact-state-error' : ''
-            }`}
-          >
-            {stateText}
-          </span>
-          {result && hint ? (
-            <>
-              <span className="word-compact-dot" aria-hidden="true">
-                ·
-              </span>
-              <span className="word-compact-hint" title={hint}>
-                {hint}
-              </span>
-            </>
-          ) : null}
-        </div>
-        <span className="word-compact-spacer" />
+      <div className="word-compact-head">
+        <strong className="word-compact-word" lang="en" title={lookup.lookupText}>
+          {lookup.lookupText}
+        </strong>
         <div className="word-compact-actions">
           <button type="button" className="word-compact-link" onClick={onClose}>
             整句
@@ -482,6 +464,18 @@ function WordLookupCompactView({
           )}
         </div>
       </div>
+      <div
+        className={`word-compact-meaning${
+          lookup.status === 'error' ? ' word-compact-meaning-error' : ''
+        }`}
+      >
+        {stateText}
+      </div>
+      {result && hint ? (
+        <p className="word-compact-hint" title={hint}>
+          {hint}
+        </p>
+      ) : null}
       <p
         className={`word-compact-why${lookup.status === 'error' ? ' word-compact-why-error' : ''}`}
       >
@@ -528,6 +522,10 @@ interface DrawerSyntaxGroup {
   role: Exclude<SentenceSyntaxSegment['role'], 'punctuation'>
   /** 当前角色在句中的原文 */
   text: string
+  /** 当前语义块相对于完整英文句子的起始偏移 */
+  start: number
+  /** 当前语义块相对于完整英文句子的结束偏移 */
+  end: number
   /** 面向初学者的白话说明 */
   plainTip?: string
 }
@@ -535,14 +533,19 @@ interface DrawerSyntaxGroup {
 /** 把同一角色的连续片段合并，避免抽屉被逐词切片撑得过长 */
 const groupSentenceSyntaxSegments = (segments: SentenceSyntaxSegment[]): DrawerSyntaxGroup[] => {
   const groups: DrawerSyntaxGroup[] = []
+  let cursor = 0
 
   for (const segment of segments) {
+    const segmentStart = cursor
+    cursor += segment.text.length
     if (segment.role === 'punctuation' || !segment.text.trim()) continue
 
     const previous = groups.at(-1)
     if (previous?.role === segment.role) {
       // 标点被移除后相邻语义块可能直接黏在一起，补一个空格再规范化
       previous.text = `${previous.text} ${segment.text}`.replace(/\s+/g, ' ').trim()
+      // 展示文本可以规范化，但高亮范围必须继续使用原始字符偏移
+      previous.end = cursor
       previous.plainTip = segment.plainTip ?? previous.plainTip
       continue
     }
@@ -550,6 +553,8 @@ const groupSentenceSyntaxSegments = (segments: SentenceSyntaxSegment[]): DrawerS
     groups.push({
       role: segment.role,
       text: segment.text.replace(/\s+/g, ' ').trim(),
+      start: segmentStart,
+      end: cursor,
       ...(segment.plainTip ? { plainTip: segment.plainTip } : {})
     })
   }
@@ -566,6 +571,10 @@ interface SentenceStructureViewProps {
   hasError: boolean
   /** 重新发起当前句的结构分析 */
   onRetry: () => void
+  /** 鼠标指向某个语义块时同步原文单词 */
+  onGroupHover?: (start: number, end: number, role: DrawerSyntaxGroup['role']) => void
+  /** 鼠标离开语义块时清除同步 */
+  onGroupLeave?: () => void
 }
 
 /** 找出锚定在当前语义块内的语法选择说明 */
@@ -581,7 +590,9 @@ function SentenceStructureView({
   analysis,
   isLoading,
   hasError,
-  onRetry
+  onRetry,
+  onGroupHover,
+  onGroupLeave
 }: SentenceStructureViewProps): React.JSX.Element {
   if (isLoading) {
     return (
@@ -621,7 +632,13 @@ function SentenceStructureView({
         return (
           <div
             key={`${group.role}-${index}`}
-            className={`sentence-structure-row sentence-structure-${group.role}`}
+            className={`sentence-structure-row sentence-structure-${group.role}${
+              onGroupHover ? ' sentence-structure-row-hoverable' : ''
+            }`}
+            onMouseEnter={
+              onGroupHover ? () => onGroupHover(group.start, group.end, group.role) : undefined
+            }
+            onMouseLeave={onGroupLeave}
           >
             <div className="sentence-structure-meta">
               <span>{DRAWER_SYNTAX_ROLE_LABELS[group.role]}</span>
@@ -654,6 +671,14 @@ function SentenceStructureView({
   )
 }
 
+/** 结构语义块与原文单词的联动高亮 */
+interface SyntaxWordHighlight {
+  /** 当前语义块覆盖的单词编号 */
+  wordIds: ReadonlySet<string>
+  /** 用于复用结构栏语义配色的角色 */
+  role: DrawerSyntaxGroup['role']
+}
+
 interface SegmentedTextProps {
   /** 要渲染的完整文本 */
   text: string
@@ -675,6 +700,8 @@ interface SegmentedTextProps {
   encounterHighlights?: EncounterVocabHighlight[]
   /** 当前鼠标指向或固定的普通英文词编号 */
   activeLookupWordId?: string | null
+  /** 当前结构语义块覆盖的英文词编号 */
+  activeSyntaxHighlight?: SyntaxWordHighlight | null
   /** 当前浮层固定的二次偶遇词条编号 */
   activeEncounterId?: string | null
   /** 点击普通英文词时的回调 */
@@ -716,6 +743,7 @@ function SegmentedText({
   lookupTokensBySegmentId,
   encounterHighlights = [],
   activeLookupWordId = null,
+  activeSyntaxHighlight = null,
   activeEncounterId = null,
   onLookupWordClick,
   onLookupWordEnter,
@@ -777,10 +805,17 @@ function SegmentedText({
       if (token) {
         const end = Math.min(token.end, segment.end)
         const isWordActive = token.id === activeLookupWordId
+        const activeSyntaxRole = activeSyntaxHighlight?.wordIds.has(token.id)
+          ? activeSyntaxHighlight.role
+          : null
         segmentNodes.push(
           <span
             key={`word-${token.id}-${segmentCursor}`}
-            className={`source-word${isWordActive ? ' source-word-active' : ''}`}
+            className={`source-word${isWordActive ? ' source-word-active' : ''}${
+              activeSyntaxRole
+                ? ` source-word-structure-active source-word-structure-${activeSyntaxRole}`
+                : ''
+            }`}
             data-source-word-id={side === 'source' ? token.id : undefined}
             data-target-word-id={side === 'target' ? token.id : undefined}
             onClick={
@@ -854,6 +889,12 @@ function App(): React.JSX.Element {
   const [hoveredSourceWordId, setHoveredSourceWordId] = useState<string | null>(null)
   // 当前鼠标指向的译文普通英文词
   const [hoveredTargetWordId, setHoveredTargetWordId] = useState<string | null>(null)
+  // 当前鼠标指向的结构语义块，用于在原文输入区同步高亮
+  const [hoveredSyntaxGroupRange, setHoveredSyntaxGroupRange] = useState<{
+    start: number
+    end: number
+    role: DrawerSyntaxGroup['role']
+  } | null>(null)
   // 点击单词后显示的上下文释义浮层
   const [wordLookup, setWordLookup] = useState<WordLookupDisplay | null>(null)
   // 当前英文句子里命中的本地词条，用于二次偶遇高亮与悬停解析
@@ -1117,6 +1158,11 @@ function App(): React.JSX.Element {
   // 收起时先保留宽窗口让左栏完成退场，面板卸载后再一次性缩回
   const useStructureWindowLayout = wantsStructureLayout
 
+  // 切换结构句时清除旧语义块范围，避免新句子沿用上一句的偏移
+  useEffect(() => {
+    setHoveredSyntaxGroupRange(null)
+  }, [displayedSyntaxPairId])
+
   // 布局目标变化时立即冻结高度同步，早于后续 useLayoutEffect 里的高度测量
   useLayoutEffect(() => {
     const wasWanted = previousWantsStructureLayoutRef.current
@@ -1257,6 +1303,60 @@ function App(): React.JSX.Element {
       tokensBySegmentId
     }
   }, [alignment, effectiveSourceLang, isLearningActive, sourceText])
+
+  // 把结构句内的相对偏移换算成原文绝对位置，再筛出完整落在语义块内的单词
+  const activeSyntaxWordHighlight = useMemo<SyntaxWordHighlight | null>(() => {
+    if (
+      !hoveredSyntaxGroupRange ||
+      !alignment ||
+      !displayedSyntaxPairId ||
+      learningHighlightSide !== 'source' ||
+      !sourceWordView
+    ) {
+      return null
+    }
+
+    const pair = alignment.pairs.find((item) => item.id === displayedSyntaxPairId)
+    if (!pair) return null
+
+    const sourceSegmentsById = new Map(
+      alignment.sourceSegments.map((segment) => [segment.id, segment])
+    )
+    const pairSegments = pair.sourceIds
+      .map((segmentId) => sourceSegmentsById.get(segmentId))
+      .filter((segment): segment is AlignmentSegment => Boolean(segment))
+      .sort((left, right) => left.start - right.start)
+    if (pairSegments.length !== pair.sourceIds.length || pairSegments.length === 0) return null
+
+    const sentenceStart = pairSegments[0].start
+    const sentenceEnd = Math.max(...pairSegments.map((segment) => segment.end))
+    const rawSentence = sourceText.slice(sentenceStart, sentenceEnd)
+    // 结构分析读取的是 trim 后的句子，因此这里补回句首被裁掉的实际偏移
+    const trimmedSentenceStart = sentenceStart + rawSentence.length - rawSentence.trimStart().length
+    const rangeStart = trimmedSentenceStart + hoveredSyntaxGroupRange.start
+    const rangeEnd = trimmedSentenceStart + hoveredSyntaxGroupRange.end
+    const wordIds = new Set<string>()
+
+    for (const token of sourceWordView.tokens) {
+      if (token.start >= rangeStart && token.end <= rangeEnd) {
+        wordIds.add(token.id)
+      }
+    }
+
+    return wordIds.size > 0
+      ? {
+          wordIds,
+          role: hoveredSyntaxGroupRange.role
+        }
+      : null
+  }, [
+    alignment,
+    displayedSyntaxPairId,
+    hoveredSyntaxGroupRange,
+    learningHighlightSide,
+    sourceText,
+    sourceWordView
+  ])
 
   // 中译英时译文中的全部英文词仍可单点查询
   const targetWordView = useMemo(() => {
@@ -1747,6 +1847,7 @@ function App(): React.JSX.Element {
     setActiveAlignmentPairId(null)
     setHoveredSourceWordId(null)
     setHoveredTargetWordId(null)
+    setHoveredSyntaxGroupRange(null)
     setWordLookup(null)
     sentenceSyntaxRequestIdRef.current += 1
     setSentenceSyntaxByPairId({})
@@ -2342,20 +2443,6 @@ function App(): React.JSX.Element {
       if (rects.length > 0) hitBoxes.push({ kind: 'word', id: wordId, rects })
     }
 
-    const segmentElements = mirror.querySelectorAll<HTMLElement>('[data-source-pair-id]')
-    for (const element of segmentElements) {
-      const pairId = element.dataset.sourcePairId
-      if (!pairId) continue
-
-      const range = document.createRange()
-      range.selectNodeContents(element)
-      const rects = Array.from(range.getClientRects()).filter(
-        (rect) => rect.width > 0 && rect.height > 0
-      )
-
-      if (rects.length > 0) hitBoxes.push({ kind: 'sentence', id: pairId, rects })
-    }
-
     sourceHitBoxesRef.current = hitBoxes
     mirror.scrollTop = textarea.scrollTop
   }, [alignment])
@@ -2823,7 +2910,7 @@ function App(): React.JSX.Element {
     ]
   )
 
-  /** 鼠标在原生输入框上移动时，按生词标记、单词、整句的优先级更新命中项 */
+  /** 鼠标在原生输入框上移动时只更新单词命中，不再联动译文对应关系 */
   const handleSourceMouseMove = (event: React.MouseEvent<HTMLTextAreaElement>): void => {
     const textarea = event.currentTarget
     if (!alignment) {
@@ -2841,7 +2928,6 @@ function App(): React.JSX.Element {
 
     sourceHoverFrameRef.current = window.requestAnimationFrame(() => {
       sourceHoverFrameRef.current = null
-      let nextPairId: string | null = null
       let nextWordId: string | null = null
       let nextEncounterId: string | null = null
       let bestVerticalDistance = Number.POSITIVE_INFINITY
@@ -2859,7 +2945,7 @@ function App(): React.JSX.Element {
                 : 0
           if (verticalDistance > 4) continue
 
-          const priority = hitBox.kind === 'encounter' ? 0 : hitBox.kind === 'word' ? 1 : 2
+          const priority = hitBox.kind === 'encounter' ? 0 : 1
           if (
             verticalDistance > bestVerticalDistance ||
             (verticalDistance === bestVerticalDistance && priority >= bestPriority)
@@ -2870,34 +2956,16 @@ function App(): React.JSX.Element {
           bestVerticalDistance = verticalDistance
           bestPriority = priority
           if (hitBox.kind === 'encounter') {
-            const encounterMatch = encounterWordView?.matchById.get(hitBox.id)
             nextEncounterId = hitBox.id
             nextWordId = null
-            nextPairId = encounterMatch?.pairId ?? null
-          } else if (hitBox.kind === 'word') {
-            const wordToken = sourceWordView?.tokenById.get(hitBox.id)
-            nextEncounterId = null
-            nextWordId = hitBox.id
-            nextPairId = wordToken
-              ? (alignmentView?.sourcePairBySegmentId.get(wordToken.segmentId) ?? null)
-              : null
           } else {
             nextEncounterId = null
-            nextWordId = null
-            nextPairId = hitBox.id
+            nextWordId = hitBox.id
           }
         }
       }
 
       setHoveredSourceWordId(nextWordId)
-
-      if (nextPairId) {
-        setActiveAlignmentPairId((current) => (current === nextPairId ? current : nextPairId))
-        scrollResultToPair(nextPairId)
-      } else {
-        setActiveAlignmentPairId(null)
-        restoreRestingSyntaxPair()
-      }
       textarea.style.cursor = nextWordId || nextEncounterId ? 'pointer' : 'text'
     })
   }
@@ -2973,7 +3041,7 @@ function App(): React.JSX.Element {
     })
   }
 
-  /** 鼠标离开输入区时只清理临时悬停状态，保留用户最后查看的整句结构 */
+  /** 鼠标离开输入区时只清理单词悬停，不改变译文触发的句对高亮 */
   const handleSourceMouseLeave = (event: React.MouseEvent<HTMLTextAreaElement>): void => {
     if (sourceHoverFrameRef.current !== null) {
       window.cancelAnimationFrame(sourceHoverFrameRef.current)
@@ -2981,7 +3049,6 @@ function App(): React.JSX.Element {
     }
     event.currentTarget.style.cursor = ''
     setHoveredSourceWordId(null)
-    setActiveAlignmentPairId(null)
   }
 
   /** 中译英时点击译文中的普通英文词，仍走原有单点上下文查词 */
@@ -3235,6 +3302,19 @@ function App(): React.JSX.Element {
   const clearHoverState = useCallback((): void => {
     setActiveAlignmentPairId(null)
     setHoveredTargetWordId(null)
+  }, [])
+
+  /** 悬停结构语义块时，记录范围供原文单词高亮使用 */
+  const handleSyntaxGroupHover = useCallback(
+    (start: number, end: number, role: DrawerSyntaxGroup['role']): void => {
+      setHoveredSyntaxGroupRange({ start, end, role })
+    },
+    []
+  )
+
+  /** 离开结构语义块后立即撤销原文中的联动高亮 */
+  const handleSyntaxGroupLeave = useCallback((): void => {
+    setHoveredSyntaxGroupRange(null)
   }, [])
 
   /** 用户手动滚动译文时清空悬停状态，程序化定位滚动则保持当前句 */
@@ -3625,6 +3705,16 @@ function App(): React.JSX.Element {
                     syntaxErrorPairId === displayedSyntaxPairId
                   )}
                   onRetry={handleRetrySentenceSyntax}
+                  onGroupHover={
+                    learningHighlightSide === 'source' && sourceWordView
+                      ? handleSyntaxGroupHover
+                      : undefined
+                  }
+                  onGroupLeave={
+                    learningHighlightSide === 'source' && sourceWordView
+                      ? handleSyntaxGroupLeave
+                      : undefined
+                  }
                 />
               </div>
             </aside>
@@ -3651,6 +3741,7 @@ function App(): React.JSX.Element {
                         hoveredSourceWordId ??
                         (wordLookup?.side === 'source' ? wordLookup.lookupAnchorId : null)
                       }
+                      activeSyntaxHighlight={activeSyntaxWordHighlight}
                       activeEncounterId={
                         wordLookup?.origin === 'encounter' && wordLookup.side === 'source'
                           ? wordLookup.lookupAnchorId

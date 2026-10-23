@@ -420,6 +420,33 @@ body {
   box-shadow: inset 0 -1px 0 rgba(26, 127, 69, 0.7);
 }
 
+/* 结构语义块联动时沿用左侧角色配色，帮助用户把句子成分与原文对应起来 */
+.source-word-structure-active {
+  background: rgba(102, 112, 122, 0.13);
+  box-shadow: inset 0 -2px 0 rgba(102, 112, 122, 0.72);
+}
+
+.source-word-structure-subject {
+  background: rgba(61, 127, 153, 0.15);
+  box-shadow: inset 0 -2px 0 rgba(61, 127, 153, 0.78);
+}
+
+.source-word-structure-predicate {
+  background: rgba(154, 90, 24, 0.13);
+  box-shadow: inset 0 -2px 0 rgba(154, 90, 24, 0.72);
+}
+
+.source-word-structure-object {
+  background: rgba(49, 112, 77, 0.14);
+  box-shadow: inset 0 -2px 0 rgba(49, 112, 77, 0.74);
+}
+
+.source-word-structure-modifier,
+.source-word-structure-other {
+  background: rgba(102, 112, 122, 0.11);
+  box-shadow: inset 0 -2px 0 rgba(102, 112, 122, 0.58);
+}
+
 /* 学习高亮只使用淡彩下划线，避免正文出现大面积色块 */
 .learning-highlight {
   position: relative;
@@ -945,11 +972,11 @@ body {
 
 .learning-drawer-word {
   max-height: none;
-  margin: 7px -15px 2px;
+  margin: 7px -15px 6px;
   border-top: 0;
   border-bottom: 0;
   background: transparent;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .learning-drawer-structure {
@@ -1005,72 +1032,50 @@ body {
 }
 
 .word-compact-body {
-  padding: 9px 10px 7px;
-  overflow: visible;
+  max-height: 154px;
+  padding: 9px 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.word-compact-row {
+.word-compact-head {
   display: flex;
   min-width: 0;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.word-compact-answer {
-  display: flex;
-  flex: 0 1 auto;
+.word-compact-word {
+  flex: 1 1 auto;
   min-width: 0;
-  align-items: baseline;
-  gap: 7px;
-}
-
-.word-compact-answer strong {
-  min-width: 0;
-  overflow: hidden;
   color: var(--app-fg);
   font-size: 20px;
   font-weight: 600;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.word-compact-answer span {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--app-fg);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.word-compact-answer .word-compact-state-error {
-  color: var(--app-danger);
-}
-
-.word-compact-dot {
-  flex: 0 0 auto;
-  color: var(--app-fg-faint);
-  font-size: 10px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .word-compact-hint {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
+  margin-top: 2px;
   color: #3b794f;
   font-size: 10.5px;
   font-weight: 600;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
-.word-compact-spacer {
-  flex: 1 1 auto;
-  min-width: 4px;
+.word-compact-meaning {
+  margin-top: 3px;
+  color: var(--app-fg);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.word-compact-meaning-error {
+  color: var(--app-danger);
 }
 
 .word-compact-actions {
@@ -1146,12 +1151,12 @@ body {
 }
 
 .word-compact-why {
-  margin: 6px 0 0;
-  padding-top: 6px;
+  margin: 7px 0 0;
+  padding-top: 7px;
   border-top: 1px solid rgba(77, 111, 130, 0.1);
   color: var(--app-fg-body);
   font-size: 12.5px;
-  line-height: 1.5;
+  line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
@@ -1248,6 +1253,27 @@ body {
 
 .sentence-structure-row + .sentence-structure-row {
   border-top: 1px solid rgba(77, 111, 130, 0.1);
+}
+
+.sentence-structure-row-hoverable {
+  border-radius: 4px;
+  transition: background-color 120ms ease;
+}
+
+.sentence-structure-row-hoverable:hover {
+  background: rgba(77, 111, 130, 0.055);
+}
+
+.sentence-structure-subject.sentence-structure-row-hoverable:hover {
+  background: rgba(61, 127, 153, 0.065);
+}
+
+.sentence-structure-predicate.sentence-structure-row-hoverable:hover {
+  background: rgba(154, 90, 24, 0.055);
+}
+
+.sentence-structure-object.sentence-structure-row-hoverable:hover {
+  background: rgba(49, 112, 77, 0.06);
 }
 
 .sentence-structure-meta {
