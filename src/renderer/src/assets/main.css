@@ -1406,10 +1406,15 @@ body {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.12)),
     rgba(242, 242, 245, 0.72);
+  opacity: 0;
+  transform: translateX(-10px);
+  will-change: opacity, transform;
+}
+
+.structure-layout.structure-layout-ready .learning-structure-panel {
   opacity: 1;
   transform: translateX(0);
-  will-change: opacity, transform;
-  /* 左栏使用横向揭开动画，不再叠加通用抽屉的向上入场动画 */
+  /* 等宽窗口稳定后再启动动画，避免开头几帧被旧视口裁掉 */
   animation: structurePanelIn var(--structure-layout-duration, 240ms) cubic-bezier(0.22, 1, 0.36, 1)
     both;
 }

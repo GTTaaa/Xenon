@@ -872,6 +872,8 @@ function App(): React.JSX.Element {
   const [syntaxTargetPairId, setSyntaxTargetPairId] = useState<string | null>(null)
   // 收起结构时保留面板内容，等左栏退场后再卸载并缩回窗口
   const [isStructureCollapsing, setIsStructureCollapsing] = useState(false)
+  // 窗口宽度就绪后才允许左栏播放展开动画，避免动画前几帧被旧视口裁掉
+  const [isStructureLayoutReady, setIsStructureLayoutReady] = useState(false)
   // 学习模式空状态展示的随机复习闪卡
   const [vocabFlashcard, setVocabFlashcard] = useState<VocabFlashcard | null>(null)
   // 区分闪卡加载中、数据库为空与正常展示三种状态
@@ -905,6 +907,10 @@ function App(): React.JSX.Element {
   // 输入切换或新翻译开始时，让旧的语法分析结果失效
   const sentenceSyntaxRequestIdRef = useRef(0)
   const structureCollapseTimerRef = useRef<number | null>(null)
+  const structureLayoutTransitionTimerRef = useRef<number | null>(null)
+  // 窗口宽度切换期间暂停高度校准，避免横向动画之后紧跟一次纵向跳动
+  const isStructureLayoutTransitioningRef = useRef(false)
+  const previousWantsStructureLayoutRef = useRef(false)
   const wordLookupCacheRef = useRef<Map<string, WordLookupResult>>(new Map())
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const sourceMirrorRef = useRef<HTMLDivElement | null>(null)
@@ -1110,6 +1116,16 @@ function App(): React.JSX.Element {
   const useStructureLayout = wantsStructureLayout || (useLearningLayout && isStructureCollapsing)
   // 收起时先保留宽窗口让左栏完成退场，面板卸载后再一次性缩回
   const useStructureWindowLayout = wantsStructureLayout
+
+  // 布局目标变化时立即冻结高度同步，早于后续 useLayoutEffect 里的高度测量
+  useLayoutEffect(() => {
+    const wasWanted = previousWantsStructureLayoutRef.current
+    previousWantsStructureLayoutRef.current = wantsStructureLayout
+    if (wasWanted === wantsStructureLayout) return
+
+    isStructureLayoutTransitioningRef.current = true
+    if (wantsStructureLayout) setIsStructureLayoutReady(false)
+  }, [wantsStructureLayout])
 
   const displayedSyntaxSentenceNumber = useMemo(() => {
     if (!alignment || !displayedSyntaxPairId) return null
@@ -1414,11 +1430,14 @@ function App(): React.JSX.Element {
 
   /** 新的句子结构请求会中断尚未完成的收起动画 */
   const cancelStructureCollapse = useCallback((): void => {
+    const wasCollapsing = structureCollapseTimerRef.current !== null
     if (structureCollapseTimerRef.current !== null) {
       window.clearTimeout(structureCollapseTimerRef.current)
       structureCollapseTimerRef.current = null
     }
     setIsStructureCollapsing(false)
+    // 若是在左栏退场途中重新打开，宽窗口仍在，直接恢复已就绪状态
+    if (wasCollapsing) setIsStructureLayoutReady(true)
   }, [])
 
   /** 展开指定句子的结构，并同步左右两侧的阅读位置 */
@@ -1453,6 +1472,9 @@ function App(): React.JSX.Element {
    * 改窗口高度不会反过来改变 scrollHeight。
    */
   const syncWindowHeight = useCallback((): void => {
+    // 展开与收起窗口期间只提交宽度，避免宽度刚变化又触发一次纵向跳动
+    if (isStructureLayoutTransitioningRef.current) return
+
     const textarea = sourceInputRef.current
     const scroll = resultScrollRef.current
     const toolbar = resultToolbarRef.current
@@ -1529,6 +1551,12 @@ function App(): React.JSX.Element {
     void window.api.setWindowHeight(nextWindowHeight)
   }, [useLearningLayout, useStructureLayout, wordLookup])
 
+  // 窗口布局 Effect 只响应布局模式变化，始终通过 ref 调用最新的高度校准函数
+  const syncWindowHeightRef = useRef(syncWindowHeight)
+  useLayoutEffect(() => {
+    syncWindowHeightRef.current = syncWindowHeight
+  }, [syncWindowHeight])
+
   useLayoutEffect(() => {
     syncWindowHeight()
   }, [
@@ -1545,21 +1573,56 @@ function App(): React.JSX.Element {
     wordLookup
   ])
 
-  // 学习模式使用更宽的并排布局；等主进程完成窗口尺寸切换后再按新宽度重算换行高度
+  // 先提交窗口宽度，再分两帧启动左栏动画；动画结束后统一补做高度校准
   useEffect(() => {
     let resizeFrame = 0
+    let revealFrame = 0
     let cancelled = false
 
-    void window.api.setWindowLayout(useStructureWindowLayout ? 'learning' : 'normal').then(() => {
-      if (cancelled) return
-      resizeFrame = window.requestAnimationFrame(() => syncWindowHeight())
-    })
+    if (structureLayoutTransitionTimerRef.current !== null) {
+      window.clearTimeout(structureLayoutTransitionTimerRef.current)
+      structureLayoutTransitionTimerRef.current = null
+    }
+
+    void window.api
+      .setWindowLayout(useStructureWindowLayout ? 'learning' : 'normal')
+      .then(() => {
+        if (cancelled) return
+
+        resizeFrame = window.requestAnimationFrame(() => {
+          if (cancelled) return
+
+          if (!useStructureWindowLayout) {
+            isStructureLayoutTransitioningRef.current = false
+            syncWindowHeightRef.current()
+            return
+          }
+
+          // 第二个绘制帧确保 560px 视口已经生效，再让左栏从零透明度开始播放
+          revealFrame = window.requestAnimationFrame(() => {
+            if (cancelled) return
+            setIsStructureLayoutReady(true)
+            structureLayoutTransitionTimerRef.current = window.setTimeout(() => {
+              structureLayoutTransitionTimerRef.current = null
+              isStructureLayoutTransitioningRef.current = false
+              syncWindowHeightRef.current()
+            }, STRUCTURE_LAYOUT_TRANSITION_MS)
+          })
+        })
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        console.error('[renderer] 切换窗口布局失败', error)
+        isStructureLayoutTransitioningRef.current = false
+        syncWindowHeightRef.current()
+      })
 
     return () => {
       cancelled = true
       if (resizeFrame) window.cancelAnimationFrame(resizeFrame)
+      if (revealFrame) window.cancelAnimationFrame(revealFrame)
     }
-  }, [syncWindowHeight, useStructureWindowLayout])
+  }, [useStructureWindowLayout])
 
   // 组件卸载时清理模型面板的退场定时器
   useEffect(() => {
@@ -1569,6 +1632,9 @@ function App(): React.JSX.Element {
       }
       if (structureCollapseTimerRef.current !== null) {
         window.clearTimeout(structureCollapseTimerRef.current)
+      }
+      if (structureLayoutTransitionTimerRef.current !== null) {
+        window.clearTimeout(structureLayoutTransitionTimerRef.current)
       }
     }
   }, [])
@@ -3139,14 +3205,20 @@ function App(): React.JSX.Element {
     closeWordLookup()
     setActiveAlignmentPairId(null)
     setIsStructureCollapsing(true)
+    isStructureLayoutTransitioningRef.current = true
 
     if (structureCollapseTimerRef.current !== null) {
       window.clearTimeout(structureCollapseTimerRef.current)
+    }
+    if (structureLayoutTransitionTimerRef.current !== null) {
+      window.clearTimeout(structureLayoutTransitionTimerRef.current)
+      structureLayoutTransitionTimerRef.current = null
     }
     structureCollapseTimerRef.current = window.setTimeout(() => {
       structureCollapseTimerRef.current = null
       setSyntaxTargetPairId(null)
       setIsStructureCollapsing(false)
+      setIsStructureLayoutReady(false)
     }, STRUCTURE_LAYOUT_COLLAPSE_MS)
   }, [closeWordLookup, isStructureCollapsing])
 
@@ -3280,7 +3352,9 @@ function App(): React.JSX.Element {
     <main
       className={`translator-device${useLearningLayout ? ' learning-layout' : ''}${
         useStructureLayout ? ' structure-layout' : ''
-      }${isStructureCollapsing ? ' structure-layout-collapsing' : ''}`}
+      }${isStructureLayoutReady ? ' structure-layout-ready' : ''}${
+        isStructureCollapsing ? ' structure-layout-collapsing' : ''
+      }`}
       ref={deviceRef}
       style={
         {
