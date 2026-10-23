@@ -23,9 +23,11 @@ import type { SentenceSyntaxRequest } from '../shared/sentenceSyntax'
 import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
 import { DEFAULT_SHORTCUTS } from '../shared/config'
 import {
+  LEARNING_WINDOW_WIDTH,
   MAIN_WINDOW_HEIGHT_MAX,
   MAIN_WINDOW_HEIGHT_MIN,
-  MAIN_WINDOW_WIDTH
+  MAIN_WINDOW_WIDTH,
+  type WindowLayoutMode
 } from '../shared/windowLayout'
 import { translateText } from './services/translator'
 import { alignText } from './services/aligner'
@@ -467,6 +469,37 @@ app.whenReady().then(async () => {
   ipcMain.handle('window:get-always-on-top', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return false
     return mainWindow.isAlwaysOnTop()
+  })
+
+  // 学习模式需要更宽的并排阅读空间；窗口只切换一次宽度，视觉过渡交给页面内的左栏
+  ipcMain.handle('window:set-layout', async (_, layout: WindowLayoutMode) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+
+    const nextWidth = layout === 'learning' ? LEARNING_WINDOW_WIDTH : MAIN_WINDOW_WIDTH
+    const bounds = mainWindow.getBounds()
+    const { workArea } = screen.getDisplayMatching(bounds)
+    const rightEdge = bounds.x + bounds.width
+    const fixedY = Math.max(workArea.y, bounds.y)
+    const maxHeight = Math.max(
+      MAIN_WINDOW_HEIGHT_MIN,
+      Math.min(MAIN_WINDOW_HEIGHT_MAX, workArea.height)
+    )
+
+    // macOS 会合并连续 setBounds，逐帧缩放在视觉上必然呈现台阶。
+    // 这里先放宽宽度约束，一次提交目标宽度，再用页面合成的左栏动画吸收视觉跳变。
+    mainWindow.setMinimumSize(MAIN_WINDOW_WIDTH, MAIN_WINDOW_HEIGHT_MIN)
+    mainWindow.setMaximumSize(Math.max(MAIN_WINDOW_WIDTH, LEARNING_WINDOW_WIDTH), maxHeight)
+    mainWindow.setBounds(
+      {
+        x: Math.max(workArea.x, rightEdge - nextWidth),
+        y: fixedY,
+        width: nextWidth,
+        height: bounds.height
+      },
+      false
+    )
+    mainWindow.setMinimumSize(nextWidth, MAIN_WINDOW_HEIGHT_MIN)
+    mainWindow.setMaximumSize(nextWidth, maxHeight)
   })
 
   // 窗口高度实时同步设置，上限跟随创建窗口时为当前屏幕计算出的可用高度

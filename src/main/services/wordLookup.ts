@@ -66,19 +66,30 @@ const buildWordLookupSystemPrompt = (wordSide: WordLookupSide): string => {
 
   return [
     'You are a concise English-to-Simplified-Chinese contextual vocabulary assistant.',
-    'Return only strict JSON in this exact shape:',
-    '{"lemma":"base form","meaning":"简体中文语境释义","targetText":"对应中文片段","confidence":"high"}',
+    'Return only strict JSON. For a content word, use this shape:',
+    '{"kind":"lexical","lemma":"base form","literalMeaning":"脱离本句时最常见的简体中文字面义","meaning":"本句中的简体中文含义","contextNote":"为什么这里取这个含义","wordOrderNote":"这个词为什么放在当前位置","targetText":"对应中文片段","confidence":"high"}',
+    'For an auxiliary, modal, copula, determiner, preposition, pronoun, conjunction, article, particle, or grammatical contraction, use this shape:',
+    '{"kind":"grammar","lemma":"expanded grammatical form","literalMeaning":"","meaning":"本句中的语法作用","contextNote":"为什么这里使用这个语法形式","wordOrderNote":"这个语法词为什么放在当前位置","targetText":"对应中文片段","confidence":"high"}',
     'Rules:',
     `- Analyze only the clicked English word inside ${clickedSentence} and its paired text in ${correspondingSentence}.`,
-    '- lemma must be the concise English base form.',
-    '- meaning must be a short Simplified Chinese explanation of the word as used in this exact context.',
-    '- For a grammar word, describe its grammatical function rather than inventing a lexical meaning.',
+    '- kind must describe the clicked word in this sentence, not another lexical sense that happens to share the same spelling.',
+    '- Use kind "grammar" when the word mainly builds tense, aspect, modality, negation, question, voice, case, or sentence structure.',
+    "- For a grammatical contraction, lemma must be its full grammatical expansion: didn't → did not, can't → cannot, won't → will not, I'm → I am.",
+    '- For kind "lexical", lemma must be the concise English base form and literalMeaning must be the most common standalone Simplified Chinese dictionary meaning.',
+    '- For kind "grammar", literalMeaning must be an empty string. Never attach the lexical meaning of a homographic content verb to a grammar form.',
+    '- In particular, didn\'t means did not; its did marks simple-past negation and does not mean "做". The content verb in "I didn\'t eat today" is eat.',
+    '- meaning must be a short Simplified Chinese explanation of the clicked word in this exact context.',
+    '- contextNote must briefly explain the contextual clue in Simplified Chinese. Set it to an empty string only when no contextual distinction needs explanation.',
+    "- wordOrderNote must explain the clicked word's grammatical role and why it occupies its current position, using one or two short Simplified Chinese sentences.",
+    '- When the position is flexible, explain the neutral default position and the emphasis or contrast created by moving it.',
+    '- For example, in "I didn\'t eat today.", today is a time adverbial normally placed at the end; moving it to the front emphasizes contrast.',
+    '- Set wordOrderNote to an empty string only when its position has no useful teaching point or cannot be determined reliably.',
     `- targetText must be an exact contiguous Simplified Chinese substring of ${correspondingSentence}.`,
     '- Use an empty targetText when no direct correspondence can be established.',
     '- Never reuse a generic dictionary meaning when the translation indicates a different contextual meaning.',
     '- Return confidence exactly "high" only when the contextual meaning is directly supported.',
     '- If no reliable contextual meaning can be determined, return {"error":"NO_RELIABLE_MEANING"}.',
-    '- Do not translate or explain the whole sentence.',
+    '- Do not translate or explain the whole sentence; wordOrderNote must stay focused on the clicked word.',
     '- Do not include Markdown fences, headings, explanations, or extra keys.'
   ].join('\n')
 }
@@ -246,7 +257,9 @@ export const lookupWord = async (request: WordLookupRequest): Promise<WordLookup
       return {
         ok: true,
         result: {
+          kind: 'lexical',
           lemma: word.toLowerCase(),
+          literalMeaning: '字面义（模拟）',
           meaning: '此处释义（模拟）',
           targetText: ''
         }

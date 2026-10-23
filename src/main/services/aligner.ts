@@ -6,7 +6,6 @@ import {
 import { buildAlignmentSystemPrompt, buildAlignmentUserMessage } from '../../shared/alignmentPrompt'
 import {
   parseAlignmentPairs,
-  resolveLearningHighlightSide,
   segmentText,
   type AlignTextRequest,
   type AlignTextResponse,
@@ -159,9 +158,7 @@ const sendAlignmentRequest = async (
       messages: [
         {
           role: 'system',
-          content: buildAlignmentSystemPrompt(
-            resolveLearningHighlightSide(request.sourceLanguage, request.targetLanguage)
-          )
+          content: buildAlignmentSystemPrompt()
         },
         {
           role: 'user',

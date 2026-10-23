@@ -1,4 +1,5 @@
 import type { VocabItem } from './vocabDatabase'
+import { isGrammarContractionPhrase } from '../../../shared/englishGrammar.ts'
 
 /** 英文文本中的单个词出现位置 */
 export interface EnglishWordOccurrence {
@@ -81,7 +82,7 @@ export const findVocabPhraseMatches = (text: string, items: VocabItem[]): VocabP
   const phraseCandidates = items
     .flatMap((item) =>
       getItemMatchForms(item)
-        .filter((form) => form.includes(' '))
+        .filter((form) => form.includes(' ') && !isGrammarContractionPhrase(form))
         .map((form) => ({ item, form }))
     )
     .sort((a, b) => b.form.length - a.form.length)
@@ -105,14 +106,20 @@ export const findVocabPhraseMatches = (text: string, items: VocabItem[]): VocabP
 }
 
 /**
- * 同时匹配多词短语与单词，供译文完成后的二次偶遇高亮使用。
- * 短语先占位，单词再补入未重叠范围，避免同一段文本被重复装饰。
+ * 匹配本地词条，可选择是否允许短语。
+ * 关闭短语后只使用单词词元与单词词形，供“已收藏词标记”保持单词级边界。
  */
-export const findVocabTextMatches = (text: string, items: VocabItem[]): VocabTextMatch[] => {
-  const phraseMatches = findVocabPhraseMatches(text, items)
+export const findVocabTextMatches = (
+  text: string,
+  items: VocabItem[],
+  options: { includePhrases?: boolean } = {}
+): VocabTextMatch[] => {
+  const includePhrases = options.includePhrases !== false
+  const phraseMatches = includePhrases ? findVocabPhraseMatches(text, items) : []
   const itemByForm = new Map<string, VocabItem>()
   for (const item of items) {
     for (const form of getItemMatchForms(item)) {
+      if (!includePhrases && form.includes(' ')) continue
       if (!itemByForm.has(form)) itemByForm.set(form, item)
     }
   }

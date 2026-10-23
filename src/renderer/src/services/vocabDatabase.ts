@@ -1,5 +1,5 @@
 import Dexie, { type Table, type Transaction } from 'dexie'
-import type { WordLookupSide } from '../../../shared/wordLookup'
+import type { WordLookupKind, WordLookupSide } from '../../../shared/wordLookup'
 
 /** 本地生词主表记录 */
 export interface VocabItem {
@@ -9,10 +9,18 @@ export interface VocabItem {
   lemma: string
   /** 查询与去重使用的归一化词元 */
   lemmaLower: string
+  /** 当前词属于实义词还是语法词；旧数据缺省时按实义词处理 */
+  kind?: WordLookupKind
   /** 最近一次遇到的词形 */
   surface: string
+  /** 脱离本句时最常见的中文字面义 */
+  literalMeaning?: string
   /** 简体中文语境释义 */
   meaning: string
+  /** 为什么本句取当前释义 */
+  contextNote?: string
+  /** 该词为什么位于当前句法位置 */
+  wordOrderNote?: string
   /** 对应中文片段 */
   targetText: string
   /** 中译英场景下的地道表达说明 */
@@ -49,10 +57,18 @@ export interface VocabContext {
 export interface VocabEncounterInput {
   /** 展示用词元 */
   lemma: string
+  /** 当前词属于实义词还是语法词 */
+  kind?: WordLookupKind
   /** 当前英文词形或短语 */
   surface: string
+  /** 脱离本句时最常见的中文字面义 */
+  literalMeaning?: string
   /** 简体中文语境释义 */
   meaning: string
+  /** 为什么本句取当前释义 */
+  contextNote?: string
+  /** 该词为什么位于当前句法位置 */
+  wordOrderNote?: string
   /** 对应中文片段 */
   targetText: string
   /** 中译英场景下的表达说明 */
@@ -235,9 +251,13 @@ export const recordVocabEncounter = async (
   database: VocabDatabase = vocabDatabase
 ): Promise<VocabItem> => {
   const lemma = input.lemma.trim()
+  const kind = input.kind ?? 'lexical'
   const lemmaLower = normalizeVocabLemma(lemma)
   const surface = input.surface.trim()
+  const literalMeaning = input.literalMeaning?.trim() || undefined
   const meaning = input.meaning.trim()
+  const contextNote = input.contextNote?.trim() || undefined
+  const wordOrderNote = input.wordOrderNote?.trim() || undefined
   const targetText = input.targetText.trim()
   const note = input.note?.trim() || undefined
   const englishSentence = normalizeSentence(input.englishSentence)
@@ -262,17 +282,26 @@ export const recordVocabEncounter = async (
     if (existing?.id !== undefined) {
       item = {
         ...existing,
+        kind,
         surface,
+        ...(literalMeaning ? { literalMeaning } : {}),
+        meaning,
+        ...(contextNote ? { contextNote } : {}),
+        ...(wordOrderNote ? { wordOrderNote } : {}),
         encounterCount: existing.encounterCount + (isNewContext ? 1 : 0),
         updatedAt: now
       }
       await database.vocabItems.put(item)
     } else {
       item = {
+        kind,
         lemma,
         lemmaLower,
         surface,
+        ...(literalMeaning ? { literalMeaning } : {}),
         meaning,
+        ...(contextNote ? { contextNote } : {}),
+        ...(wordOrderNote ? { wordOrderNote } : {}),
         targetText,
         ...(note ? { note } : {}),
         side: input.side,

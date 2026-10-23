@@ -86,7 +86,7 @@ const getErrorMessage = (data: SentenceSyntaxResponseBody, status: number): stri
   return `语法透视请求失败：${status}`
 }
 
-/** 请求当前模型把英文文本切成核心内容与次要补充 */
+/** 请求当前模型把英文句子切成可直接驱动结构卡片的语义片段 */
 const requestSentenceSyntax = async (
   sentence: string,
   targetTranslation: string,
@@ -163,16 +163,18 @@ const requestSentenceSyntax = async (
 
   const analysis = parseSentenceSyntaxAnalysis(rawAnalysis, sentence)
   if (!analysis) {
+    // 校验失败时保留模型原始切片，便于定位是边界偏差还是字段格式问题
+    console.warn('[main] 语法透视原始结果校验失败:', rawAnalysis.slice(0, 2000))
     throw new SentenceSyntaxServiceError(
       'INVALID_SYNTAX_ANALYSIS',
-      '语法透视结果未能严格覆盖原句，已拒绝展示'
+      '语法透视结果没有通过字段校验，已拒绝展示'
     )
   }
 
   return analysis
 }
 
-/** 按需分析英文文本，供学习模式做行内视觉降噪 */
+/** 按需分析英文文本，供学习模式在译文下方展开结构卡片 */
 export const analyzeSentenceSyntax = async (
   sentence: string,
   targetTranslation = '',
@@ -217,14 +219,16 @@ export const analyzeSentenceSyntax = async (
       return {
         ok: true,
         analysis: {
+          coreSummary: '当前句结构已标出',
           segments: [
             {
               text: normalizedSentence,
               role: 'subject',
               isCore: true,
-              plainTip: '核心内容'
+              plainTip: '描述的主体'
             }
-          ]
+          ],
+          insights: []
         }
       }
     }

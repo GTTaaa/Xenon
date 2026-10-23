@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties
+} from 'react'
 import type { ProviderItem, ShortcutSettings } from '../../shared/config'
 import {
   getAlignmentPairSentences,
@@ -6,7 +14,6 @@ import {
   tokenizeTextWords,
   type AlignmentSegment,
   type AlignmentToken,
-  type LearningHighlight,
   type TextAlignment
 } from '../../shared/textAlignment'
 import {
@@ -15,10 +22,11 @@ import {
   type WordLookupSide
 } from '../../shared/wordLookup'
 import {
-  splitSentenceSyntaxText,
   type SentenceSyntaxAnalysis,
+  type SentenceSyntaxInsight,
   type SentenceSyntaxSegment
 } from '../../shared/sentenceSyntax'
+import { isGrammarContraction } from '../../shared/englishGrammar.ts'
 
 import {
   detectLanguage,
@@ -36,7 +44,6 @@ import {
 } from './scrollAlignment'
 import {
   findCachedVocab,
-  getPhraseVocabItems,
   getRandomVocabFlashcard,
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
@@ -55,7 +62,9 @@ import {
 import {
   MAIN_WINDOW_HEIGHT_MAX,
   MAIN_WINDOW_HEIGHT_MIN,
-  NORMAL_WINDOW_HEIGHT_MAX
+  NORMAL_WINDOW_HEIGHT_MAX,
+  STRUCTURE_LAYOUT_COLLAPSE_MS,
+  STRUCTURE_LAYOUT_TRANSITION_MS
 } from '../../shared/windowLayout'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
@@ -65,8 +74,8 @@ const INITIAL_SOURCE_TEXT = ''
 const INPUT_LINE_HEIGHT = 21.7
 // 输入区最多长到 5 行，再多交给输入框自己滚动
 const MAX_INPUT_LINES = 5
-// 学习模式两侧统一显示 4～15 行：短文本按内容收敛，长文本提供更充足的对照阅读空间
-const LEARNING_MIN_VISIBLE_LINES = 4
+// 学习模式两侧统一显示 2～15 行：短句保持紧凑，长文本提供更充足的对照阅读空间
+const LEARNING_MIN_VISIBLE_LINES = 2
 const LEARNING_MAX_VISIBLE_LINES = 15
 // 普通模式译文最少铺 3 行（16px 字号 × 1.6 行高），短内容不再留下过多空白
 const RESULT_MIN_HEIGHT = 16 * 1.6 * 3
@@ -74,15 +83,12 @@ const RESULT_MIN_HEIGHT = 16 * 1.6 * 3
 const MAX_ALIGNMENT_CACHE_ENTRIES = 8
 // 单词释义按“当前句 + 对应译文”缓存，避免重复点击同一语境时产生额外模型请求
 const MAX_WORD_LOOKUP_CACHE_ENTRIES = 64
-// 鼠标离开单词后留出移动到释义浮层的时间，超时后自动关闭
-const WORD_LOOKUP_HOVER_HIDE_DELAY_MS = 120
 // 调整对齐规则或提示词后递增缓存版本，主动淘汰旧结果
-const ALIGNMENT_CACHE_VERSION = 'learning-v5'
+const ALIGNMENT_CACHE_VERSION = 'learning-v7'
 // 程序化平滑滚动期间短暂忽略滚动事件，避免自动定位被当成用户滚动而关闭悬停状态
 const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 600
 // 用户停止滚动后再同步另一侧，避免连续滚动时两侧抢滚动位置
 const PAIR_SCROLL_SYNC_DEBOUNCE_MS = 80
-
 const getUserFriendlyErrorMessage = (code: string): string => {
   switch (code) {
     case 'CONFIG_MISSING_API_KEY':
@@ -157,9 +163,9 @@ function getShortLanguageLabel(code: SupportedLanguage): string {
 
 /** 输入框透明测量层缓存的命中区域 */
 interface SourceHitBox {
-  /** 命中类型：学习高亮优先于生词偶遇，生词偶遇优先于普通单词 */
-  kind: 'highlight' | 'encounter' | 'word' | 'sentence'
-  /** 学习高亮编号、生词偶遇编号、单词编号或整句对齐组编号 */
+  /** 命中类型：生词偶遇优先于普通单词 */
+  kind: 'encounter' | 'word' | 'sentence'
+  /** 生词偶遇编号、单词编号或整句对齐组编号 */
   id: string
   /** 片段在屏幕上的所有行矩形 */
   rects: DOMRect[]
@@ -262,7 +268,7 @@ interface WordLookupPosition {
 interface WordLookupDisplay extends WordLookupPosition {
   /** 当前展示的英文词形或短语 */
   lookupText: string
-  /** 当前词条或学习高亮的稳定编号，用于固定高亮状态 */
+  /** 当前词条或偶遇词的稳定编号，用于固定当前交互项 */
   lookupAnchorId: string
   /** 英文项所属的整句对齐组编号 */
   pairId: string
@@ -270,11 +276,11 @@ interface WordLookupDisplay extends WordLookupPosition {
   side: WordLookupSide
   /** 当前查询状态 */
   status: 'loading' | 'ready' | 'error'
-  /** 当前数据来自学习高亮、本地词库、模型查询还是二次偶遇 */
-  origin?: 'highlight' | 'database' | 'llm' | 'encounter'
+  /** 当前数据来自本地词库、模型查询还是二次偶遇 */
+  origin?: 'database' | 'llm' | 'encounter'
   /** 查询成功后的上下文释义 */
   result?: WordLookupResult
-  /** 中译英学习高亮附带的地道表达说明 */
+  /** 词义卡附带的地道表达说明 */
   note?: string
   /** 本地词库中记录的累计偶遇次数 */
   encounterCount?: number
@@ -290,6 +296,199 @@ interface WordLookupDisplay extends WordLookupPosition {
   isRemoving?: boolean
   /** 查询失败时的界面说明 */
   errorMessage?: string
+}
+
+/** 统一比较中文释义时使用的文本格式，避免标点和空白造成重复展示 */
+const normalizeCompactMeaning = (text: string): string => {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s，。；：、,.!?;:'"“”‘’]/g, '')
+}
+
+/** 字面义已经被本句释义覆盖时不再重复展示 */
+const hasRedundantCompactMeaning = (literalMeaning: string, meaning: string): boolean => {
+  const literal = normalizeCompactMeaning(literalMeaning)
+  const contextual = normalizeCompactMeaning(meaning)
+  if (!literal || !contextual) return false
+
+  return literal === contextual || contextual.includes(literal) || literal.includes(contextual)
+}
+
+/** 常见否定缩写的语法作用可以直接从词形推导，无需额外请求模型 */
+const GRAMMAR_CONTRACTION_LABELS: Record<string, string> = {
+  "don't": '现在否定',
+  "doesn't": '第三人称否定',
+  "didn't": '过去否定',
+  "isn't": 'be 动词否定',
+  "aren't": 'be 动词否定',
+  "wasn't": '过去否定',
+  "weren't": '过去否定',
+  "haven't": '完成时否定',
+  "hasn't": '完成时否定',
+  "hadn't": '过去完成否定',
+  "can't": '否定',
+  "couldn't": '过去否定',
+  "won't": '将来否定',
+  "wouldn't": '否定',
+  "shouldn't": '否定',
+  "mustn't": '否定'
+}
+
+/** 主行只保留最短、最容易扫读的本句词义 */
+const getCompactLookupMeaning = (result: WordLookupResult, lookupText: string): string => {
+  if (result.kind === 'lexical') return result.meaning
+
+  const normalizedSurface = lookupText.trim().toLowerCase().replace(/’/g, "'")
+  return GRAMMAR_CONTRACTION_LABELS[normalizedSurface] ?? result.meaning
+}
+
+/** 只在原形或字面义能补充当前词义时生成一条辅助提示 */
+const getCompactLookupHint = (result: WordLookupResult, lookupText: string): string => {
+  const surface = lookupText.trim().toLowerCase().replace(/’/g, "'")
+  const lemma = result.lemma.trim().replace(/’/g, "'")
+  const lemmaDiffers = lemma.toLowerCase() !== surface
+
+  if (result.kind === 'grammar') {
+    return lemmaDiffers ? `完整形式 ${lemma}` : ''
+  }
+
+  const hints: string[] = []
+  if (lemmaDiffers) hints.push(`原形 ${lemma}`)
+
+  if (result.literalMeaning && !hasRedundantCompactMeaning(result.literalMeaning, result.meaning)) {
+    hints.push(`字面 ${result.literalMeaning}`)
+  }
+
+  return hints.join(' · ')
+}
+
+/** 两行布局只给出一条最有解释力的原因，避免多个近义栏目重复占空间 */
+const getCompactLookupReason = (lookup: WordLookupDisplay): string => {
+  if (!lookup.result) return ''
+
+  const directReason = lookup.result.wordOrderNote || lookup.result.contextNote || lookup.note || ''
+  if (directReason) return directReason
+
+  return lookup.result.kind === 'grammar' ? lookup.result.meaning : ''
+}
+
+interface WordLookupCompactViewProps {
+  /** 当前词义查询的完整状态 */
+  lookup: WordLookupDisplay
+  /** 返回整句结构 */
+  onClose: () => void
+  /** 收藏当前词义 */
+  onPersist: () => void
+  /** 从生词库移出当前词义 */
+  onRemove: () => void
+}
+
+/** 加载、成功和失败始终复用同一套两行词义布局，避免查询完成后界面突然变样 */
+function WordLookupCompactView({
+  lookup,
+  onClose,
+  onPersist,
+  onRemove
+}: WordLookupCompactViewProps): React.JSX.Element {
+  const result = lookup.status === 'ready' ? lookup.result : undefined
+  const hint = result ? getCompactLookupHint(result, lookup.lookupText) : ''
+
+  let stateText = '查询失败'
+  if (result) {
+    stateText = getCompactLookupMeaning(result, lookup.lookupText)
+  } else if (lookup.status === 'loading') {
+    stateText = '正在查询'
+  }
+
+  let detailText = lookup.errorMessage || '释义查询失败，请稍后再试'
+  if (result) {
+    detailText = getCompactLookupReason(lookup)
+  } else if (lookup.status === 'loading') {
+    detailText = '正在结合上下文查询词义…'
+  }
+
+  return (
+    <div className="word-compact-view">
+      <div className="word-compact-row">
+        <div className="word-compact-answer">
+          <strong lang="en">{lookup.lookupText}</strong>
+          <span
+            className={`word-compact-state${
+              lookup.status === 'error' ? ' word-compact-state-error' : ''
+            }`}
+          >
+            {stateText}
+          </span>
+          {result && hint ? (
+            <>
+              <span className="word-compact-dot" aria-hidden="true">
+                ·
+              </span>
+              <span className="word-compact-hint" title={hint}>
+                {hint}
+              </span>
+            </>
+          ) : null}
+        </div>
+        <span className="word-compact-spacer" />
+        <div className="word-compact-actions">
+          <button type="button" className="word-compact-link" onClick={onClose}>
+            整句
+          </button>
+          {result && lookup.isPersisted ? (
+            <button
+              type="button"
+              className="word-compact-save word-compact-save-on"
+              disabled={lookup.isRemoving}
+              aria-label={lookup.isRemoving ? '正在移出' : '移出生词库'}
+              title={lookup.isRemoving ? '正在移出' : '已在生词库，点击移出'}
+              onClick={onRemove}
+            >
+              {lookup.isRemoving ? '…' : '★'}
+            </button>
+          ) : result && lookup.isCheckingPersistence ? (
+            <button
+              type="button"
+              className="word-compact-save"
+              disabled
+              aria-label="正在检查词库"
+              title="正在检查词库"
+            >
+              …
+            </button>
+          ) : result && lookup.isPersisting ? (
+            <button
+              type="button"
+              className="word-compact-save"
+              disabled
+              aria-label="正在收录"
+              title="正在收录"
+            >
+              …
+            </button>
+          ) : result && lookup.canPersist ? (
+            <button
+              type="button"
+              className="word-compact-save"
+              aria-label="收藏到生词库"
+              title="收藏到生词库"
+              onClick={onPersist}
+            >
+              ☆
+            </button>
+          ) : (
+            <span className="word-compact-save-placeholder" aria-hidden="true" />
+          )}
+        </div>
+      </div>
+      <p
+        className={`word-compact-why${lookup.status === 'error' ? ' word-compact-why-error' : ''}`}
+      >
+        {detailText}
+      </p>
+    </div>
+  )
 }
 
 /** 二次偶遇高亮：本地词条在英文文本中的可交互范围 */
@@ -313,6 +512,148 @@ const getWordLookupPosition = (x: number, y: number): WordLookupPosition => {
   }
 }
 
+const DRAWER_SYNTAX_ROLE_LABELS: Record<
+  'subject' | 'predicate' | 'object' | 'modifier' | 'other',
+  string
+> = {
+  subject: '主语',
+  predicate: '谓语',
+  object: '宾语',
+  modifier: '补充',
+  other: '连接'
+}
+
+interface DrawerSyntaxGroup {
+  /** 合并后的语义角色 */
+  role: Exclude<SentenceSyntaxSegment['role'], 'punctuation'>
+  /** 当前角色在句中的原文 */
+  text: string
+  /** 面向初学者的白话说明 */
+  plainTip?: string
+}
+
+/** 把同一角色的连续片段合并，避免抽屉被逐词切片撑得过长 */
+const groupSentenceSyntaxSegments = (segments: SentenceSyntaxSegment[]): DrawerSyntaxGroup[] => {
+  const groups: DrawerSyntaxGroup[] = []
+
+  for (const segment of segments) {
+    if (segment.role === 'punctuation' || !segment.text.trim()) continue
+
+    const previous = groups.at(-1)
+    if (previous?.role === segment.role) {
+      // 标点被移除后相邻语义块可能直接黏在一起，补一个空格再规范化
+      previous.text = `${previous.text} ${segment.text}`.replace(/\s+/g, ' ').trim()
+      previous.plainTip = segment.plainTip ?? previous.plainTip
+      continue
+    }
+
+    groups.push({
+      role: segment.role,
+      text: segment.text.replace(/\s+/g, ' ').trim(),
+      ...(segment.plainTip ? { plainTip: segment.plainTip } : {})
+    })
+  }
+
+  return groups
+}
+
+interface SentenceStructureViewProps {
+  /** 当前句已通过校验的结构分析 */
+  analysis: SentenceSyntaxAnalysis | null
+  /** 当前句是否仍在请求模型 */
+  isLoading: boolean
+  /** 当前句的结构请求是否已经失败 */
+  hasError: boolean
+  /** 重新发起当前句的结构分析 */
+  onRetry: () => void
+}
+
+/** 找出锚定在当前语义块内的语法选择说明 */
+const findGroupSyntaxInsights = (
+  text: string,
+  insights: SentenceSyntaxInsight[]
+): SentenceSyntaxInsight[] => {
+  return insights.filter((insight) => text.includes(insight.anchorText))
+}
+
+/** 在底部学习抽屉中展示“这句话由哪些语义块组成” */
+function SentenceStructureView({
+  analysis,
+  isLoading,
+  hasError,
+  onRetry
+}: SentenceStructureViewProps): React.JSX.Element {
+  if (isLoading) {
+    return (
+      <div className="structure-state-row">
+        <p className="learning-drawer-status">正在拆解这句话…</p>
+      </div>
+    )
+  }
+
+  if (hasError) {
+    return (
+      <div className="structure-state-row">
+        <p className="learning-drawer-status learning-drawer-status-error">
+          整句结构没有返回，可以重新分析。
+        </p>
+        <button type="button" className="word-compact-link" onClick={onRetry}>
+          重新分析
+        </button>
+      </div>
+    )
+  }
+
+  if (!analysis) {
+    return (
+      <div className="structure-state-row">
+        <p className="learning-drawer-status">整句结构尚未生成，可以点击英文单词查看词义。</p>
+      </div>
+    )
+  }
+
+  const groups = groupSentenceSyntaxSegments(analysis.segments)
+  return (
+    <div className="sentence-structure-list">
+      {groups.map((group, index) => {
+        const insights = findGroupSyntaxInsights(group.text, analysis.insights ?? [])
+
+        return (
+          <div
+            key={`${group.role}-${index}`}
+            className={`sentence-structure-row sentence-structure-${group.role}`}
+          >
+            <div className="sentence-structure-meta">
+              <span>{DRAWER_SYNTAX_ROLE_LABELS[group.role]}</span>
+            </div>
+            <div className="sentence-structure-copy">
+              <p lang="en">{group.text}</p>
+              {group.plainTip ? <small>{group.plainTip}</small> : null}
+              {insights.map((insight, insightIndex) => (
+                <details
+                  key={`${insight.anchorText}-${insightIndex}`}
+                  className="sentence-structure-insight"
+                >
+                  <summary>{insight.title}</summary>
+                  <div className="sentence-structure-insight-body">
+                    <p>{insight.reason}</p>
+                    {insight.contrast ? (
+                      <p className="sentence-structure-insight-contrast">
+                        <span>对比</span>
+                        {insight.contrast}
+                      </p>
+                    ) : null}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 interface SegmentedTextProps {
   /** 要渲染的完整文本 */
   text: string
@@ -326,16 +667,14 @@ interface SegmentedTextProps {
   side: WordLookupSide
   /** 鼠标进入某个对齐组时的回调 */
   onPairEnter?: (pairId: string) => void
+  /** 点击某个对齐组时锁定该句结构 */
+  onPairClick?: (pairId: string) => void
   /** 当前侧全部英文词片段，按自然句归组 */
   lookupTokensBySegmentId?: ReadonlyMap<string, AlignmentToken[]>
-  /** 当前侧经过校验的学习高亮 */
-  highlights?: LearningHighlight[]
   /** 当前侧命中的本地已收录词 */
   encounterHighlights?: EncounterVocabHighlight[]
   /** 当前鼠标指向或固定的普通英文词编号 */
   activeLookupWordId?: string | null
-  /** 当前鼠标指向或固定的学习高亮编号 */
-  activeHighlightId?: string | null
   /** 当前浮层固定的二次偶遇词条编号 */
   activeEncounterId?: string | null
   /** 点击普通英文词时的回调 */
@@ -348,18 +687,6 @@ interface SegmentedTextProps {
   onLookupWordEnter?: (token: AlignmentToken, pairId: string) => void
   /** 鼠标离开普通英文词时的回调 */
   onLookupWordLeave?: () => void
-  /** 点击学习高亮时的回调 */
-  onHighlightClick?: (
-    highlight: LearningHighlight,
-    event: React.MouseEvent<HTMLSpanElement>
-  ) => void
-  /** 鼠标进入学习高亮时的回调 */
-  onHighlightEnter?: (
-    highlight: LearningHighlight,
-    event: React.MouseEvent<HTMLSpanElement>
-  ) => void
-  /** 鼠标离开学习高亮时的回调 */
-  onHighlightLeave?: () => void
   /** 点击二次偶遇词时的回调 */
   onEncounterClick?: (
     match: EncounterVocabHighlight,
@@ -385,18 +712,14 @@ function SegmentedText({
   activePairId,
   side,
   onPairEnter,
+  onPairClick,
   lookupTokensBySegmentId,
-  highlights = [],
   encounterHighlights = [],
   activeLookupWordId = null,
-  activeHighlightId = null,
   activeEncounterId = null,
   onLookupWordClick,
   onLookupWordEnter,
   onLookupWordLeave,
-  onHighlightClick,
-  onHighlightEnter,
-  onHighlightLeave,
   onEncounterClick,
   onEncounterEnter,
   onEncounterLeave
@@ -414,44 +737,11 @@ function SegmentedText({
     const segmentTokens = (lookupTokensBySegmentId?.get(segment.id) ?? []).filter(
       (token) => token.start >= segment.start && token.end <= segment.end
     )
-    const segmentHighlights = highlights.filter(
-      (highlight) => highlight.start < segment.end && highlight.end > segment.start
-    )
     const segmentEncounterHighlights = encounterHighlights.filter(
       (highlight) => highlight.start < segment.end && highlight.end > segment.start
     )
 
     while (segmentCursor < segment.end) {
-      const highlight = segmentHighlights.find(
-        (item) => item.start <= segmentCursor && item.end > segmentCursor
-      )
-      if (highlight) {
-        const end = Math.min(highlight.end, segment.end)
-        const isHighlightActive = highlight.id === activeHighlightId
-        const hasLocalEncounter = segmentEncounterHighlights.some(
-          (item) => item.start < end && item.end > segmentCursor
-        )
-        segmentNodes.push(
-          <span
-            key={`highlight-${highlight.id}-${segmentCursor}`}
-            className={`learning-highlight learning-highlight-${side}${
-              isHighlightActive ? ' learning-highlight-active' : ''
-            }${hasLocalEncounter ? ' learning-highlight-collected' : ''}`}
-            data-source-highlight-id={side === 'source' ? highlight.id : undefined}
-            data-target-highlight-id={side === 'target' ? highlight.id : undefined}
-            onClick={onHighlightClick ? (event) => onHighlightClick(highlight, event) : undefined}
-            onMouseEnter={
-              onHighlightEnter ? (event) => onHighlightEnter(highlight, event) : undefined
-            }
-            onMouseLeave={onHighlightLeave}
-          >
-            {text.slice(segmentCursor, end)}
-          </span>
-        )
-        segmentCursor = end
-        continue
-      }
-
       const encounterHighlight = segmentEncounterHighlights.find(
         (item) => item.start <= segmentCursor && item.end > segmentCursor
       )
@@ -512,7 +802,6 @@ function SegmentedText({
 
       const nextBoundary = Math.min(
         segment.end,
-        ...segmentHighlights.map((item) => item.start).filter((start) => start > segmentCursor),
         ...segmentEncounterHighlights
           .map((item) => item.start)
           .filter((start) => start > segmentCursor),
@@ -530,6 +819,7 @@ function SegmentedText({
         data-source-pair-id={side === 'source' && pairId ? pairId : undefined}
         data-target-pair-id={side === 'target' && pairId ? pairId : undefined}
         onMouseEnter={onPairEnter && pairId ? () => onPairEnter(pairId) : undefined}
+        onClick={onPairClick && pairId ? () => onPairClick(pairId) : undefined}
       >
         {segmentNodes}
       </span>
@@ -543,200 +833,6 @@ function SegmentedText({
   return <>{nodes}</>
 }
 
-/** 轻量骨架图标，用于进入和退出语法透视视图 */
-function SyntaxStructureIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M3 4.25h4v3H3zM9 4.25h4v3H9zM6 10.25h4v3H6z" />
-      <path d="M7 5.75h2M8 7.25v3" />
-    </svg>
-  )
-}
-
-interface SentenceSyntaxViewProps {
-  /** 已通过连续切片校验的语法分析 */
-  analysis: SentenceSyntaxAnalysis
-  /** 返回常规英文句子视图 */
-  onClose: () => void
-}
-
-const SYNTAX_ROLE_LABELS: Record<'subject' | 'predicate' | 'object', string> = {
-  subject: '主',
-  predicate: '谓',
-  object: '宾'
-}
-
-/** 在不改变输入区高度的行内视图中展示 S-V-O 语义胶囊与次要补充 */
-function SentenceSyntaxView({ analysis, onClose }: SentenceSyntaxViewProps): React.JSX.Element {
-  const [tooltip, setTooltip] = useState<{
-    tip: string
-    x: number
-    y: number
-  } | null>(null)
-  const [isClosing, setIsClosing] = useState(false)
-  const closeTimerRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) {
-        window.clearTimeout(closeTimerRef.current)
-      }
-    }
-  }, [])
-
-  const showTooltip = (
-    segment: SentenceSyntaxSegment,
-    event: React.MouseEvent<HTMLSpanElement>
-  ): void => {
-    if (!segment.plainTip) return
-    setTooltip({
-      tip: segment.plainTip,
-      x: Math.max(8, Math.min(event.clientX + 9, window.innerWidth - 238)),
-      y: Math.max(8, event.clientY - 27)
-    })
-  }
-
-  const handleClose = (): void => {
-    if (isClosing) return
-    setIsClosing(true)
-    closeTimerRef.current = window.setTimeout(onClose, 150)
-  }
-
-  return (
-    <div className={`sentence-syntax-view${isClosing ? ' sentence-syntax-view-closing' : ''}`}>
-      <button
-        type="button"
-        className="sentence-syntax-toggle"
-        title="收起语法透视"
-        aria-label="收起语法透视"
-        aria-expanded="true"
-        disabled={isClosing}
-        onClick={handleClose}
-      >
-        <SyntaxStructureIcon />
-      </button>
-
-      <div
-        className="sentence-syntax-sentence-shell"
-        onMouseLeave={() => setTooltip(null)}
-        onScroll={() => setTooltip(null)}
-      >
-        <p className="sentence-syntax-sentence" lang="en">
-          {analysis.segments.flatMap((segment, segmentIndex) =>
-            splitSentenceSyntaxText(segment.text).flatMap((run, runIndex) => {
-              // 模型切片可能重复，索引与长度组合足以在当前句内保持稳定
-              const key = `${segmentIndex}-${runIndex}-${run.text.length}`
-
-              // 标点永远独立渲染，即使模型错误地把它放进了某个语义角色
-              if (run.kind === 'punctuation') {
-                return [
-                  <span key={key} className="sentence-syntax-punctuation">
-                    {run.text}
-                  </span>
-                ]
-              }
-
-              const canShowTip = segment.role !== 'other' && Boolean(segment.plainTip)
-              const showTip = canShowTip
-                ? (event: React.MouseEvent<HTMLSpanElement>) => showTooltip(segment, event)
-                : undefined
-              const hideTip = canShowTip ? () => setTooltip(null) : undefined
-              // 首尾空格留在胶囊外，语义文本内部空格完整保留，角标只出现一次
-              const [, leadingSpace = '', content = run.text, trailingSpace = ''] =
-                run.text.match(/^(\s*)([\s\S]*?)(\s*)$/) ?? []
-
-              if (!content) {
-                return [
-                  <span key={`${key}-space`} className="sentence-syntax-whitespace">
-                    {run.text}
-                  </span>
-                ]
-              }
-
-              if (
-                segment.role === 'subject' ||
-                segment.role === 'predicate' ||
-                segment.role === 'object'
-              ) {
-                return [
-                  ...(leadingSpace
-                    ? [
-                        <span key={`${key}-leading`} className="sentence-syntax-whitespace">
-                          {leadingSpace}
-                        </span>
-                      ]
-                    : []),
-                  <span
-                    key={`${key}-capsule`}
-                    className={`sentence-syntax-capsule sentence-syntax-role-${segment.role}`}
-                    onMouseEnter={showTip}
-                    onMouseLeave={hideTip}
-                  >
-                    {content}
-                    <span className="sentence-syntax-role-badge" aria-hidden="true">
-                      {SYNTAX_ROLE_LABELS[segment.role]}
-                    </span>
-                  </span>,
-                  ...(trailingSpace
-                    ? [
-                        <span key={`${key}-trailing`} className="sentence-syntax-whitespace">
-                          {trailingSpace}
-                        </span>
-                      ]
-                    : [])
-                ]
-              }
-
-              if (segment.role === 'modifier') {
-                return [
-                  ...(leadingSpace
-                    ? [
-                        <span key={`${key}-leading`} className="sentence-syntax-whitespace">
-                          {leadingSpace}
-                        </span>
-                      ]
-                    : []),
-                  <span
-                    key={`${key}-modifier`}
-                    className="sentence-syntax-modifier"
-                    onMouseEnter={showTip}
-                    onMouseLeave={hideTip}
-                  >
-                    {content}
-                  </span>,
-                  ...(trailingSpace
-                    ? [
-                        <span key={`${key}-trailing`} className="sentence-syntax-whitespace">
-                          {trailingSpace}
-                        </span>
-                      ]
-                    : [])
-                ]
-              }
-
-              return [
-                <span key={key} className="sentence-syntax-other">
-                  {run.text}
-                </span>
-              ]
-            })
-          )}
-        </p>
-      </div>
-
-      {tooltip ? (
-        <div
-          className="sentence-syntax-tooltip"
-          style={{ left: `${tooltip.x}px`, top: `${tooltip.y}px` }}
-          role="tooltip"
-        >
-          {tooltip.tip}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
 function App(): React.JSX.Element {
   const [sourceText, setSourceText] = useState(INITIAL_SOURCE_TEXT)
   // const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
@@ -748,16 +844,16 @@ function App(): React.JSX.Element {
   const [learningMode, setLearningMode] = useState(() => {
     return localStorage.getItem('learningMode') === '1'
   })
+  // 已收藏词标记默认关闭，避免自动装饰打断阅读
+  const [showCollectedWordMarks, setShowCollectedWordMarks] = useState(() => {
+    return localStorage.getItem('showCollectedWordMarks') === '1'
+  })
   // 当前悬停或指向的对齐组编号
   const [activeAlignmentPairId, setActiveAlignmentPairId] = useState<string | null>(null)
   // 当前鼠标指向的普通英文词，用于输入框透明层上的词级底色
   const [hoveredSourceWordId, setHoveredSourceWordId] = useState<string | null>(null)
-  // 当前鼠标指向的原文学习高亮
-  const [hoveredSourceHighlightId, setHoveredSourceHighlightId] = useState<string | null>(null)
   // 当前鼠标指向的译文普通英文词
   const [hoveredTargetWordId, setHoveredTargetWordId] = useState<string | null>(null)
-  // 当前鼠标指向的译文学习高亮
-  const [hoveredTargetHighlightId, setHoveredTargetHighlightId] = useState<string | null>(null)
   // 点击单词后显示的上下文释义浮层
   const [wordLookup, setWordLookup] = useState<WordLookupDisplay | null>(null)
   // 当前英文句子里命中的本地词条，用于二次偶遇高亮与悬停解析
@@ -768,12 +864,14 @@ function App(): React.JSX.Element {
   >({})
   // 当前正在请求语法分析的句子
   const [syntaxLoadingPairId, setSyntaxLoadingPairId] = useState<string | null>(null)
-  // 当前进入语法透视视图的句子
-  const [syntaxViewPairId, setSyntaxViewPairId] = useState<string | null>(null)
-  // 语法透视按钮当前指向的句子，由悬停句自动更新
+  // 结构分析失败后保留明确状态，避免界面一直显示“稍候查看”
+  const [syntaxErrorPairId, setSyntaxErrorPairId] = useState<string | null>(null)
+  // 手动重试时驱动分析 Effect 重新执行
+  const [syntaxRetryToken, setSyntaxRetryToken] = useState(0)
+  // 当前直接铺回原文的语法分析句
   const [syntaxTargetPairId, setSyntaxTargetPairId] = useState<string | null>(null)
-  // 最近一次语法透视的轻量错误提示
-  const [syntaxErrorMessage, setSyntaxErrorMessage] = useState('')
+  // 收起结构时保留面板内容，等左栏退场后再卸载并缩回窗口
+  const [isStructureCollapsing, setIsStructureCollapsing] = useState(false)
   // 学习模式空状态展示的随机复习闪卡
   const [vocabFlashcard, setVocabFlashcard] = useState<VocabFlashcard | null>(null)
   // 区分闪卡加载中、数据库为空与正常展示三种状态
@@ -806,9 +904,8 @@ function App(): React.JSX.Element {
   const vocabRemovalInFlightRef = useRef(new Set<string>())
   // 输入切换或新翻译开始时，让旧的语法分析结果失效
   const sentenceSyntaxRequestIdRef = useRef(0)
+  const structureCollapseTimerRef = useRef<number | null>(null)
   const wordLookupCacheRef = useRef<Map<string, WordLookupResult>>(new Map())
-  const wordLookupRef = useRef<HTMLDivElement | null>(null)
-  const wordLookupCloseTimerRef = useRef<number | null>(null)
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const sourceMirrorRef = useRef<HTMLDivElement | null>(null)
   const sourceHitBoxesRef = useRef<SourceHitBox[]>([])
@@ -819,6 +916,8 @@ function App(): React.JSX.Element {
   const autoScrollResultTimerRef = useRef<number | null>(null)
   const sourceScrollSyncTimerRef = useRef<number | null>(null)
   const resultScrollSyncTimerRef = useRef<number | null>(null)
+  // 同一句默认只自动请求一次，失败后由用户点击“重新分析”显式重试
+  const attemptedSyntaxPairIdsRef = useRef(new Set<string>())
   const [providers, setProviders] = useState<ProviderItem[]>([])
   // 渠道与模型的初始值只认本地记忆值，读不到就留空 ——
   // 这里不再写 'deepseek' / 'deepseek-chat' 这类硬编码兜底：
@@ -952,7 +1051,7 @@ function App(): React.JSX.Element {
     (effectiveSourceLang === 'en' && effectiveTargetLang === 'zh') ||
     (effectiveSourceLang === 'zh' && effectiveTargetLang === 'en')
   const isLearningActive = learningMode && isLearningSupported
-  // 学习高亮落在英文原文还是英文译文，供本地词库统一还原双语语序
+  // 英文位于原文还是译文，供本地词库与点词查义统一还原双语语序
   const learningHighlightSide = useMemo(
     () => resolveLearningHighlightSide(effectiveSourceLang, effectiveTargetLang),
     [effectiveSourceLang, effectiveTargetLang]
@@ -995,47 +1094,131 @@ function App(): React.JSX.Element {
 
     return {
       sourcePairBySegmentId,
-      targetPairBySegmentId,
-      sourceHighlights: alignment.highlights.filter((highlight) => highlight.side === 'source'),
-      targetHighlights: alignment.highlights.filter((highlight) => highlight.side === 'target'),
-      highlightById: new Map(alignment.highlights.map((highlight) => [highlight.id, highlight]))
+      targetPairBySegmentId
     }
   }, [alignment])
 
-  // 当前视图只对英文原文提供语法透视，中译英仍保留原有学习高亮流程
-  const canUseSourceSentenceSyntax =
-    isLearningActive && learningHighlightSide === 'source' && Boolean(alignment && alignmentView)
-  const activeSentenceSyntax =
-    syntaxViewPairId && canUseSourceSentenceSyntax
-      ? (sentenceSyntaxByPairId[syntaxViewPairId] ?? null)
-      : null
+  // 阅读与写作都分析英文侧：英译中取原文，中译英取模型生成的英文译文
+  const canUseSentenceSyntax =
+    isLearningActive && Boolean(alignment && alignmentView && learningHighlightSide)
+  const displayedSyntaxPairId = canUseSentenceSyntax ? syntaxTargetPairId : null
+  const displayedSentenceSyntax = displayedSyntaxPairId
+    ? (sentenceSyntaxByPairId[displayedSyntaxPairId] ?? null)
+    : null
+  // A1 左右布局只在整句结构被触发后启用；收起动画期间继续保留面板内容
+  const wantsStructureLayout = useLearningLayout && Boolean(displayedSyntaxPairId)
+  const useStructureLayout = wantsStructureLayout || (useLearningLayout && isStructureCollapsing)
+  // 收起时先保留宽窗口让左栏完成退场，面板卸载后再一次性缩回
+  const useStructureWindowLayout = wantsStructureLayout
 
-  // 学习模式下默认分析第一句；悬停其他句后按钮会自动切换到对应句
+  const displayedSyntaxSentenceNumber = useMemo(() => {
+    if (!alignment || !displayedSyntaxPairId) return null
+    const pairIndex = alignment.pairs.findIndex((pair) => pair.id === displayedSyntaxPairId)
+    return pairIndex >= 0 ? pairIndex + 1 : null
+  }, [alignment, displayedSyntaxPairId])
+  const hoveredSyntaxSentenceNumber = useMemo(() => {
+    if (!alignment || !activeAlignmentPairId || activeAlignmentPairId === displayedSyntaxPairId) {
+      return null
+    }
+    const pairIndex = alignment.pairs.findIndex((pair) => pair.id === activeAlignmentPairId)
+    return pairIndex >= 0 ? pairIndex + 1 : null
+  }, [activeAlignmentPairId, alignment, displayedSyntaxPairId])
+
+  // 进入学习模式时不自动触发整句结构；只有用户点击某一句后才开始分析
   useEffect(() => {
-    if (!alignment || !isLearningActive || learningHighlightSide !== 'source') {
+    if (!alignment || !isLearningActive || !learningHighlightSide) {
       setSyntaxTargetPairId(null)
-      setSyntaxViewPairId(null)
       return
     }
 
     const pairIds = new Set(alignment.pairs.map((pair) => pair.id))
     setSyntaxTargetPairId((current) => {
       if (current && pairIds.has(current)) return current
-      return alignment.pairs[0]?.id ?? null
+      return null
     })
   }, [alignment, isLearningActive, learningHighlightSide])
 
+  // 进入学习模式后，当前句会自动请求一次轻量分析并缓存到左侧结构栏
   useEffect(() => {
+    const pairId = syntaxTargetPairId
     if (
-      syntaxViewPairId ||
-      !activeAlignmentPairId ||
-      !alignment?.pairs.some((pair) => pair.id === activeAlignmentPairId)
+      !canUseSentenceSyntax ||
+      !pairId ||
+      !alignment ||
+      !learningHighlightSide ||
+      !selectedProviderId ||
+      !selectedModel ||
+      sentenceSyntaxByPairId[pairId] ||
+      syntaxLoadingPairId ||
+      attemptedSyntaxPairIdsRef.current.has(pairId)
     ) {
       return
     }
-    setSyntaxTargetPairId(activeAlignmentPairId)
-    setSyntaxErrorMessage('')
-  }, [activeAlignmentPairId, alignment, syntaxViewPairId])
+
+    const pairSentences = getAlignmentPairSentences(
+      alignment,
+      sourceText,
+      targetText,
+      pairId,
+      learningHighlightSide
+    )
+    if (!pairSentences?.englishSentence || !pairSentences.chineseSentence) return
+
+    const timer = window.setTimeout(() => {
+      attemptedSyntaxPairIdsRef.current.add(pairId)
+      const requestId = sentenceSyntaxRequestIdRef.current + 1
+      sentenceSyntaxRequestIdRef.current = requestId
+      setSyntaxErrorPairId(null)
+      setSyntaxLoadingPairId(pairId)
+
+      void window.api
+        .analyzeSentenceSyntax({
+          sentence: pairSentences.englishSentence,
+          targetTranslation: pairSentences.chineseSentence,
+          options: {
+            providerId: selectedProviderId,
+            model: selectedModel
+          }
+        })
+        .then((response) => {
+          if (sentenceSyntaxRequestIdRef.current !== requestId) return
+          if (!response.ok) {
+            console.warn('[renderer] 语法透视未返回结果:', response.error.code)
+            setSyntaxErrorPairId(pairId)
+            return
+          }
+          setSyntaxErrorPairId(null)
+          setSentenceSyntaxByPairId((current) => ({
+            ...current,
+            [pairId]: response.analysis
+          }))
+        })
+        .catch((error) => {
+          if (sentenceSyntaxRequestIdRef.current !== requestId) return
+          console.warn('[renderer] 语法透视失败:', error)
+          setSyntaxErrorPairId(pairId)
+        })
+        .finally(() => {
+          if (sentenceSyntaxRequestIdRef.current === requestId) {
+            setSyntaxLoadingPairId(null)
+          }
+        })
+    }, 220)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    alignment,
+    canUseSentenceSyntax,
+    learningHighlightSide,
+    selectedModel,
+    selectedProviderId,
+    sentenceSyntaxByPairId,
+    sourceText,
+    syntaxLoadingPairId,
+    syntaxRetryToken,
+    syntaxTargetPairId,
+    targetText
+  ])
 
   // 原文中所有英文词都参与点击查词；分词结果与透明测量层共用同一套偏移
   const sourceWordView = useMemo(() => {
@@ -1059,7 +1242,7 @@ function App(): React.JSX.Element {
     }
   }, [alignment, effectiveSourceLang, isLearningActive, sourceText])
 
-  // 中译英时译文中的全部英文词仍可单点查询，学习高亮则会直接使用对齐响应
+  // 中译英时译文中的全部英文词仍可单点查询
   const targetWordView = useMemo(() => {
     if (!isLearningActive || !alignment || effectiveTargetLang !== 'en') return null
 
@@ -1088,6 +1271,7 @@ function App(): React.JSX.Element {
       !alignment ||
       !alignmentView ||
       !learningHighlightSide ||
+      !showCollectedWordMarks ||
       status !== 'idle' ||
       encounterVocabItems.length === 0
     ) {
@@ -1103,7 +1287,9 @@ function App(): React.JSX.Element {
         : alignmentView.targetPairBySegmentId
     const highlights: EncounterVocabHighlight[] = []
 
-    for (const match of findVocabTextMatches(englishText, encounterVocabItems)) {
+    for (const match of findVocabTextMatches(englishText, encounterVocabItems, {
+      includePhrases: false
+    })) {
       const segment = segments.find((item) => match.start >= item.start && match.start < item.end)
       const pairId = segment ? pairBySegmentId.get(segment.id) : null
       if (!segment || !pairId) continue
@@ -1128,6 +1314,7 @@ function App(): React.JSX.Element {
     encounterVocabItems,
     isLearningActive,
     learningHighlightSide,
+    showCollectedWordMarks,
     sourceText,
     status,
     targetText
@@ -1145,6 +1332,7 @@ function App(): React.JSX.Element {
   const deviceRef = useRef<HTMLElement | null>(null)
   // 译文区滚动容器与底部工具行：量两者高度，窗口才能按"内容实际需要多高"来收放
   const resultScrollRef = useRef<HTMLDivElement | null>(null)
+  const learningDrawerRef = useRef<HTMLElement | null>(null)
   const resultToolbarRef = useRef<HTMLDivElement | null>(null)
 
   // 缓存上一次同步给 Electron 主进程的窗口高度，避免高频冗余触发
@@ -1224,10 +1412,40 @@ function App(): React.JSX.Element {
     [beginAutoScroll]
   )
 
+  /** 新的句子结构请求会中断尚未完成的收起动画 */
+  const cancelStructureCollapse = useCallback((): void => {
+    if (structureCollapseTimerRef.current !== null) {
+      window.clearTimeout(structureCollapseTimerRef.current)
+      structureCollapseTimerRef.current = null
+    }
+    setIsStructureCollapsing(false)
+  }, [])
+
+  /** 展开指定句子的结构，并同步左右两侧的阅读位置 */
+  const openStructurePair = useCallback(
+    (pairId: string): void => {
+      cancelStructureCollapse()
+      setActiveAlignmentPairId(pairId)
+      setSyntaxTargetPairId(pairId)
+      scrollSourceToPair(pairId)
+    },
+    [cancelStructureCollapse, scrollSourceToPair]
+  )
+
+  /** 已展开结构时跟随滚动定位当前可见句；未展开时不自动触发结构。 */
+  const restoreRestingSyntaxPair = useCallback((): void => {
+    if (!canUseSentenceSyntax || !syntaxTargetPairId) return
+
+    const mirror = sourceMirrorRef.current
+    const visiblePairId = mirror ? findVisiblePairId(mirror, '[data-source-pair-id]') : null
+    if (visiblePairId) setSyntaxTargetPairId(visiblePairId)
+  }, [canUseSentenceSyntax, syntaxTargetPairId])
+
   /**
    * 输入区高度与窗口高度联动。
    *
-   * 窗口高度按"内容真正需要多高"来算：头部到译文区的固定距离 + 输入区实际高度 + 译文实际高度。
+   * 窗口高度按"内容真正需要多高"来算：头部到译文区的固定距离 + 输入区实际高度
+   * + 译文实际高度。
    * 早先是按输入行数线性加高（每行 +50px），多出来的空间全归译文区，
    * 于是"输入 5 行、译文只有 4 行"时底部会空出一大片。
    *
@@ -1272,36 +1490,44 @@ function App(): React.JSX.Element {
     const scrollStyle = getComputedStyle(scroll)
     const scrollPadding =
       parseFloat(scrollStyle.paddingTop || '0') + parseFloat(scrollStyle.paddingBottom || '0')
-    // 学习模式让译文滚动区与原文输入区拥有相同的文字可视高度
-    scroll.style.height = useLearningLayout ? `${learningTextHeight + scrollPadding}px` : ''
+
     // 普通模式按译文实际内容计算；学习模式忽略内容高度，保持两侧等高
-    const resultHeight = useLearningLayout
+    scroll.style.height = ''
+    const baseResultHeight = useLearningLayout
       ? learningTextHeight
       : Math.max(RESULT_MIN_HEIGHT, scroll.scrollHeight - scrollPadding)
-    // 工具行到窗口底边的这点留白写在 .device-body 的 padding-bottom 上，从样式里读，避免两处硬编码
+    // 内容区到窗口底边的留白写在 .device-body 的 padding-bottom 上，从样式里读，避免两处硬编码
     const body = panel.querySelector('.device-body')
     const bottomPadding = body ? parseFloat(getComputedStyle(body).paddingBottom || '0') : 0
+    const drawer = learningDrawerRef.current
+    // 左侧结构栏与阅读区并排；只有右侧词义卡仍参与窗口纵向高度累加
+    const drawerHeight =
+      (!useStructureLayout || wordLookup) && drawer
+        ? drawer.getBoundingClientRect().height +
+          parseFloat(getComputedStyle(drawer).marginTop || '0') +
+          parseFloat(getComputedStyle(drawer).marginBottom || '0')
+        : 0
+    const toolbarHeight = toolbar.getBoundingClientRect().height
+    const maxWindowHeight = useLearningLayout ? MAIN_WINDOW_HEIGHT_MAX : NORMAL_WINDOW_HEIGHT_MAX
+    const fixedHeight = lead + scrollPadding + drawerHeight + toolbarHeight + bottomPadding
+    const resultHeight = Math.max(0, Math.min(baseResultHeight, maxWindowHeight - fixedHeight))
+
+    // 学习模式让译文滚动区与原文输入区拥有相同的文字可视高度；空间不足时允许内部滚动
+    scroll.style.height =
+      useLearningLayout || resultHeight < baseResultHeight
+        ? `${resultHeight + scrollPadding}px`
+        : ''
 
     const nextWindowHeight = Math.round(
-      Math.min(
-        useLearningLayout ? MAIN_WINDOW_HEIGHT_MAX : NORMAL_WINDOW_HEIGHT_MAX,
-        Math.max(
-          MAIN_WINDOW_HEIGHT_MIN,
-          lead +
-            scrollPadding +
-            resultHeight +
-            toolbar.getBoundingClientRect().height +
-            bottomPadding
-        )
-      )
+      Math.min(maxWindowHeight, Math.max(MAIN_WINDOW_HEIGHT_MIN, fixedHeight + resultHeight))
     )
 
     // 仅当高度发生有效变化（>= 2px）时才派发 IPC，杜绝微小晃动与性能浪费
-    if (Math.abs(lastSentHeightRef.current - nextWindowHeight) >= 2) {
-      lastSentHeightRef.current = nextWindowHeight
-      void window.api.setWindowHeight(nextWindowHeight)
-    }
-  }, [useLearningLayout])
+    if (Math.abs(lastSentHeightRef.current - nextWindowHeight) < 2) return
+
+    lastSentHeightRef.current = nextWindowHeight
+    void window.api.setWindowHeight(nextWindowHeight)
+  }, [useLearningLayout, useStructureLayout, wordLookup])
 
   useLayoutEffect(() => {
     syncWindowHeight()
@@ -1313,14 +1539,36 @@ function App(): React.JSX.Element {
     syncWindowHeight,
     isVocabFlashcardVisible,
     vocabFlashcardState,
-    isVocabFlashcardRevealed
+    isVocabFlashcardRevealed,
+    displayedSentenceSyntax,
+    syntaxLoadingPairId,
+    wordLookup
   ])
 
-  // 组件卸载时清理退出定时器
+  // 学习模式使用更宽的并排布局；等主进程完成窗口尺寸切换后再按新宽度重算换行高度
+  useEffect(() => {
+    let resizeFrame = 0
+    let cancelled = false
+
+    void window.api.setWindowLayout(useStructureWindowLayout ? 'learning' : 'normal').then(() => {
+      if (cancelled) return
+      resizeFrame = window.requestAnimationFrame(() => syncWindowHeight())
+    })
+
+    return () => {
+      cancelled = true
+      if (resizeFrame) window.cancelAnimationFrame(resizeFrame)
+    }
+  }, [syncWindowHeight, useStructureWindowLayout])
+
+  // 组件卸载时清理模型面板的退场定时器
   useEffect(() => {
     return () => {
       if (deckClosingTimerRef.current) {
         clearTimeout(deckClosingTimerRef.current)
+      }
+      if (structureCollapseTimerRef.current !== null) {
+        window.clearTimeout(structureCollapseTimerRef.current)
       }
     }
   }, [])
@@ -1432,16 +1680,15 @@ function App(): React.JSX.Element {
     setEncounterVocabItems([])
     setActiveAlignmentPairId(null)
     setHoveredSourceWordId(null)
-    setHoveredSourceHighlightId(null)
     setHoveredTargetWordId(null)
-    setHoveredTargetHighlightId(null)
     setWordLookup(null)
     sentenceSyntaxRequestIdRef.current += 1
     setSentenceSyntaxByPairId({})
     setSyntaxLoadingPairId(null)
-    setSyntaxViewPairId(null)
+    setSyntaxErrorPairId(null)
+    setSyntaxRetryToken(0)
     setSyntaxTargetPairId(null)
-    setSyntaxErrorMessage('')
+    attemptedSyntaxPairIdsRef.current.clear()
     sourceHitBoxesRef.current = []
     isAutoScrollingSourceRef.current = false
     isAutoScrollingResultRef.current = false
@@ -1590,6 +1837,14 @@ function App(): React.JSX.Element {
   useEffect(() => {
     localStorage.setItem('learningMode', learningMode ? '1' : '0')
   }, [learningMode])
+
+  // 已收藏词标记偏好持久化；关闭时只收起视觉标记，避免同一段文本重复累计偶遇次数
+  useEffect(() => {
+    localStorage.setItem('showCollectedWordMarks', showCollectedWordMarks ? '1' : '0')
+    if (showCollectedWordMarks) return
+
+    setWordLookup((current) => (current?.origin === 'encounter' ? null : current))
+  }, [showCollectedWordMarks])
 
   // 手动目标语言选择持久化
   useEffect(() => {
@@ -1885,6 +2140,7 @@ function App(): React.JSX.Element {
     if (
       !isLearningActive ||
       !learningHighlightSide ||
+      !showCollectedWordMarks ||
       status !== 'idle' ||
       !sourceText.trim() ||
       !targetText.trim()
@@ -1901,17 +2157,14 @@ function App(): React.JSX.Element {
 
     const loadPassiveEncounters = async (): Promise<void> => {
       const words = collectUniqueEnglishWords(englishText)
-      const [wordItems, phraseItems] = await Promise.all([
-        getVocabItemsByWordForms(words),
-        getPhraseVocabItems()
-      ])
+      const wordItems = await getVocabItemsByWordForms(words)
       const itemByLemma = new Map<string, VocabItem>()
-      for (const item of [...wordItems, ...phraseItems]) {
+      for (const item of wordItems) {
         itemByLemma.set(item.lemmaLower, item)
       }
 
       const matchedItems = Array.from(itemByLemma.values()).filter(
-        (item) => findVocabTextMatches(englishText, [item]).length > 0
+        (item) => findVocabTextMatches(englishText, [item], { includePhrases: false }).length > 0
       )
       if (matchedItems.length === 0) {
         if (!cancelled) setEncounterVocabItems([])
@@ -1936,7 +2189,14 @@ function App(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [isLearningActive, learningHighlightSide, sourceText, status, targetText])
+  }, [
+    isLearningActive,
+    learningHighlightSide,
+    showCollectedWordMarks,
+    sourceText,
+    status,
+    targetText
+  ])
 
   // 学习模式空状态随机抽取一条带语境的生词闪卡
   useEffect(() => {
@@ -1984,27 +2244,6 @@ function App(): React.JSX.Element {
     mirror.scrollTop = 0
 
     const hitBoxes: SourceHitBox[] = []
-
-    // 学习短语可能跨行，先按编号合并所有可见矩形，命中时优先于单词和整句
-    const highlightRectsById = new Map<string, DOMRect[]>()
-    const highlightElements = mirror.querySelectorAll<HTMLElement>('[data-source-highlight-id]')
-    for (const element of highlightElements) {
-      const highlightId = element.dataset.sourceHighlightId
-      if (!highlightId) continue
-
-      const range = document.createRange()
-      range.selectNodeContents(element)
-      const rects = Array.from(range.getClientRects()).filter(
-        (rect) => rect.width > 0 && rect.height > 0
-      )
-      if (rects.length === 0) continue
-      const currentRects = highlightRectsById.get(highlightId) ?? []
-      currentRects.push(...rects)
-      highlightRectsById.set(highlightId, currentRects)
-    }
-    for (const [highlightId, rects] of highlightRectsById) {
-      hitBoxes.push({ kind: 'highlight', id: highlightId, rects })
-    }
 
     // 已收录词优先于普通单词命中，确保点击时直接读取本地释义
     const encounterElements = mirror.querySelectorAll<HTMLElement>('[data-source-encounter-id]')
@@ -2098,26 +2337,26 @@ function App(): React.JSX.Element {
       if (resultScrollSyncTimerRef.current !== null) {
         window.clearTimeout(resultScrollSyncTimerRef.current)
       }
-      if (wordLookupCloseTimerRef.current !== null) {
-        window.clearTimeout(wordLookupCloseTimerRef.current)
-      }
     }
   }, [])
 
-  /** 关闭查词浮层，并让尚未返回的旧查询自动失效 */
+  /** 关闭词义卡，并让尚未返回的旧查询自动失效 */
   const closeWordLookup = useCallback((): void => {
-    if (wordLookupCloseTimerRef.current !== null) {
-      window.clearTimeout(wordLookupCloseTimerRef.current)
-      wordLookupCloseTimerRef.current = null
-    }
     wordLookupRequestIdRef.current += 1
     setWordLookup(null)
     setActiveAlignmentPairId(null)
     setHoveredSourceWordId(null)
-    setHoveredSourceHighlightId(null)
     setHoveredTargetWordId(null)
-    setHoveredTargetHighlightId(null)
   }, [])
+
+  /** 允许用户在结构分析失败后主动重试，而不是等待不存在的自动重试 */
+  const handleRetrySentenceSyntax = (): void => {
+    if (!syntaxTargetPairId) return
+
+    attemptedSyntaxPairIdsRef.current.delete(syntaxTargetPairId)
+    setSyntaxErrorPairId(null)
+    setSyntaxRetryToken((current) => current + 1)
+  }
 
   /** 写入单词查询缓存，并按最近使用顺序淘汰旧条目 */
   const cacheWordLookupResult = useCallback((cacheKey: string, result: WordLookupResult): void => {
@@ -2130,23 +2369,6 @@ function App(): React.JSX.Element {
       if (oldestKey) cache.delete(oldestKey)
     }
   }, [])
-
-  /** 取消即将执行的查词浮层关闭，供重新进入单词或浮层时调用 */
-  const cancelWordLookupClose = useCallback((): void => {
-    if (wordLookupCloseTimerRef.current === null) return
-    window.clearTimeout(wordLookupCloseTimerRef.current)
-    wordLookupCloseTimerRef.current = null
-  }, [])
-
-  /** 鼠标离开单词或浮层后开始计时；连续移动不会反复重置关闭时间 */
-  const scheduleWordLookupClose = useCallback((): void => {
-    if (!wordLookup || wordLookupCloseTimerRef.current !== null) return
-
-    wordLookupCloseTimerRef.current = window.setTimeout(() => {
-      wordLookupCloseTimerRef.current = null
-      closeWordLookup()
-    }, WORD_LOOKUP_HOVER_HIDE_DELAY_MS)
-  }, [closeWordLookup, wordLookup])
 
   /** 把新收录或计数更新后的词条同步到当前英文文本的偶遇标识 */
   const upsertEncounterVocabItem = useCallback(
@@ -2244,8 +2466,12 @@ function App(): React.JSX.Element {
       try {
         const item = await recordVocabEncounter({
           lemma: params.result.lemma,
+          kind: params.result.kind,
           surface: params.surface,
+          ...(params.result.literalMeaning ? { literalMeaning: params.result.literalMeaning } : {}),
           meaning: params.result.meaning,
+          ...(params.result.contextNote ? { contextNote: params.result.contextNote } : {}),
+          ...(params.result.wordOrderNote ? { wordOrderNote: params.result.wordOrderNote } : {}),
           targetText: params.result.targetText,
           ...(params.note ? { note: params.note } : {}),
           side: params.side,
@@ -2292,121 +2518,9 @@ function App(): React.JSX.Element {
     [alignment, learningHighlightSide, sourceText, targetText, upsertEncounterVocabItem]
   )
 
-  /** 学习高亮直接使用句级对齐响应，不再发起额外查词请求 */
-  const showHighlightLookup = useCallback(
-    (
-      highlight: LearningHighlight,
-      position: WordLookupPosition,
-      options?: { persist?: boolean }
-    ): void => {
-      cancelWordLookupClose()
-      // 学习高亮直接命中缓存数据时，也要让尚未返回的普通查词请求失效。
-      wordLookupRequestIdRef.current += 1
-      setActiveAlignmentPairId(highlight.pairId)
-      if (highlight.side === 'source') {
-        setHoveredSourceWordId(null)
-        setHoveredSourceHighlightId(highlight.id)
-        setHoveredTargetWordId(null)
-        setHoveredTargetHighlightId(null)
-        scrollResultToPair(highlight.pairId)
-      } else {
-        setHoveredSourceWordId(null)
-        setHoveredSourceHighlightId(null)
-        setHoveredTargetWordId(null)
-        setHoveredTargetHighlightId(highlight.id)
-        scrollSourceToPair(highlight.pairId)
-      }
-
-      setWordLookup({
-        ...position,
-        lookupText: highlight.surface,
-        lookupAnchorId: highlight.id,
-        pairId: highlight.pairId,
-        side: highlight.side,
-        status: 'ready',
-        result: {
-          lemma: highlight.lemma,
-          meaning: highlight.meaning,
-          targetText: highlight.targetText
-        },
-        note: highlight.note || undefined,
-        origin: 'highlight',
-        isPersisted: false,
-        canPersist: false,
-        isPersisting: false,
-        isCheckingPersistence: true
-      })
-
-      const requestId = wordLookupRequestIdRef.current
-      void Promise.all([findCachedVocab(highlight.lemma), findCachedVocab(highlight.surface)])
-        .then(([itemByLemma, itemBySurface]) => {
-          if (wordLookupRequestIdRef.current !== requestId) return
-          const item = itemByLemma ?? itemBySurface
-          if (!item) {
-            if (options?.persist) {
-              void persistLookupData({
-                lookupAnchorId: highlight.id,
-                pairId: highlight.pairId,
-                side: highlight.side,
-                surface: highlight.surface,
-                result: {
-                  lemma: highlight.lemma,
-                  meaning: highlight.meaning,
-                  targetText: highlight.targetText
-                },
-                ...(highlight.note ? { note: highlight.note } : {})
-              })
-              return
-            }
-
-            setWordLookup((current) =>
-              current && current.lookupAnchorId === highlight.id && current.side === highlight.side
-                ? {
-                    ...current,
-                    isPersisted: false,
-                    canPersist: true,
-                    isCheckingPersistence: false
-                  }
-                : current
-            )
-            return
-          }
-
-          setWordLookup((current) =>
-            current && current.lookupAnchorId === highlight.id && current.side === highlight.side
-              ? {
-                  ...current,
-                  encounterCount: item.encounterCount,
-                  isPersisted: true,
-                  canPersist: false,
-                  isPersisting: false,
-                  isCheckingPersistence: false
-                }
-              : current
-          )
-        })
-        .catch((error) => {
-          console.warn('[renderer] 读取学习高亮词库状态失败:', error)
-          if (wordLookupRequestIdRef.current !== requestId) return
-          setWordLookup((current) =>
-            current && current.lookupAnchorId === highlight.id && current.side === highlight.side
-              ? {
-                  ...current,
-                  isPersisted: false,
-                  canPersist: true,
-                  isCheckingPersistence: false
-                }
-              : current
-          )
-        })
-    },
-    [cancelWordLookupClose, persistLookupData, scrollResultToPair, scrollSourceToPair]
-  )
-
   /** 二次偶遇高亮直接展示本地数据，不发起任何模型请求 */
   const showEncounterLookup = useCallback(
     (match: EncounterVocabHighlight, position: WordLookupPosition): void => {
-      cancelWordLookupClose()
       wordLookupRequestIdRef.current += 1
       setActiveAlignmentPairId(match.pairId)
       const pairSentences = alignment
@@ -2427,15 +2541,11 @@ function App(): React.JSX.Element {
 
       if (match.side === 'source') {
         setHoveredSourceWordId(null)
-        setHoveredSourceHighlightId(null)
         setHoveredTargetWordId(null)
-        setHoveredTargetHighlightId(null)
         scrollResultToPair(match.pairId)
       } else {
         setHoveredSourceWordId(null)
-        setHoveredSourceHighlightId(null)
         setHoveredTargetWordId(null)
-        setHoveredTargetHighlightId(null)
         scrollSourceToPair(match.pairId)
       }
 
@@ -2448,8 +2558,12 @@ function App(): React.JSX.Element {
         status: 'ready',
         origin: 'encounter',
         result: {
+          kind: match.item.kind ?? 'lexical',
           lemma: match.item.lemma,
+          ...(match.item.literalMeaning ? { literalMeaning: match.item.literalMeaning } : {}),
           meaning: match.item.meaning,
+          ...(match.item.contextNote ? { contextNote: match.item.contextNote } : {}),
+          ...(match.item.wordOrderNote ? { wordOrderNote: match.item.wordOrderNote } : {}),
           targetText: contextualTargetText
         },
         note: match.item.note,
@@ -2460,7 +2574,6 @@ function App(): React.JSX.Element {
     },
     [
       alignment,
-      cancelWordLookupClose,
       learningHighlightSide,
       scrollResultToPair,
       scrollSourceToPair,
@@ -2469,105 +2582,7 @@ function App(): React.JSX.Element {
     ]
   )
 
-  /** 按需分析当前悬停句的核心内容，并缓存结果供再次展开 */
-  const handleToggleSentenceSyntax = useCallback((): void => {
-    const pairId = activeAlignmentPairId ?? syntaxTargetPairId
-    if (
-      !pairId ||
-      !alignment ||
-      !isLearningActive ||
-      learningHighlightSide !== 'source' ||
-      syntaxLoadingPairId
-    ) {
-      return
-    }
-
-    if (syntaxViewPairId === pairId) {
-      setSyntaxViewPairId(null)
-      window.requestAnimationFrame(() => sourceInputRef.current?.focus())
-      return
-    }
-
-    const cachedAnalysis = sentenceSyntaxByPairId[pairId]
-    if (cachedAnalysis) {
-      setSyntaxErrorMessage('')
-      setSyntaxViewPairId(pairId)
-      sourceInputRef.current?.blur()
-      return
-    }
-
-    const pairSentences = getAlignmentPairSentences(
-      alignment,
-      sourceText,
-      targetText,
-      pairId,
-      learningHighlightSide
-    )
-    if (!pairSentences?.englishSentence || !pairSentences.chineseSentence) {
-      setSyntaxErrorMessage('当前句缺少完整的双语上下文')
-      return
-    }
-
-    const requestId = sentenceSyntaxRequestIdRef.current + 1
-    sentenceSyntaxRequestIdRef.current = requestId
-    setSyntaxLoadingPairId(pairId)
-    setSyntaxErrorMessage('')
-    sourceInputRef.current?.blur()
-
-    void window.api
-      .analyzeSentenceSyntax({
-        sentence: pairSentences.englishSentence,
-        targetTranslation: pairSentences.chineseSentence,
-        options: {
-          providerId: selectedProviderId,
-          model: selectedModel
-        }
-      })
-      .then((response) => {
-        if (sentenceSyntaxRequestIdRef.current !== requestId) return
-        if (!response.ok) {
-          setSyntaxErrorMessage(response.error.message || '语法透视失败，请稍后再试')
-          return
-        }
-
-        setSentenceSyntaxByPairId((current) => ({
-          ...current,
-          [pairId]: response.analysis
-        }))
-        setSyntaxViewPairId(pairId)
-      })
-      .catch((error) => {
-        if (sentenceSyntaxRequestIdRef.current !== requestId) return
-        console.warn('[renderer] 语法透视失败:', error)
-        setSyntaxErrorMessage('语法透视失败，请稍后再试')
-      })
-      .finally(() => {
-        if (sentenceSyntaxRequestIdRef.current === requestId) {
-          setSyntaxLoadingPairId(null)
-        }
-      })
-  }, [
-    activeAlignmentPairId,
-    alignment,
-    isLearningActive,
-    learningHighlightSide,
-    selectedModel,
-    selectedProviderId,
-    sentenceSyntaxByPairId,
-    sourceText,
-    syntaxLoadingPairId,
-    syntaxTargetPairId,
-    syntaxViewPairId,
-    targetText
-  ])
-
-  /** 关闭语法透视并恢复输入框焦点 */
-  const handleCloseSentenceSyntax = useCallback((): void => {
-    setSyntaxViewPairId(null)
-    window.requestAnimationFrame(() => sourceInputRef.current?.focus())
-  }, [])
-
-  /** 对未被学习高亮覆盖的英文词发起单点上下文查词 */
+  /** 对用户点击的英文词发起单点上下文查词 */
   const requestContextualWordLookup = useCallback(
     (params: {
       word: string
@@ -2593,19 +2608,14 @@ function App(): React.JSX.Element {
       const requestId = wordLookupRequestIdRef.current + 1
       wordLookupRequestIdRef.current = requestId
 
-      cancelWordLookupClose()
       setActiveAlignmentPairId(params.pairId)
       if (params.side === 'source') {
         setHoveredSourceWordId(params.anchorId)
-        setHoveredSourceHighlightId(null)
         setHoveredTargetWordId(null)
-        setHoveredTargetHighlightId(null)
         scrollResultToPair(params.pairId)
       } else {
         setHoveredSourceWordId(null)
-        setHoveredSourceHighlightId(null)
         setHoveredTargetWordId(params.anchorId)
-        setHoveredTargetHighlightId(null)
         scrollSourceToPair(params.pairId)
       }
 
@@ -2665,8 +2675,12 @@ function App(): React.JSX.Element {
               : ''
           applyReadyResult(
             {
+              kind: cachedItem.kind ?? 'lexical',
               lemma: cachedItem.lemma,
+              ...(cachedItem.literalMeaning ? { literalMeaning: cachedItem.literalMeaning } : {}),
               meaning: cachedItem.meaning,
+              ...(cachedItem.contextNote ? { contextNote: cachedItem.contextNote } : {}),
+              ...(cachedItem.wordOrderNote ? { wordOrderNote: cachedItem.wordOrderNote } : {}),
               targetText: contextualTargetText
             },
             'database',
@@ -2733,7 +2747,6 @@ function App(): React.JSX.Element {
     },
     [
       cacheWordLookupResult,
-      cancelWordLookupClose,
       detectedInfo.detected,
       effectiveTargetLang,
       scrollResultToPair,
@@ -2744,7 +2757,7 @@ function App(): React.JSX.Element {
     ]
   )
 
-  /** 鼠标在原生输入框上移动时，按高亮、单词、整句的优先级更新命中项 */
+  /** 鼠标在原生输入框上移动时，按生词标记、单词、整句的优先级更新命中项 */
   const handleSourceMouseMove = (event: React.MouseEvent<HTMLTextAreaElement>): void => {
     const textarea = event.currentTarget
     if (!alignment) {
@@ -2764,12 +2777,7 @@ function App(): React.JSX.Element {
       sourceHoverFrameRef.current = null
       let nextPairId: string | null = null
       let nextWordId: string | null = null
-      let nextHighlightId: string | null = null
       let nextEncounterId: string | null = null
-      let hoveredWordIdUnderPointer: string | null = null
-      let hoveredHighlightIdUnderPointer: string | null = null
-      let hoveredEncounterIdUnderPointer: string | null = null
-      let isPointerOverLookupItem = false
       let bestVerticalDistance = Number.POSITIVE_INFINITY
       let bestPriority = Number.POSITIVE_INFINITY
 
@@ -2784,31 +2792,8 @@ function App(): React.JSX.Element {
                 ? pointerY - rect.bottom
                 : 0
           if (verticalDistance > 4) continue
-          if (hitBox.kind === 'word') {
-            hoveredWordIdUnderPointer = hitBox.id
-            if (wordLookup?.side === 'source' && hitBox.id === wordLookup.lookupAnchorId) {
-              isPointerOverLookupItem = true
-            }
-          } else if (hitBox.kind === 'highlight') {
-            hoveredHighlightIdUnderPointer = hitBox.id
-            if (wordLookup?.side === 'source' && hitBox.id === wordLookup.lookupAnchorId) {
-              isPointerOverLookupItem = true
-            }
-          } else if (hitBox.kind === 'encounter') {
-            hoveredEncounterIdUnderPointer = hitBox.id
-            if (wordLookup?.side === 'source' && hitBox.id === wordLookup.lookupAnchorId) {
-              isPointerOverLookupItem = true
-            }
-          }
 
-          const priority =
-            hitBox.kind === 'highlight'
-              ? 0
-              : hitBox.kind === 'encounter'
-                ? 1
-                : hitBox.kind === 'word'
-                  ? 2
-                  : 3
+          const priority = hitBox.kind === 'encounter' ? 0 : hitBox.kind === 'word' ? 1 : 2
           if (
             verticalDistance > bestVerticalDistance ||
             (verticalDistance === bestVerticalDistance && priority >= bestPriority)
@@ -2818,28 +2803,19 @@ function App(): React.JSX.Element {
 
           bestVerticalDistance = verticalDistance
           bestPriority = priority
-          if (hitBox.kind === 'highlight') {
-            const highlight = alignmentView?.highlightById.get(hitBox.id)
-            nextHighlightId = hitBox.id
-            nextEncounterId = null
-            nextWordId = null
-            nextPairId = highlight?.pairId ?? null
-          } else if (hitBox.kind === 'encounter') {
+          if (hitBox.kind === 'encounter') {
             const encounterMatch = encounterWordView?.matchById.get(hitBox.id)
-            nextHighlightId = null
             nextEncounterId = hitBox.id
             nextWordId = null
             nextPairId = encounterMatch?.pairId ?? null
           } else if (hitBox.kind === 'word') {
             const wordToken = sourceWordView?.tokenById.get(hitBox.id)
-            nextHighlightId = null
             nextEncounterId = null
             nextWordId = hitBox.id
             nextPairId = wordToken
               ? (alignmentView?.sourcePairBySegmentId.get(wordToken.segmentId) ?? null)
               : null
           } else {
-            nextHighlightId = null
             nextEncounterId = null
             nextWordId = null
             nextPairId = hitBox.id
@@ -2848,54 +2824,19 @@ function App(): React.JSX.Element {
       }
 
       setHoveredSourceWordId(nextWordId)
-      setHoveredSourceHighlightId(nextHighlightId)
 
-      if (nextHighlightId) {
-        const highlight = alignmentView?.highlightById.get(nextHighlightId)
-        if (highlight) {
-          setActiveAlignmentPairId(highlight.pairId)
-          if (wordLookup?.side === 'source' && wordLookup.lookupAnchorId === highlight.id) {
-            cancelWordLookupClose()
-          } else {
-            showHighlightLookup(highlight, getWordLookupPosition(pointerX, event.clientY))
-          }
-        }
-      } else if (nextEncounterId) {
-        const encounterMatch = encounterWordView?.matchById.get(nextEncounterId)
-        if (encounterMatch) {
-          setActiveAlignmentPairId(encounterMatch.pairId)
-          if (wordLookup?.side === 'source' && wordLookup.lookupAnchorId === encounterMatch.id) {
-            cancelWordLookupClose()
-          } else {
-            showEncounterLookup(encounterMatch, getWordLookupPosition(pointerX, event.clientY))
-          }
-        }
-      } else if (!wordLookup) {
+      if (nextPairId) {
         setActiveAlignmentPairId((current) => (current === nextPairId ? current : nextPairId))
-        if (nextPairId) scrollResultToPair(nextPairId)
-      } else if (isPointerOverLookupItem) {
-        cancelWordLookupClose()
-      } else if (hoveredWordIdUnderPointer) {
-        closeWordLookup()
-        setHoveredSourceWordId(hoveredWordIdUnderPointer)
-        setHoveredSourceHighlightId(null)
-        setActiveAlignmentPairId(nextPairId)
-        if (nextPairId) scrollResultToPair(nextPairId)
+        scrollResultToPair(nextPairId)
       } else {
-        scheduleWordLookupClose()
+        setActiveAlignmentPairId(null)
+        restoreRestingSyntaxPair()
       }
-      textarea.style.cursor =
-        hoveredHighlightIdUnderPointer ||
-        hoveredEncounterIdUnderPointer ||
-        hoveredWordIdUnderPointer ||
-        nextWordId ||
-        nextEncounterId
-          ? 'pointer'
-          : 'text'
+      textarea.style.cursor = nextWordId || nextEncounterId ? 'pointer' : 'text'
     })
   }
 
-  /** 点击原文时优先打开已返回的学习高亮，否则查询光标下的普通英文词 */
+  /** 点击原文时查询光标下的普通英文词 */
   const handleSourceClick = (event: React.MouseEvent<HTMLTextAreaElement>): void => {
     const textarea = event.currentTarget
     if (
@@ -2908,34 +2849,35 @@ function App(): React.JSX.Element {
     }
 
     const clickOffset = textarea.selectionStart
-    const clickedHighlight =
-      alignmentView.sourceHighlights.find(
-        (highlight) => clickOffset >= highlight.start && clickOffset < highlight.end
-      ) ?? alignmentView.sourceHighlights.find((highlight) => clickOffset === highlight.end)
-    if (clickedHighlight) {
-      showHighlightLookup(clickedHighlight, getWordLookupPosition(event.clientX, event.clientY), {
-        persist: true
-      })
-      return
-    }
-
+    const selection = findEnglishWordAtOffset(sourceText, clickOffset)
+    // 语法缩写即使落在旧短语匹配范围里，也必须允许用户单独点选。
+    const preferStandaloneGrammarWord = selection ? isGrammarContraction(selection.text) : false
     const clickedEncounter =
-      encounterWordView?.highlights.find(
-        (encounter) => clickOffset >= encounter.start && clickOffset < encounter.end
-      ) ?? encounterWordView?.highlights.find((encounter) => clickOffset === encounter.end)
+      (preferStandaloneGrammarWord
+        ? undefined
+        : encounterWordView?.highlights.find(
+            (encounter) => clickOffset >= encounter.start && clickOffset < encounter.end
+          )) ??
+      (preferStandaloneGrammarWord
+        ? undefined
+        : encounterWordView?.highlights.find((encounter) => clickOffset === encounter.end))
     if (clickedEncounter) {
       showEncounterLookup(clickedEncounter, getWordLookupPosition(event.clientX, event.clientY))
       return
     }
 
-    if (!sourceWordView) {
+    if (!selection || !sourceWordView) {
+      const clickedSegment = alignment.sourceSegments.find(
+        (segment) => clickOffset >= segment.start && clickOffset < segment.end
+      )
+      const pairId = clickedSegment
+        ? (alignmentView.sourcePairBySegmentId.get(clickedSegment.id) ?? null)
+        : null
       closeWordLookup()
-      return
-    }
-
-    const selection = findEnglishWordAtOffset(sourceText, clickOffset)
-    if (!selection) {
-      closeWordLookup()
+      if (pairId) {
+        setActiveAlignmentPairId(pairId)
+        setSyntaxTargetPairId(pairId)
+      }
       return
     }
 
@@ -2965,20 +2907,15 @@ function App(): React.JSX.Element {
     })
   }
 
-  /** 鼠标离开输入区时立即取消两侧高亮 */
+  /** 鼠标离开输入区时只清理临时悬停状态，保留用户最后查看的整句结构 */
   const handleSourceMouseLeave = (event: React.MouseEvent<HTMLTextAreaElement>): void => {
     if (sourceHoverFrameRef.current !== null) {
       window.cancelAnimationFrame(sourceHoverFrameRef.current)
       sourceHoverFrameRef.current = null
     }
     event.currentTarget.style.cursor = ''
-    if (wordLookup) {
-      scheduleWordLookupClose()
-    } else {
-      setHoveredSourceWordId(null)
-      setHoveredSourceHighlightId(null)
-      setActiveAlignmentPairId(null)
-    }
+    setHoveredSourceWordId(null)
+    setActiveAlignmentPairId(null)
   }
 
   /** 中译英时点击译文中的普通英文词，仍走原有单点上下文查词 */
@@ -3010,34 +2947,20 @@ function App(): React.JSX.Element {
     })
   }
 
-  /** 点击学习高亮表示主动学习，立即写入本地词库 */
-  const handleTargetHighlightClick = (
-    highlight: LearningHighlight,
-    event: React.MouseEvent<HTMLSpanElement>
-  ): void => {
-    event.stopPropagation()
-    showHighlightLookup(highlight, getWordLookupPosition(event.clientX, event.clientY), {
-      persist: true
-    })
-  }
-
-  /** 译文中的学习高亮直接展示对齐响应中的释义与地道表达说明 */
-  const handleTargetHighlightEnter = (
-    highlight: LearningHighlight,
-    event: React.MouseEvent<HTMLSpanElement>
-  ): void => {
-    showHighlightLookup(highlight, getWordLookupPosition(event.clientX, event.clientY))
-  }
-
   /** 译文普通词只显示轻量悬停状态，点击时才发起请求 */
   const handleTargetWordEnter = (token: AlignmentToken, pairId: string): void => {
     setActiveAlignmentPairId(pairId)
     setHoveredTargetWordId(token.id)
-    setHoveredTargetHighlightId(null)
     scrollSourceToPair(pairId)
   }
 
-  /** 译文中的二次偶遇词直接展示本地记录，不发模型请求 */
+  /** 译文中的二次偶遇词悬停只同步句对，点击后再展示本地记录 */
+  const handleTargetEncounterEnter = (match: EncounterVocabHighlight): void => {
+    setActiveAlignmentPairId(match.pairId)
+    setHoveredTargetWordId(null)
+    scrollSourceToPair(match.pairId)
+  }
+
   const handleTargetEncounterLookup = (
     match: EncounterVocabHighlight,
     event: React.MouseEvent<HTMLSpanElement>
@@ -3046,7 +2969,7 @@ function App(): React.JSX.Element {
     showEncounterLookup(match, getWordLookupPosition(event.clientX, event.clientY))
   }
 
-  /** 浮层中的收藏按钮用于把仅预览的学习高亮主动写入本地词库 */
+  /** 浮层中的收藏按钮用于把当前词义主动写入本地词库 */
   const handlePersistCurrentLookup = (): void => {
     if (
       !wordLookup?.result ||
@@ -3084,7 +3007,7 @@ function App(): React.JSX.Element {
 
     void removeVocabItem(wordLookup.result.lemma)
       .then(() => {
-        // 偶遇高亮完全由该状态派生，移除词条后下划线与星标会立即消失。
+        // 已收藏词标记完全由该状态派生，移除词条后下划线与星标会立即消失。
         setEncounterVocabItems((current) =>
           current.filter((item) => item.lemmaLower !== lemmaLower)
         )
@@ -3116,34 +3039,22 @@ function App(): React.JSX.Element {
       })
   }
 
-  /** 离开译文词条后按原有延迟关闭浮层 */
+  /** 离开译文词条后只清理临时悬停状态，不关闭底部学习内容 */
   const handleTargetLookupLeave = (): void => {
     setHoveredTargetWordId(null)
-    setHoveredTargetHighlightId(null)
-    if (wordLookup) scheduleWordLookupClose()
   }
 
-  // 查词浮层打开后，点击单词与浮层外的位置或按 Esc 即可立即关闭
+  // 词义卡打开后按 Esc 返回整句结构
   useEffect(() => {
     if (!wordLookup) return
 
-    const handlePointerDown = (event: PointerEvent): void => {
-      const target = event.target
-      if (target instanceof Node && sourceInputRef.current?.contains(target)) return
-      if (target instanceof Node && wordLookupRef.current?.contains(target)) return
-      closeWordLookup()
-    }
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') closeWordLookup()
     }
 
-    document.addEventListener('pointerdown', handlePointerDown, true)
     window.addEventListener('keydown', handleKeyDown)
 
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown, true)
-      window.removeEventListener('keydown', handleKeyDown)
-    }
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [closeWordLookup, wordLookup])
 
   /** 输入框滚动后同步测量层，避免命中的语句与显示文本错位 */
@@ -3167,8 +3078,8 @@ function App(): React.JSX.Element {
 
     setActiveAlignmentPairId(null)
     setHoveredSourceWordId(null)
-    setHoveredSourceHighlightId(null)
     measureSourceHitBoxes()
+    restoreRestingSyntaxPair()
 
     if (sourceScrollSyncTimerRef.current !== null) {
       window.clearTimeout(sourceScrollSyncTimerRef.current)
@@ -3186,7 +3097,14 @@ function App(): React.JSX.Element {
       const pairId = findVisiblePairId(currentMirror, '[data-source-pair-id]')
       if (pairId) scrollResultToPair(pairId)
     }, PAIR_SCROLL_SYNC_DEBOUNCE_MS)
-  }, [alignment, closeWordLookup, measureSourceHitBoxes, scrollResultToPair, useLearningLayout])
+  }, [
+    alignment,
+    closeWordLookup,
+    measureSourceHitBoxes,
+    restoreRestingSyntaxPair,
+    scrollResultToPair,
+    useLearningLayout
+  ])
 
   useEffect(() => {
     const textarea = sourceInputRef.current
@@ -3205,18 +3123,54 @@ function App(): React.JSX.Element {
     [scrollSourceToPair]
   )
 
-  /** 清空所有悬停状态，供译文区滚动与鼠标离开时复用 */
+  /** 点击译文中的句子才锁定结构；点击单词会阻止冒泡并继续打开词义卡 */
+  const handleTargetPairClick = useCallback(
+    (pairId: string): void => {
+      closeWordLookup()
+      openStructurePair(pairId)
+    },
+    [closeWordLookup, openStructurePair]
+  )
+
+  /** 收起整句结构后回到原文、译文上下排列的竖向布局 */
+  const handleCollapseStructure = useCallback((): void => {
+    if (isStructureCollapsing) return
+
+    closeWordLookup()
+    setActiveAlignmentPairId(null)
+    setIsStructureCollapsing(true)
+
+    if (structureCollapseTimerRef.current !== null) {
+      window.clearTimeout(structureCollapseTimerRef.current)
+    }
+    structureCollapseTimerRef.current = window.setTimeout(() => {
+      structureCollapseTimerRef.current = null
+      setSyntaxTargetPairId(null)
+      setIsStructureCollapsing(false)
+    }, STRUCTURE_LAYOUT_COLLAPSE_MS)
+  }, [closeWordLookup, isStructureCollapsing])
+
+  /** 词义卡里的“整句”按钮需要真正打开当前词所属句子的结构 */
+  const handleOpenLookupSentence = useCallback((): void => {
+    const pairId = wordLookup?.pairId
+    closeWordLookup()
+    if (!pairId) return
+
+    openStructurePair(pairId)
+  }, [closeWordLookup, openStructurePair, wordLookup?.pairId])
+
+  /** 清空临时悬停状态；整句结构保留在当前查看的段落，不随鼠标离开回退 */
   const clearHoverState = useCallback((): void => {
     setActiveAlignmentPairId(null)
     setHoveredTargetWordId(null)
-    setHoveredTargetHighlightId(null)
   }, [])
 
-  /** 用户手动滚动译文时清空悬停状态，程序化定位滚动则保持高亮 */
+  /** 用户手动滚动译文时清空悬停状态，程序化定位滚动则保持当前句 */
   const handleResultScroll = (): void => {
     if (isAutoScrollingResultRef.current) return
     closeWordLookup()
     clearHoverState()
+    restoreRestingSyntaxPair()
 
     if (resultScrollSyncTimerRef.current !== null) {
       window.clearTimeout(resultScrollSyncTimerRef.current)
@@ -3299,6 +3253,17 @@ function App(): React.JSX.Element {
     setCopyState('idle')
   }
 
+  /** 顶部模式切换：翻译保持轻量，学习模式负责加载对齐与结构分析 */
+  const handleModeChange = (nextLearningMode: boolean): void => {
+    if (nextLearningMode === learningMode || (nextLearningMode && !isLearningSupported)) return
+    setLearningMode(nextLearningMode)
+
+    if (!nextLearningMode) {
+      closeWordLookup()
+      resetAlignment()
+    }
+  }
+
   const handleCopyTarget = async (): Promise<void> => {
     if (!targetText.trim()) return
 
@@ -3313,8 +3278,16 @@ function App(): React.JSX.Element {
 
   return (
     <main
-      className={`translator-device${useLearningLayout ? ' learning-layout' : ''}`}
+      className={`translator-device${useLearningLayout ? ' learning-layout' : ''}${
+        useStructureLayout ? ' structure-layout' : ''
+      }${isStructureCollapsing ? ' structure-layout-collapsing' : ''}`}
       ref={deviceRef}
+      style={
+        {
+          '--structure-layout-duration': `${STRUCTURE_LAYOUT_TRANSITION_MS}ms`,
+          '--structure-collapse-duration': `${STRUCTURE_LAYOUT_COLLAPSE_MS}ms`
+        } as CSSProperties
+      }
     >
       <section className="device-panel">
         <header className="lang-bar">
@@ -3445,6 +3418,29 @@ function App(): React.JSX.Element {
             ) : null}
           </div>
 
+          <span className="header-spacer" aria-hidden="true" />
+
+          <div className="mode-tabs" role="group" aria-label="工作模式">
+            <button
+              type="button"
+              className={`mode-tab${!isLearningActive ? ' mode-tab-active' : ''}`}
+              aria-pressed={!isLearningActive}
+              onClick={() => handleModeChange(false)}
+            >
+              翻译
+            </button>
+            <button
+              type="button"
+              className={`mode-tab${isLearningActive ? ' mode-tab-active' : ''}`}
+              aria-pressed={isLearningActive}
+              disabled={!isLearningSupported}
+              title={isLearningSupported ? '进入学习模式' : '学习模式仅支持英语与简体中文互译'}
+              onClick={() => handleModeChange(true)}
+            >
+              学习
+            </button>
+          </div>
+
           <button
             className="icon-btn settings-btn"
             type="button"
@@ -3496,344 +3492,355 @@ function App(): React.JSX.Element {
         </header>
 
         <div className="device-body">
-          <div className="compose">
-            <div
-              className={`compose-stage${
-                canUseSourceSentenceSyntax ? ' compose-stage-with-syntax' : ''
-              }${activeSentenceSyntax ? ' syntax-source-active' : ''}`}
+          {useStructureLayout && alignment && alignmentView ? (
+            <aside
+              className="learning-drawer learning-drawer-structure learning-structure-panel"
+              role="region"
+              aria-label="当前句子的结构说明"
+              aria-live="polite"
             >
-              {isLearningActive && alignment && alignmentView ? (
-                <div className="compose-mirror" aria-hidden="true" ref={sourceMirrorRef}>
-                  <SegmentedText
-                    text={sourceText}
-                    segments={alignment.sourceSegments}
-                    pairBySegmentId={alignmentView.sourcePairBySegmentId}
-                    activePairId={activeAlignmentPairId}
-                    side="source"
-                    lookupTokensBySegmentId={sourceWordView?.tokensBySegmentId}
-                    highlights={alignmentView.sourceHighlights}
-                    encounterHighlights={
-                      encounterWordView?.side === 'source'
-                        ? encounterWordView.highlights
-                        : undefined
-                    }
-                    activeLookupWordId={
-                      hoveredSourceWordId ??
-                      (wordLookup?.side === 'source' ? wordLookup.lookupAnchorId : null)
-                    }
-                    activeHighlightId={
-                      hoveredSourceHighlightId ??
-                      (wordLookup?.side === 'source' ? wordLookup.lookupAnchorId : null)
-                    }
-                    activeEncounterId={
-                      wordLookup?.origin === 'encounter' && wordLookup.side === 'source'
-                        ? wordLookup.lookupAnchorId
-                        : null
-                    }
-                  />
+              <span className="learning-drawer-word-rail" aria-hidden="true" />
+              <div className="learning-drawer-body structure-compact-body">
+                <div className="structure-compact-head">
+                  <div className="structure-compact-title">
+                    <strong>整句结构</strong>
+                    {displayedSyntaxSentenceNumber ? (
+                      <span>第 {displayedSyntaxSentenceNumber} 句</span>
+                    ) : null}
+                  </div>
+                  <div className="structure-compact-head-actions">
+                    <button
+                      type="button"
+                      className={`structure-compact-toggle${
+                        showCollectedWordMarks ? ' structure-compact-toggle-on' : ''
+                      }`}
+                      aria-label={showCollectedWordMarks ? '关闭已收藏词标记' : '显示已收藏词标记'}
+                      aria-pressed={showCollectedWordMarks}
+                      title="只标记已收藏的单词，不影响点击查词"
+                      onClick={() => setShowCollectedWordMarks((current) => !current)}
+                    >
+                      <span className="structure-compact-toggle-dot" aria-hidden="true" />
+                      收藏
+                    </button>
+                    <button
+                      type="button"
+                      className="structure-compact-close"
+                      aria-label="收起整句结构"
+                      title="收起整句结构，回到竖向阅读"
+                      onClick={handleCollapseStructure}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
-              ) : null}
-
-              <textarea
-                ref={sourceInputRef}
-                className="compose-input"
-                value={sourceText}
-                onChange={handleSourceTextChange}
-                onClick={handleSourceClick}
-                onMouseMove={handleSourceMouseMove}
-                onMouseLeave={handleSourceMouseLeave}
-                placeholder={`截图 ${screenshotShortcut}，或直接输入 / 粘贴文字`}
-                rows={1}
-                spellCheck={false}
-                aria-label="源文本输入框"
-              />
-
-              {canUseSourceSentenceSyntax && !activeSentenceSyntax ? (
-                <button
-                  type="button"
-                  className={`sentence-syntax-toggle${
-                    syntaxErrorMessage ? ' sentence-syntax-toggle-error' : ''
-                  }`}
-                  disabled={Boolean(syntaxLoadingPairId)}
-                  title={
-                    syntaxLoadingPairId
-                      ? '正在分析当前句的核心内容'
-                      : '语法透视（悬停英文句可切换目标）'
+                {hoveredSyntaxSentenceNumber ? (
+                  <p className="structure-compact-switch-hint">
+                    点击第 {hoveredSyntaxSentenceNumber} 句查看这句话的结构
+                  </p>
+                ) : null}
+                <SentenceStructureView
+                  analysis={displayedSentenceSyntax}
+                  isLoading={
+                    Boolean(displayedSyntaxPairId) &&
+                    !displayedSentenceSyntax &&
+                    syntaxErrorPairId !== displayedSyntaxPairId
                   }
-                  aria-label="分析当前英文句的核心内容"
-                  aria-expanded="false"
-                  onClick={handleToggleSentenceSyntax}
-                >
-                  {syntaxLoadingPairId ? (
-                    <span className="sentence-syntax-spinner" aria-hidden="true" />
-                  ) : (
-                    <SyntaxStructureIcon />
+                  hasError={Boolean(
+                    displayedSyntaxPairId &&
+                    !displayedSentenceSyntax &&
+                    syntaxErrorPairId === displayedSyntaxPairId
                   )}
-                </button>
-              ) : null}
-
-              {syntaxErrorMessage && canUseSourceSentenceSyntax && !activeSentenceSyntax ? (
-                <div className="sentence-syntax-error" role="alert">
-                  {syntaxErrorMessage}
-                </div>
-              ) : null}
-
-              {activeSentenceSyntax ? (
-                <SentenceSyntaxView
-                  analysis={activeSentenceSyntax}
-                  onClose={handleCloseSentenceSyntax}
+                  onRetry={handleRetrySentenceSyntax}
                 />
-              ) : null}
+              </div>
+            </aside>
+          ) : null}
+
+          <div className="reading-column">
+            <div className="compose">
+              <div className="compose-stage">
+                {isLearningActive && alignment && alignmentView ? (
+                  <div className="compose-mirror" aria-hidden="true" ref={sourceMirrorRef}>
+                    <SegmentedText
+                      text={sourceText}
+                      segments={alignment.sourceSegments}
+                      pairBySegmentId={alignmentView.sourcePairBySegmentId}
+                      activePairId={activeAlignmentPairId}
+                      side="source"
+                      lookupTokensBySegmentId={sourceWordView?.tokensBySegmentId}
+                      encounterHighlights={
+                        encounterWordView?.side === 'source'
+                          ? encounterWordView.highlights
+                          : undefined
+                      }
+                      activeLookupWordId={
+                        hoveredSourceWordId ??
+                        (wordLookup?.side === 'source' ? wordLookup.lookupAnchorId : null)
+                      }
+                      activeEncounterId={
+                        wordLookup?.origin === 'encounter' && wordLookup.side === 'source'
+                          ? wordLookup.lookupAnchorId
+                          : null
+                      }
+                    />
+                  </div>
+                ) : null}
+
+                <textarea
+                  ref={sourceInputRef}
+                  className="compose-input"
+                  value={sourceText}
+                  onChange={handleSourceTextChange}
+                  onClick={handleSourceClick}
+                  onMouseMove={handleSourceMouseMove}
+                  onMouseLeave={handleSourceMouseLeave}
+                  placeholder={`截图 ${screenshotShortcut}，或直接输入 / 粘贴文字`}
+                  rows={1}
+                  spellCheck={false}
+                  aria-label="源文本输入框"
+                />
+              </div>
             </div>
-          </div>
 
-          <section className="result">
-            <div className="result-scroll" ref={resultScrollRef} onScroll={handleResultScroll}>
-              {errorMessage ? (
-                <p className="result-error" role="status" aria-live="polite">
-                  {errorMessage}
-                </p>
+            <section className="result">
+              <div className="result-scroll" ref={resultScrollRef} onScroll={handleResultScroll}>
+                {errorMessage ? (
+                  <p className="result-error" role="status" aria-live="polite">
+                    {errorMessage}
+                  </p>
+                ) : null}
+
+                {isRecognizing ? (
+                  <div className="result-pending" role="status" aria-live="polite">
+                    <p>正在识别截图文字…</p>
+                    {ocrSlowHint ? (
+                      <p className="result-pending-hint">
+                        首次使用需要初始化识别模型，可能需要半分钟，请稍候
+                      </p>
+                    ) : null}
+                  </div>
+                ) : status === 'translating' && !targetText.trim() ? (
+                  <div className="result-loader" aria-live="polite" aria-label="正在翻译">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                ) : isVocabFlashcardVisible ? (
+                  vocabFlashcardState === 'ready' && vocabFlashcard && flashcardSentenceParts ? (
+                    <div
+                      className={`vocab-flashcard${
+                        isVocabFlashcardRevealed ? ' vocab-flashcard-revealed' : ''
+                      }`}
+                      role="button"
+                      tabIndex={0}
+                      aria-label="偶遇复习闪卡，悬停或点击查看中文释义"
+                      onMouseEnter={() => setIsVocabFlashcardRevealed(true)}
+                      onClick={() => setIsVocabFlashcardRevealed(true)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          setIsVocabFlashcardRevealed(true)
+                        }
+                      }}
+                    >
+                      <div className="vocab-flashcard-kicker">
+                        <span>偶遇复习</span>
+                        <span>已偶遇 {vocabFlashcard.item.encounterCount} 次</span>
+                      </div>
+                      <p className="vocab-flashcard-sentence" lang="en">
+                        {flashcardSentenceParts.match ? (
+                          <>
+                            {flashcardSentenceParts.before}
+                            <mark>{flashcardSentenceParts.match}</mark>
+                            {flashcardSentenceParts.after}
+                          </>
+                        ) : (
+                          flashcardSentenceParts.before
+                        )}
+                      </p>
+                      <div className="vocab-flashcard-answer">
+                        <p>{vocabFlashcard.item.meaning}</p>
+                        <p lang="zh-CN">{vocabFlashcard.context.targetSentence}</p>
+                      </div>
+                      <div className="vocab-flashcard-hint">
+                        {isVocabFlashcardRevealed ? '再次偶遇，记得更牢' : '悬停或点击揭晓释义'}
+                      </div>
+                    </div>
+                  ) : vocabFlashcardState === 'loading' || vocabFlashcardState === 'hidden' ? (
+                    <div className="vocab-flashcard-loading" role="status">
+                      正在翻阅生词…
+                    </div>
+                  ) : (
+                    <div className="vocab-flashcard-empty">
+                      <span>偶遇复习</span>
+                      <p>查过的重点词会在这里变成闪卡</p>
+                    </div>
+                  )
+                ) : isLearningActive && alignment && alignmentView ? (
+                  <p className="result-text" onMouseLeave={clearHoverState}>
+                    <SegmentedText
+                      text={targetText}
+                      segments={alignment.targetSegments}
+                      pairBySegmentId={alignmentView.targetPairBySegmentId}
+                      activePairId={activeAlignmentPairId}
+                      side="target"
+                      lookupTokensBySegmentId={targetWordView?.tokensBySegmentId}
+                      encounterHighlights={
+                        encounterWordView?.side === 'target'
+                          ? encounterWordView.highlights
+                          : undefined
+                      }
+                      activeLookupWordId={
+                        hoveredTargetWordId ??
+                        (wordLookup?.side === 'target' ? wordLookup.lookupAnchorId : null)
+                      }
+                      activeEncounterId={
+                        wordLookup?.origin === 'encounter' && wordLookup.side === 'target'
+                          ? wordLookup.lookupAnchorId
+                          : null
+                      }
+                      onPairEnter={handleTargetPairEnter}
+                      onPairClick={handleTargetPairClick}
+                      onLookupWordClick={handleTargetWordClick}
+                      onLookupWordEnter={handleTargetWordEnter}
+                      onLookupWordLeave={handleTargetLookupLeave}
+                      onEncounterClick={handleTargetEncounterLookup}
+                      onEncounterEnter={handleTargetEncounterEnter}
+                      onEncounterLeave={handleTargetLookupLeave}
+                    />
+                  </p>
+                ) : (
+                  <p
+                    className={`result-text${targetText ? '' : ' result-placeholder'}${
+                      status === 'translating' && targetText ? ' result-text-streaming' : ''
+                    }`}
+                  >
+                    {targetText || '译文会显示在这里'}
+                  </p>
+                )}
+              </div>
+
+              {wordLookup ? (
+                <aside
+                  ref={learningDrawerRef}
+                  className="learning-drawer learning-drawer-word"
+                  role="region"
+                  aria-label={
+                    wordLookup.result?.kind === 'grammar'
+                      ? '当前语法词的语境说明'
+                      : '当前单词的语境释义'
+                  }
+                  aria-live="polite"
+                >
+                  <span className="learning-drawer-word-rail" aria-hidden="true" />
+                  <div className="learning-drawer-body word-compact-body">
+                    <WordLookupCompactView
+                      lookup={wordLookup}
+                      onClose={handleOpenLookupSentence}
+                      onPersist={handlePersistCurrentLookup}
+                      onRemove={handleRemoveCurrentLookup}
+                    />
+                  </div>
+                </aside>
               ) : null}
 
-              {isRecognizing ? (
-                <div className="result-pending" role="status" aria-live="polite">
-                  <p>正在识别截图文字…</p>
-                  {ocrSlowHint ? (
-                    <p className="result-pending-hint">
-                      首次使用需要初始化识别模型，可能需要半分钟，请稍候
-                    </p>
-                  ) : null}
-                </div>
-              ) : status === 'translating' && !targetText.trim() ? (
-                <div className="result-loader" aria-live="polite" aria-label="正在翻译">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              ) : isVocabFlashcardVisible ? (
-                vocabFlashcardState === 'ready' && vocabFlashcard && flashcardSentenceParts ? (
-                  <div
-                    className={`vocab-flashcard${
-                      isVocabFlashcardRevealed ? ' vocab-flashcard-revealed' : ''
-                    }`}
-                    role="button"
-                    tabIndex={0}
-                    aria-label="偶遇复习闪卡，悬停或点击查看中文释义"
-                    onMouseEnter={() => setIsVocabFlashcardRevealed(true)}
-                    onClick={() => setIsVocabFlashcardRevealed(true)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        setIsVocabFlashcardRevealed(true)
+              <div className="result-toolbar" ref={resultToolbarRef}>
+                <div className="toolbar-left">
+                  <button
+                    className="icon-btn"
+                    type="button"
+                    onClick={handleClearSource}
+                    disabled={!hasSourceText}
+                    aria-label="清空输入"
+                    title="清空输入"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </button>
+
+                  <button
+                    ref={modelSelectorRef}
+                    className="model-entry"
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={isModelMenuOpen}
+                    aria-label={
+                      activeProvider
+                        ? `当前服务商: ${activeProvider.name}，模型: ${selectedModel}，点击打开模型面板`
+                        : '当前没有启用任何服务商，点击打开模型面板查看'
+                    }
+                    title={
+                      activeProvider
+                        ? `服务商: ${activeProvider.name}\n模型: ${selectedModel}\n地址: ${activeProvider.baseUrl}`
+                        : '当前没有启用任何服务商，请在偏好设置里启用一个'
+                    }
+                    onClick={() => {
+                      setIsSourceLangMenuOpen(false)
+                      setIsTargetLangMenuOpen(false)
+                      if (isModelMenuOpen) {
+                        closeModelMenu()
+                      } else {
+                        openModelMenu()
                       }
                     }}
                   >
-                    <div className="vocab-flashcard-kicker">
-                      <span>偶遇复习</span>
-                      <span>已偶遇 {vocabFlashcard.item.encounterCount} 次</span>
-                    </div>
-                    <p className="vocab-flashcard-sentence" lang="en">
-                      {flashcardSentenceParts.match ? (
-                        <>
-                          {flashcardSentenceParts.before}
-                          <mark>{flashcardSentenceParts.match}</mark>
-                          {flashcardSentenceParts.after}
-                        </>
-                      ) : (
-                        flashcardSentenceParts.before
-                      )}
-                    </p>
-                    <div className="vocab-flashcard-answer">
-                      <p>{vocabFlashcard.item.meaning}</p>
-                      <p lang="zh-CN">{vocabFlashcard.context.targetSentence}</p>
-                    </div>
-                    <div className="vocab-flashcard-hint">
-                      {isVocabFlashcardRevealed ? '再次偶遇，记得更牢' : '悬停或点击揭晓释义'}
-                    </div>
-                  </div>
-                ) : vocabFlashcardState === 'loading' || vocabFlashcardState === 'hidden' ? (
-                  <div className="vocab-flashcard-loading" role="status">
-                    正在翻阅生词…
-                  </div>
-                ) : (
-                  <div className="vocab-flashcard-empty">
-                    <span>偶遇复习</span>
-                    <p>查过的重点词会在这里变成闪卡</p>
-                  </div>
-                )
-              ) : isLearningActive && alignment && alignmentView ? (
-                <p className="result-text" onMouseLeave={clearHoverState}>
-                  <SegmentedText
-                    text={targetText}
-                    segments={alignment.targetSegments}
-                    pairBySegmentId={alignmentView.targetPairBySegmentId}
-                    activePairId={activeAlignmentPairId}
-                    side="target"
-                    lookupTokensBySegmentId={targetWordView?.tokensBySegmentId}
-                    highlights={alignmentView.targetHighlights}
-                    encounterHighlights={
-                      encounterWordView?.side === 'target'
-                        ? encounterWordView.highlights
-                        : undefined
-                    }
-                    activeLookupWordId={
-                      hoveredTargetWordId ??
-                      (wordLookup?.side === 'target' ? wordLookup.lookupAnchorId : null)
-                    }
-                    activeHighlightId={
-                      hoveredTargetHighlightId ??
-                      (wordLookup?.side === 'target' ? wordLookup.lookupAnchorId : null)
-                    }
-                    activeEncounterId={
-                      wordLookup?.origin === 'encounter' && wordLookup.side === 'target'
-                        ? wordLookup.lookupAnchorId
-                        : null
-                    }
-                    onPairEnter={handleTargetPairEnter}
-                    onLookupWordClick={handleTargetWordClick}
-                    onLookupWordEnter={handleTargetWordEnter}
-                    onLookupWordLeave={handleTargetLookupLeave}
-                    onHighlightClick={handleTargetHighlightClick}
-                    onHighlightEnter={handleTargetHighlightEnter}
-                    onHighlightLeave={handleTargetLookupLeave}
-                    onEncounterClick={handleTargetEncounterLookup}
-                    onEncounterEnter={handleTargetEncounterLookup}
-                    onEncounterLeave={handleTargetLookupLeave}
-                  />
-                </p>
-              ) : (
-                <p
-                  className={`result-text${targetText ? '' : ' result-placeholder'}${
-                    status === 'translating' && targetText ? ' result-text-streaming' : ''
+                    {selectedModel || '未配置模型'}
+                  </button>
+                </div>
+
+                <button
+                  className={`icon-btn${copyState === 'done' ? ' icon-btn-done' : ''}${
+                    copyState === 'error' ? ' icon-btn-error' : ''
                   }`}
-                >
-                  {targetText || '译文会显示在这里'}
-                </p>
-              )}
-            </div>
-
-            <div className="result-toolbar" ref={resultToolbarRef}>
-              <div className="toolbar-left">
-                <button
-                  className="icon-btn"
                   type="button"
-                  onClick={handleClearSource}
-                  disabled={!hasSourceText}
-                  aria-label="清空输入"
-                  title="清空输入"
+                  onClick={() => void handleCopyTarget()}
+                  disabled={!hasTargetText || status === 'translating'}
+                  aria-label={copyState === 'done' ? '复制完成' : '复制输出'}
+                  title={copyState === 'done' ? '复制完成' : '复制输出'}
                 >
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
-
-                <button
-                  ref={modelSelectorRef}
-                  className="model-entry"
-                  type="button"
-                  aria-haspopup="listbox"
-                  aria-expanded={isModelMenuOpen}
-                  aria-label={
-                    activeProvider
-                      ? `当前服务商: ${activeProvider.name}，模型: ${selectedModel}，点击打开模型面板`
-                      : '当前没有启用任何服务商，点击打开模型面板查看'
-                  }
-                  title={
-                    activeProvider
-                      ? `服务商: ${activeProvider.name}\n模型: ${selectedModel}\n地址: ${activeProvider.baseUrl}`
-                      : '当前没有启用任何服务商，请在偏好设置里启用一个'
-                  }
-                  onClick={() => {
-                    setIsSourceLangMenuOpen(false)
-                    setIsTargetLangMenuOpen(false)
-                    if (isModelMenuOpen) {
-                      closeModelMenu()
-                    } else {
-                      openModelMenu()
-                    }
-                  }}
-                >
-                  {selectedModel || '未配置模型'}
-                </button>
-
-                <button
-                  className={`learning-toggle${isLearningActive ? ' learning-toggle-on' : ''}`}
-                  type="button"
-                  aria-label={isLearningActive ? '关闭学习模式' : '开启学习模式'}
-                  aria-pressed={isLearningActive}
-                  disabled={!isLearningSupported}
-                  title={
-                    isLearningSupported
-                      ? learningMode
-                        ? '关闭学习模式'
-                        : '开启学习模式：查看重点表达并点击英文词查询'
-                      : '学习模式当前仅支持英语与简体中文互译'
-                  }
-                  onClick={() => {
-                    const nextMode = !learningMode
-                    setLearningMode(nextMode)
-                    if (!nextMode) {
-                      closeWordLookup()
-                      clearHoverState()
-                      resetAlignment()
-                    }
-                  }}
-                >
-                  学习
+                  {copyState === 'done' ? (
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M15.25 8.75V4C15.25 3.30964 14.6904 2.75 14 2.75H4C3.30964 2.75 2.75 3.30964 2.75 4V14C2.75 14.6904 3.30964 15.25 4 15.25H8.75M10 8.75H20C20.6904 8.75 21.25 9.30964 21.25 10V20C21.25 20.6904 20.6904 21.25 20 21.25H10C9.30964 21.25 8.75 20.6904 8.75 20V10C8.75 9.30964 9.30964 8.75 10 8.75Z" />
+                    </svg>
+                  )}
                 </button>
               </div>
-
-              <button
-                className={`icon-btn${copyState === 'done' ? ' icon-btn-done' : ''}${
-                  copyState === 'error' ? ' icon-btn-error' : ''
-                }`}
-                type="button"
-                onClick={() => void handleCopyTarget()}
-                disabled={!hasTargetText || status === 'translating'}
-                aria-label={copyState === 'done' ? '复制完成' : '复制输出'}
-                title={copyState === 'done' ? '复制完成' : '复制输出'}
-              >
-                {copyState === 'done' ? (
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M15.25 8.75V4C15.25 3.30964 14.6904 2.75 14 2.75H4C3.30964 2.75 2.75 3.30964 2.75 4V14C2.75 14.6904 3.30964 15.25 4 15.25H8.75M10 8.75H20C20.6904 8.75 21.25 9.30964 21.25 10V20C21.25 20.6904 20.6904 21.25 20 21.25H10C9.30964 21.25 8.75 20.6904 8.75 20V10C8.75 9.30964 9.30964 8.75 10 8.75Z" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
 
         {/* 模型面板：结构与交互沿用原实现，配色并入中性极简体系 */}
@@ -3916,106 +3923,6 @@ function App(): React.JSX.Element {
           </div>
         ) : null}
       </section>
-
-      {wordLookup ? (
-        <div
-          ref={wordLookupRef}
-          className={`word-lookup-tooltip word-lookup-tooltip-${wordLookup.placement}`}
-          style={{
-            left: `${wordLookup.x}px`,
-            top: `${wordLookup.y}px`
-          }}
-          role="status"
-          aria-live="polite"
-          onMouseEnter={cancelWordLookupClose}
-          onMouseLeave={scheduleWordLookupClose}
-        >
-          <div className="word-lookup-word" lang="en">
-            {wordLookup.lookupText}
-          </div>
-
-          {wordLookup.origin === 'database' ? (
-            <div className="word-lookup-origin">本地词库命中</div>
-          ) : null}
-
-          {wordLookup.status === 'loading' ? (
-            <div className="word-lookup-status">正在结合上下文查询释义…</div>
-          ) : null}
-
-          {wordLookup.status === 'ready' && wordLookup.result ? (
-            <>
-              <div className="word-lookup-meaning">
-                <span>此处</span>
-                {wordLookup.result.meaning}
-              </div>
-              <div className="word-lookup-meta">
-                {wordLookup.result.lemma.trim().toLowerCase() !==
-                wordLookup.lookupText.trim().toLowerCase() ? (
-                  <span>原形 {wordLookup.result.lemma}</span>
-                ) : null}
-                {wordLookup.result.targetText ? (
-                  <span>
-                    {wordLookup.side === 'source' ? '译文对应' : '原文对应'}：
-                    {wordLookup.result.targetText}
-                  </span>
-                ) : (
-                  <span>当前没有可靠的连续对应表达</span>
-                )}
-              </div>
-              {wordLookup.note ? (
-                <div className="word-lookup-note">
-                  <span>表达提示</span>
-                  {wordLookup.note}
-                </div>
-              ) : null}
-              {wordLookup.isPersisted ? (
-                <button
-                  type="button"
-                  className="word-lookup-save word-lookup-save-persisted"
-                  disabled={wordLookup.isRemoving}
-                  onClick={handleRemoveCurrentLookup}
-                >
-                  {wordLookup.isRemoving ? (
-                    '正在移出…'
-                  ) : (
-                    <>
-                      <span className="word-lookup-save-persisted-label">
-                        ★ 已在生词库
-                        {wordLookup.encounterCount !== undefined
-                          ? ` (第 ${wordLookup.encounterCount} 次遇到)`
-                          : ''}
-                      </span>
-                      <span className="word-lookup-save-remove-label">✕ 移出生词库</span>
-                    </>
-                  )}
-                </button>
-              ) : wordLookup.isCheckingPersistence ? (
-                <button type="button" className="word-lookup-save" disabled>
-                  正在检查词库…
-                </button>
-              ) : wordLookup.isPersisting ? (
-                <button type="button" className="word-lookup-save" disabled>
-                  正在收录…
-                </button>
-              ) : wordLookup.canPersist ? (
-                <button
-                  type="button"
-                  className="word-lookup-save"
-                  onClick={handlePersistCurrentLookup}
-                >
-                  ☆ 收藏到生词库
-                </button>
-              ) : null}
-            </>
-          ) : null}
-
-          {wordLookup.status === 'error' ? (
-            <div className="word-lookup-status word-lookup-status-error">
-              {wordLookup.errorMessage || '释义查询失败，请稍后再试'}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
     </main>
   )
 }

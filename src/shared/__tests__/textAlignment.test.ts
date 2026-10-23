@@ -280,6 +280,7 @@ test('英译中的学习高亮会校验并计算精确偏移', () => {
           side: 'source',
           surface: 'ramp up',
           lemma: 'ramp up',
+          literalMeaning: '铺斜坡；增加',
           meaning: '逐步加快',
           targetText: '加快',
           note: ''
@@ -303,6 +304,7 @@ test('英译中的学习高亮会校验并计算精确偏移', () => {
       pairId: alignment.highlights[0].pairId,
       side: alignment.highlights[0].side,
       surface: alignment.highlights[0].surface,
+      literalMeaning: alignment.highlights[0].literalMeaning,
       start: alignment.highlights[0].start,
       end: alignment.highlights[0].end
     },
@@ -310,9 +312,59 @@ test('英译中的学习高亮会校验并计算精确偏移', () => {
       pairId: 'p0',
       side: 'source',
       surface: 'ramp up',
+      literalMeaning: '铺斜坡；增加',
       start: sourceText.indexOf('ramp up'),
       end: sourceText.indexOf('ramp up') + 'ramp up'.length
     }
+  )
+})
+
+test('语法缩写不会和后面的实义动词合并成学习短语', () => {
+  const sourceText = "I didn't eat today."
+  const targetText = '我今天没吃饭。'
+  const sourceSegments = segmentText(sourceText, 'ENGLISH', 's')
+  const targetSegments = segmentText(targetText, 'CHINESE (SIM)', 't')
+
+  const alignment = parseAlignmentPairs(
+    JSON.stringify({
+      pairs: [{ source: ['s0'], target: ['t0'] }],
+      highlights: [
+        {
+          pairId: 'p0',
+          side: 'source',
+          surface: "didn't eat",
+          lemma: 'eat',
+          literalMeaning: '吃',
+          meaning: '没有吃',
+          targetText: '没吃',
+          note: ''
+        },
+        {
+          pairId: 'p0',
+          side: 'source',
+          surface: 'eat',
+          lemma: 'eat',
+          literalMeaning: '吃',
+          meaning: '吃饭',
+          targetText: '吃',
+          note: ''
+        }
+      ]
+    }),
+    sourceSegments,
+    targetSegments,
+    {
+      sourceText,
+      targetText,
+      sourceLanguage: 'ENGLISH',
+      targetLanguage: 'CHINESE (SIM)'
+    }
+  )
+
+  assert.ok(alignment)
+  assert.deepEqual(
+    alignment.highlights.map((highlight) => highlight.surface),
+    ['eat']
   )
 })
 

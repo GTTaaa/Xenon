@@ -1,4 +1,5 @@
 import type { TranslateOptions } from './translate'
+import { isGrammarContractionPhrase } from './englishGrammar.ts'
 
 /** 对齐分段：记录片段文本及其在原文中的 UTF-16 偏移 */
 export interface AlignmentSegment {
@@ -35,6 +36,8 @@ export interface LearningLexeme {
   surface: string
   /** 英文词形还原后的原形 */
   lemma: string
+  /** 脱离本句时最常见的中文字面义 */
+  literalMeaning?: string
   /** 当前上下文中的简体中文释义 */
   meaning: string
   /** 与英文片段对应的中文连续表达；没有可靠对应时为空字符串 */
@@ -770,6 +773,7 @@ const parseLearningHighlights = (
       side?: unknown
       surface?: unknown
       lemma?: unknown
+      literalMeaning?: unknown
       meaning?: unknown
       targetText?: unknown
       note?: unknown
@@ -802,6 +806,10 @@ const parseLearningHighlights = (
       typeof highlightItem.meaning === 'string'
         ? highlightItem.meaning.trim().replace(/\s+/g, ' ')
         : ''
+    const literalMeaning =
+      typeof highlightItem.literalMeaning === 'string'
+        ? highlightItem.literalMeaning.trim().replace(/\s+/g, ' ')
+        : ''
     const correspondingText =
       typeof highlightItem.targetText === 'string'
         ? highlightItem.targetText.trim().replace(/\s+/g, ' ')
@@ -812,9 +820,12 @@ const parseLearningHighlights = (
     if (!surface || surface.length > 120) continue
     if (!lemma || lemma.length > 80) continue
     if (!meaning || meaning.length > 120) continue
+    if (literalMeaning.length > 120) continue
     if (!/^[A-Za-z][A-Za-z'’ -]*$/.test(surface)) continue
     if (!/^[A-Za-z][A-Za-z'’ -]*$/.test(lemma)) continue
     if (!/[\u3400-\u9fff]/.test(meaning)) continue
+    if (literalMeaning && !/[\u3400-\u9fff]/.test(literalMeaning)) continue
+    if (isGrammarContractionPhrase(surface)) continue
     if (correspondingText && correspondingText.length > 120) continue
     if (correspondingText && !/[\u3400-\u9fff]/.test(correspondingText)) continue
     if (note.length > 160) continue
@@ -861,6 +872,7 @@ const parseLearningHighlights = (
       side,
       surface,
       lemma,
+      ...(literalMeaning ? { literalMeaning } : {}),
       meaning,
       targetText: correspondingText,
       note,

@@ -65,6 +65,10 @@ body {
   max-width: 358px;
 }
 
+.translator-device.structure-layout {
+  max-width: 560px;
+}
+
 .device-panel {
   position: relative;
   width: 100%;
@@ -148,6 +152,55 @@ body {
   /* 箭头不参与行盒高度计算，避免头部高度因 svg 基线多出 0.4px */
   line-height: 0;
   color: #bcbcc4;
+}
+
+/* 顶部模式切换：语言流向靠左，翻译/学习贴着窗口操作区 */
+.header-spacer {
+  flex: 1 1 auto;
+  min-width: 2px;
+}
+
+.mode-tabs {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.035);
+  -webkit-app-region: no-drag;
+}
+
+.mode-tab {
+  height: 18px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--app-fg-muted);
+  font-family: inherit;
+  font-size: 9.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.mode-tab:hover:not(:disabled):not(.mode-tab-active) {
+  color: var(--app-fg-body);
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.mode-tab-active {
+  background: var(--app-accent);
+  color: #ffffff;
+}
+
+.mode-tab:disabled {
+  color: #c5c5cb;
+  cursor: default;
 }
 
 /* ---------- 语言下拉：浮层列表（替代旧磁带滑轨） ---------- */
@@ -273,7 +326,6 @@ body {
  * top 上提 4.2px 的理由同图钉 —— 图形的墨迹在 24px 盒里比中文字面更靠下。
  */
 .settings-btn {
-  margin-left: auto;
   position: relative;
   /* 齿轮墨迹高 9.9px，比图钉矮 0.4px；上提 4.7px 后两者墨迹顶与中心都落在同一条 15px 网格线上 */
   top: -4.7px;
@@ -312,6 +364,14 @@ body {
   padding: 10px 15px 7px;
 }
 
+.reading-column {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .compose {
   flex: 0 0 auto;
   padding-bottom: 9px;
@@ -342,275 +402,6 @@ body {
   overflow-wrap: anywhere;
   pointer-events: none;
   user-select: none;
-}
-
-/* 为原文区右上角的结构按钮预留一条不影响文字换行的窄槽 */
-.compose-stage-with-syntax .compose-mirror,
-.compose-stage-with-syntax .compose-input {
-  padding-right: 24px;
-}
-
-.sentence-syntax-toggle {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: #8a9a94;
-  cursor: pointer;
-  transition:
-    color 100ms ease,
-    background-color 100ms ease;
-}
-
-.sentence-syntax-toggle:hover:not(:disabled) {
-  background: rgba(26, 127, 69, 0.08);
-  color: var(--app-accent);
-}
-
-.sentence-syntax-toggle:focus-visible {
-  outline: 1px solid var(--app-accent);
-  outline-offset: 1px;
-}
-
-.sentence-syntax-toggle:disabled {
-  color: #a39b88;
-  cursor: default;
-}
-
-.sentence-syntax-toggle-error {
-  color: var(--app-danger);
-}
-
-.sentence-syntax-toggle svg {
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.15;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.sentence-syntax-spinner {
-  width: 10px;
-  height: 10px;
-  border: 1.2px solid rgba(123, 105, 65, 0.24);
-  border-top-color: #9b7a31;
-  border-radius: 50%;
-  animation: sentenceSyntaxSpin 700ms linear infinite;
-}
-
-@keyframes sentenceSyntaxSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.sentence-syntax-error {
-  position: absolute;
-  top: 22px;
-  right: 0;
-  z-index: 4;
-  max-width: 210px;
-  padding: 5px 7px;
-  border: 1px solid rgba(179, 55, 31, 0.16);
-  border-radius: 6px;
-  background: rgba(255, 250, 248, 0.98);
-  box-shadow: 0 5px 16px rgba(62, 37, 29, 0.09);
-  color: var(--app-danger);
-  font-size: 9.5px;
-  line-height: 1.4;
-}
-
-.syntax-source-active .compose-mirror,
-.syntax-source-active .compose-input {
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.sentence-syntax-view {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  overflow: hidden;
-  padding: 1px 0 3px;
-  background: var(--app-bg);
-  color: var(--app-fg-read);
-  transform-origin: top center;
-  animation: sentenceSyntaxViewIn 170ms cubic-bezier(0.2, 0.72, 0.24, 1);
-}
-
-.sentence-syntax-view-closing {
-  pointer-events: none;
-  animation: sentenceSyntaxViewOut 150ms ease-in forwards;
-}
-
-@keyframes sentenceSyntaxViewIn {
-  from {
-    opacity: 0;
-    transform: translateY(-3px) scale(0.992);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes sentenceSyntaxViewOut {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    transform: translateY(-2px) scale(0.994);
-  }
-}
-
-.sentence-syntax-sentence-shell {
-  height: 100%;
-  overflow-y: auto;
-  padding-right: 22px;
-}
-
-.sentence-syntax-sentence-shell::-webkit-scrollbar {
-  width: 3px;
-}
-
-.sentence-syntax-sentence-shell::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.14);
-  border-radius: 3px;
-}
-
-.sentence-syntax-sentence {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.7;
-  letter-spacing: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.sentence-syntax-whitespace {
-  white-space: pre;
-}
-
-.sentence-syntax-capsule {
-  display: inline-block;
-  max-width: calc(100% - 4px);
-  margin: 1px 2px;
-  padding: 1px 4px;
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-  vertical-align: baseline;
-  cursor: help;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-
-.sentence-syntax-role-subject {
-  background: #e0f2fe;
-  color: #075985;
-  font-weight: 600;
-}
-
-.sentence-syntax-role-predicate {
-  background: #ffedd5;
-  color: #9a3412;
-  font-weight: 600;
-}
-
-.sentence-syntax-role-object {
-  background: #dcfce7;
-  color: #166534;
-  font-weight: 500;
-}
-
-.sentence-syntax-role-badge {
-  margin-left: 2px;
-  padding: 0 2px;
-  border-radius: 2px;
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.2;
-  opacity: 0.8;
-  vertical-align: baseline;
-}
-
-.sentence-syntax-role-subject .sentence-syntax-role-badge {
-  background: rgba(14, 165, 233, 0.12);
-  color: #0369a1;
-}
-
-.sentence-syntax-role-predicate .sentence-syntax-role-badge {
-  background: rgba(249, 115, 22, 0.13);
-  color: #c2410c;
-}
-
-.sentence-syntax-role-object .sentence-syntax-role-badge {
-  background: rgba(34, 197, 94, 0.13);
-  color: #15803d;
-}
-
-.sentence-syntax-modifier {
-  color: var(--app-fg-muted);
-  opacity: 0.4;
-  cursor: help;
-  transition: opacity 100ms ease;
-}
-
-.sentence-syntax-modifier:hover {
-  opacity: 0.68;
-}
-
-.sentence-syntax-other,
-.sentence-syntax-punctuation {
-  color: var(--app-fg-muted);
-  font-weight: 400;
-  opacity: 0.72;
-  cursor: default;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sentence-syntax-view {
-    animation: none;
-  }
-
-  .sentence-syntax-view-closing {
-    animation-duration: 1ms;
-  }
-}
-
-.sentence-syntax-tooltip {
-  position: fixed;
-  z-index: 60;
-  max-width: min(230px, calc(100vw - 16px));
-  overflow: hidden;
-  padding: 4px 7px;
-  border: 1px solid rgba(77, 111, 130, 0.16);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 4px 12px rgba(23, 28, 25, 0.1);
-  color: var(--app-fg-body);
-  font-size: 9.5px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  pointer-events: none;
 }
 
 /* 原文词片段的命中范围始终存在，但只在鼠标指向或固定查词时显示底色 */
@@ -675,6 +466,7 @@ body {
 
 /* 二次偶遇只留一条淡色点线与微型星标，和模型学习高亮明确区分 */
 .encounter-highlight {
+  position: relative;
   border-radius: 2px;
   cursor: pointer;
   text-decoration-line: underline;
@@ -715,9 +507,16 @@ body {
   color: rgba(125, 104, 75, 0.72);
 }
 
-/* 输入框透明测量层不能给词后追加星标，否则会改变换行位置并让命中框错位 */
+/* 镜像层用绝对定位星标保留收录提示，同时不参与换行计算 */
 .compose-mirror .encounter-highlight::after {
-  content: none;
+  content: '★';
+  position: absolute;
+  top: -0.34em;
+  right: -0.5em;
+  margin-left: 0;
+  font-size: 7px;
+  line-height: 1;
+  vertical-align: baseline;
 }
 
 .encounter-highlight-active {
@@ -777,6 +576,7 @@ body {
 
 .result {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1063,12 +863,12 @@ body {
 }
 
 /* ==========================================================================
-   底部工具行：清空 · 模型入口 · 复制（零新增高度，吸在窗口底部）
+   底部工具行：清空 · 模型入口 · 复制（固定在内容区最底部）
    ========================================================================== */
 
 .result-toolbar {
   flex-shrink: 0;
-  /* 译文区不再撑满后，靠这条自动外边距把工具行压在窗口底边（等价于原来的贴底效果） */
+  /* 译文区不再撑满后，靠这条自动外边距把工具行压到主体内容底边 */
   margin-top: auto;
   display: flex;
   align-items: center;
@@ -1124,70 +924,46 @@ body {
   color: var(--app-fg-body);
 }
 
-/* 学习模式开关：常态保持安静，开启后用唯一正向色标明学习辅助已生效 */
-.learning-toggle {
+/* ==========================================================================
+   学习抽屉：译文保持原样，词义与句子结构固定在底部同一区域
+   ========================================================================== */
+
+.learning-drawer {
   flex: 0 0 auto;
-  height: 20px;
-  padding: 0 7px;
-  border: 1px solid var(--app-border);
-  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  max-height: 196px;
+  margin: 10px 0 3px;
+  overflow: hidden;
+  border-top: 1px solid rgba(77, 111, 130, 0.22);
+  border-bottom: 1px solid rgba(77, 111, 130, 0.08);
+  background:
+    linear-gradient(180deg, rgba(77, 111, 130, 0.055), rgba(77, 111, 130, 0.015)),
+    rgba(255, 255, 255, 0.42);
+  animation: learningDrawerIn 140ms ease-out;
+}
+
+.learning-drawer-word {
+  max-height: none;
+  margin: 7px -15px 2px;
+  border-top: 0;
+  border-bottom: 0;
   background: transparent;
-  color: var(--app-fg-muted);
-  font-family: inherit;
-  font-size: 10px;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    color 120ms ease,
-    background 120ms ease,
-    border-color 120ms ease;
-  -webkit-app-region: no-drag;
+  overflow: visible;
 }
 
-.learning-toggle:hover:not(:disabled) {
-  color: var(--app-fg-body);
-  background: var(--app-hover-bg);
-}
-
-.learning-toggle-on {
-  border-color: rgba(26, 127, 69, 0.22);
-  background: rgba(26, 127, 69, 0.08);
-  color: var(--app-accent);
-}
-
-.learning-toggle:disabled {
-  border-color: transparent;
+.learning-drawer-structure {
+  max-height: 260px;
+  margin: 7px -15px 2px;
+  border-top: 0;
+  border-bottom: 0;
   background: transparent;
-  color: #cfcfd6;
-  cursor: default;
 }
 
-/* 查词浮层：贴鼠标显示，并允许鼠标移入查看完整解释 */
-.word-lookup-tooltip {
-  position: fixed;
-  z-index: 40;
-  box-sizing: border-box;
-  width: 232px;
-  padding: 9px 10px 8px;
-  border: 1px solid rgba(26, 127, 69, 0.16);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow:
-    0 8px 24px rgba(23, 28, 25, 0.12),
-    0 1px 2px rgba(23, 28, 25, 0.06);
-  color: var(--app-fg-body);
-  pointer-events: none;
-  animation: wordLookupTooltipIn 90ms ease-out;
-}
-
-.word-lookup-tooltip-above {
-  transform: translateY(-100%);
-}
-
-@keyframes wordLookupTooltipIn {
+@keyframes learningDrawerIn {
   from {
     opacity: 0;
-    transform: translateY(2px);
+    transform: translateY(3px);
   }
 
   to {
@@ -1196,162 +972,580 @@ body {
   }
 }
 
-.word-lookup-tooltip-above {
-  animation-name: wordLookupTooltipInAbove;
-}
-
-@keyframes wordLookupTooltipInAbove {
-  from {
-    opacity: 0;
-    transform: translateY(calc(-100% + 2px));
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(-100%);
-  }
-}
-
-.word-lookup-word {
-  overflow-wrap: anywhere;
-  color: var(--app-fg);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.word-lookup-meaning {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  margin-top: 4px;
-  color: var(--app-fg-body);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.word-lookup-meaning span {
+.learning-drawer-word-rail {
   flex: 0 0 auto;
-  color: var(--app-accent);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  height: 1px;
+  background: rgba(77, 111, 130, 0.2);
 }
 
-.word-lookup-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin-top: 5px;
+.learning-drawer-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+}
+
+.learning-drawer-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.learning-drawer-body::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.learning-drawer-status {
+  margin: 3px 0;
   color: var(--app-fg-muted);
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: 11.5px;
+  line-height: 1.55;
 }
 
-.word-lookup-note {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(201, 127, 42, 0.16);
-  color: var(--app-fg-body);
-  font-size: 10.5px;
-  line-height: 1.5;
-}
-
-.word-lookup-note span {
-  margin-right: 5px;
-  color: #a36522;
-  font-size: 9px;
-  font-weight: 600;
-}
-
-.word-lookup-tooltip {
-  min-height: 54px;
-  /* 查词浮层需要接收鼠标进入事件，鼠标从单词移入后不能立即消失 */
-  pointer-events: auto;
-}
-
-.word-lookup-status {
-  margin-top: 5px;
-  color: var(--app-fg-muted);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.word-lookup-status-error {
+.learning-drawer-status-error {
   color: var(--app-danger);
 }
 
-.word-lookup-origin {
-  margin-top: 3px;
-  color: #6f8794;
-  font-family: var(--app-mono);
-  font-size: 8.5px;
-  line-height: 1.3;
+.word-compact-body {
+  padding: 9px 10px 7px;
+  overflow: visible;
 }
 
-.word-lookup-encounter {
-  margin-top: 6px;
-  color: #6f8794;
-  font-size: 9.5px;
-  line-height: 1.4;
+.word-compact-row {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
 }
 
-.word-lookup-save {
-  margin-top: 7px;
-  padding: 3px 7px;
-  border: 1px solid rgba(77, 111, 130, 0.24);
-  border-radius: 5px;
-  background: rgba(77, 111, 130, 0.06);
-  color: #4d6f82;
+.word-compact-answer {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.word-compact-answer strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-fg);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-compact-answer span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-fg);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-compact-answer .word-compact-state-error {
+  color: var(--app-danger);
+}
+
+.word-compact-dot {
+  flex: 0 0 auto;
+  color: var(--app-fg-faint);
+  font-size: 10px;
+}
+
+.word-compact-hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #3b794f;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-compact-spacer {
+  flex: 1 1 auto;
+  min-width: 4px;
+}
+
+.word-compact-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.word-compact-link {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #577282;
   font-family: inherit;
-  font-size: 9.5px;
-  line-height: 1.3;
+  font-size: 10px;
+  line-height: 1.35;
   cursor: pointer;
-  transition:
-    color 120ms ease,
-    background-color 120ms ease,
-    border-color 120ms ease;
 }
 
-.word-lookup-save:hover:not(:disabled) {
-  background: rgba(77, 111, 130, 0.11);
+.word-compact-link:hover {
+  color: var(--app-fg);
 }
 
-.word-lookup-save:focus-visible {
-  outline: 1px solid currentColor;
-  outline-offset: 1px;
+.word-compact-save {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(77, 111, 130, 0.16);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.48);
+  color: #577282;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.word-lookup-save-persisted {
+.word-compact-save:hover:not(:disabled) {
+  border-color: rgba(77, 111, 130, 0.3);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--app-fg);
+}
+
+.word-compact-save-on {
   border-color: rgba(26, 127, 69, 0.22);
   background: rgba(26, 127, 69, 0.07);
   color: var(--app-accent);
 }
 
-.word-lookup-save-persisted:hover:not(:disabled),
-.word-lookup-save-persisted:focus-visible:not(:disabled) {
-  border-color: rgba(179, 55, 31, 0.28);
-  background: rgba(179, 55, 31, 0.07);
+.word-compact-save-on:hover:not(:disabled) {
+  border-color: rgba(179, 55, 31, 0.24);
   color: var(--app-danger);
 }
 
-.word-lookup-save-remove-label {
-  display: none;
-}
-
-.word-lookup-save-persisted:hover:not(:disabled) .word-lookup-save-persisted-label,
-.word-lookup-save-persisted:focus-visible:not(:disabled) .word-lookup-save-persisted-label {
-  display: none;
-}
-
-.word-lookup-save-persisted:hover:not(:disabled) .word-lookup-save-remove-label,
-.word-lookup-save-persisted:focus-visible:not(:disabled) .word-lookup-save-remove-label {
-  display: inline;
-}
-
-.word-lookup-save:disabled {
+.word-compact-save:disabled {
   color: var(--app-fg-faint);
   cursor: default;
+}
+
+.word-compact-save-placeholder {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
+
+.word-compact-link:focus-visible,
+.word-compact-save:focus-visible {
+  outline: 2px solid rgba(59, 121, 79, 0.3);
+  outline-offset: 1px;
+}
+
+.word-compact-why {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid rgba(77, 111, 130, 0.1);
+  color: var(--app-fg-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.word-compact-why-error {
+  color: var(--app-danger);
+}
+
+.structure-compact-body {
+  padding: 9px 10px 7px;
+}
+
+.structure-compact-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(77, 111, 130, 0.1);
+}
+
+.structure-compact-head strong {
+  color: var(--app-fg);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.structure-compact-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-fg-faint);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.structure-compact-toggle:hover {
+  color: var(--app-fg-muted);
+}
+
+.structure-compact-toggle:focus-visible {
+  outline: 2px solid rgba(59, 121, 79, 0.3);
+  outline-offset: 2px;
+}
+
+.structure-compact-toggle-dot {
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.structure-compact-toggle-on {
+  color: #3b794f;
+}
+
+.structure-compact-toggle-on .structure-compact-toggle-dot {
+  background: currentColor;
+}
+
+.structure-state-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 31px;
+  padding-top: 7px;
+}
+
+.structure-state-row .learning-drawer-status {
+  min-width: 0;
+  margin: 0;
+}
+
+.sentence-structure-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.sentence-structure-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
+  padding: 8px 0;
+}
+
+.sentence-structure-row + .sentence-structure-row {
+  border-top: 1px solid rgba(77, 111, 130, 0.1);
+}
+
+.sentence-structure-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  padding-top: 2px;
+  color: #66707a;
+}
+
+.sentence-structure-meta::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sentence-structure-meta span {
+  color: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.sentence-structure-subject .sentence-structure-meta {
+  color: #3d7f99;
+}
+
+.sentence-structure-predicate .sentence-structure-meta {
+  color: #9a5a18;
+}
+
+.sentence-structure-object .sentence-structure-meta {
+  color: #31704d;
+}
+
+.sentence-structure-copy {
+  min-width: 0;
+}
+
+.sentence-structure-copy > p {
+  margin: 0;
+  color: var(--app-fg);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.sentence-structure-copy > small {
+  display: block;
+  margin-top: 2px;
+  color: var(--app-fg-muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sentence-structure-insight {
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(77, 111, 130, 0.12);
+}
+
+.sentence-structure-insight summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  color: #7b684c;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sentence-structure-insight summary::-webkit-details-marker {
+  display: none;
+}
+
+.sentence-structure-insight summary::before {
+  content: '+';
+  display: inline-grid;
+  width: 13px;
+  height: 13px;
+  place-items: center;
+  border: 1px solid rgba(123, 104, 76, 0.24);
+  border-radius: 50%;
+  font-family: var(--app-mono);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.sentence-structure-insight[open] summary::before {
+  content: '-';
+}
+
+.sentence-structure-insight summary:hover {
+  color: #5d4b32;
+}
+
+.sentence-structure-insight-body {
+  padding: 4px 0 0;
+}
+
+.sentence-structure-insight-body p {
+  margin: 0;
+  color: var(--app-fg-muted);
+  font-size: 11px;
+  line-height: 1.58;
+}
+
+.sentence-structure-insight-body .sentence-structure-insight-contrast {
+  margin-top: 3px;
+  color: var(--app-fg-faint);
+}
+
+.sentence-structure-insight-contrast span {
+  margin-right: 4px;
+  color: #7b684c;
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+/*
+ * A1：窗口向左展开，结构与阅读区从右侧固定基准向左揭开。
+ * 阅读区始终保持 358px，窗口切换宽度时文字不会逐帧重排。
+ */
+.structure-layout .device-body {
+  display: grid;
+  grid-template-columns: 202px 358px;
+  justify-content: end;
+  padding: 0 0 7px;
+  overflow: hidden;
+}
+
+.structure-layout .reading-column {
+  width: 358px;
+  min-width: 0;
+  padding: 10px 15px 0;
+}
+
+.structure-layout .learning-structure-panel {
+  width: 190px;
+  min-width: 0;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-right: 1px solid var(--app-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.12)),
+    rgba(242, 242, 245, 0.72);
+  opacity: 1;
+  transform: translateX(0);
+  will-change: opacity, transform;
+  /* 左栏使用横向揭开动画，不再叠加通用抽屉的向上入场动画 */
+  animation: structurePanelIn var(--structure-layout-duration, 240ms) cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+}
+
+.structure-layout.structure-layout-collapsing .learning-structure-panel {
+  animation: none;
+  opacity: 0;
+  transform: translateX(-10px);
+  pointer-events: none;
+  transition:
+    opacity var(--structure-collapse-duration, 180ms) ease-in,
+    transform var(--structure-collapse-duration, 180ms) cubic-bezier(0.4, 0, 1, 1);
+}
+
+@keyframes structurePanelIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.structure-layout .learning-structure-panel .learning-drawer-word-rail {
+  display: none;
+}
+
+.structure-layout .learning-structure-panel .learning-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px 14px 10px;
+}
+
+.structure-compact-title {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.structure-compact-title strong {
+  white-space: nowrap;
+}
+
+.structure-compact-title > span {
+  flex: 0 0 auto;
+  color: var(--app-fg-faint);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.structure-compact-switch-hint {
+  margin: 7px 0 0;
+  color: #7b684c;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.structure-layout .structure-compact-head {
+  gap: 5px;
+}
+
+.structure-compact-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.structure-compact-close {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(77, 111, 130, 0.16);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--app-fg-faint);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.structure-compact-close:hover {
+  border-color: rgba(77, 111, 130, 0.28);
+  color: var(--app-fg-body);
+}
+
+.structure-compact-close:focus-visible {
+  outline: 2px solid rgba(59, 121, 79, 0.3);
+  outline-offset: 1px;
+}
+
+.structure-layout .sentence-structure-row {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 3px;
+  padding: 9px 0;
+}
+
+.structure-layout .sentence-structure-meta {
+  padding-top: 0;
+}
+
+.structure-layout .sentence-structure-copy > p {
+  font-size: 12.5px;
+}
+
+.structure-layout .structure-state-row {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.learning-layout .alignment-segment {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learning-drawer {
+    animation: none;
+  }
+
+  .structure-layout .learning-structure-panel,
+  .structure-layout.structure-layout-collapsing .learning-structure-panel {
+    animation: none;
+    transition: none;
+  }
 }
 
 /* ==========================================================================

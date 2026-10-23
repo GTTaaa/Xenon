@@ -66,6 +66,7 @@ test('首次主动查词会同时写入主词与完整双语语境', async (cont
       lemma: 'Resilient',
       surface: 'resilient',
       meaning: '有韧性的',
+      wordOrderNote: 'resilient 作表语，放在系动词 remained 之后。',
       targetText: '有韧性',
       side: 'source',
       englishSentence: 'She remained resilient through the crisis.',
@@ -77,6 +78,7 @@ test('首次主动查词会同时写入主词与完整双语语境', async (cont
   assert.equal(item.lemma, 'Resilient')
   assert.equal(item.lemmaLower, 'resilient')
   assert.equal(item.encounterCount, 1)
+  assert.equal(item.wordOrderNote, 'resilient 作表语，放在系动词 remained 之后。')
   assert.equal(await database.vocabItems.count(), 1)
   assert.equal(await database.vocabContexts.count(), 1)
 

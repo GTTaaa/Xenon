@@ -5,6 +5,7 @@ import type { WordLookupRequest, WordLookupResponse } from '../shared/wordLookup
 import type { SentenceSyntaxRequest, SentenceSyntaxResponse } from '../shared/sentenceSyntax'
 import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
+import type { WindowLayoutMode } from '../shared/windowLayout'
 
 interface AppAPI {
   translateTextStream: (
@@ -24,6 +25,7 @@ interface AppAPI {
   onApplySourceText: (callback: (text: string) => void) => () => void
   onOcrStatus: (callback: (status: OcrStatus) => void) => () => void
   setWindowHeight: (height: number) => Promise<void>
+  setWindowLayout: (layout: WindowLayoutMode) => Promise<void>
   openConfigWindow: () => Promise<void>
   closeConfigWindow: () => Promise<void>
   toggleAlwaysOnTop: () => Promise<boolean>

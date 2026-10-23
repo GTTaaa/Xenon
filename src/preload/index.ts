@@ -10,6 +10,7 @@ import type { WordLookupRequest, WordLookupResponse } from '../shared/wordLookup
 import type { SentenceSyntaxRequest, SentenceSyntaxResponse } from '../shared/sentenceSyntax'
 import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
+import type { WindowLayoutMode } from '../shared/windowLayout'
 
 // 暴露给渲染进程的应用 API
 const api = {
@@ -92,6 +93,9 @@ const api = {
   },
   setWindowHeight: (height: number): Promise<void> => {
     return ipcRenderer.invoke('window:set-height', height)
+  },
+  setWindowLayout: (layout: WindowLayoutMode): Promise<void> => {
+    return ipcRenderer.invoke('window:set-layout', layout)
   },
   openConfigWindow: (): Promise<void> => {
     return ipcRenderer.invoke('app:open-config')

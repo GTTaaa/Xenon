@@ -58,6 +58,21 @@ test('文本匹配会优先保留长短语并避开重叠单词', () => {
   assert.equal(matches[0].item.lemmaLower, 'take off')
 })
 
+test('关闭短语匹配后只标记独立单词', () => {
+  const phrase = createVocabItem('take off')
+  const word = createVocabItem('take')
+  const text = 'Please take off your shoes, then take a seat.'
+
+  assert.deepEqual(findVocabTextMatches(text, [phrase], { includePhrases: false }), [])
+
+  const matches = findVocabTextMatches(text, [phrase, word], { includePhrases: false })
+  assert.deepEqual(
+    matches.map((match) => match.surface),
+    ['take', 'take']
+  )
+  assert.ok(matches.every((match) => match.item.lemmaLower === 'take'))
+})
+
 test('单词匹配大小写不敏感并支持多次偶遇', () => {
   const item = createVocabItem('subtle')
   const matches = findVocabTextMatches('Subtle changes create subtle effects.', [item])
@@ -78,6 +93,20 @@ test('实际词形与 lemmaLower 不同时仍能匹配最近词形', () => {
   assert.equal(matches.length, 1)
   assert.equal(matches[0].surface, 'deprecated')
   assert.equal(matches[0].item.lemmaLower, 'deprecate')
+})
+
+test('旧词条把语法缩写和实义动词存成短语时只匹配真正的实义词', () => {
+  const item = createVocabItem('eat', {
+    surface: "didn't eat"
+  })
+  const text = "I didn't eat today."
+
+  assert.deepEqual(findVocabPhraseMatches(text, [item]), [])
+  const matches = findVocabTextMatches(text, [item])
+  assert.deepEqual(
+    matches.map((match) => match.surface),
+    ['eat']
+  )
 })
 
 test('闪卡拆分能定位真实词形并保留前后文本', () => {

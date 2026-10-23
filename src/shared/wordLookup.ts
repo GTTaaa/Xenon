@@ -31,12 +31,23 @@ export interface WordLookupRequest {
   options?: TranslateOptions
 }
 
+/** 单词在句中的学习类型：实义词或承担语法功能的词 */
+export type WordLookupKind = 'lexical' | 'grammar'
+
 /** 模型返回并通过严格校验的上下文释义 */
 export interface WordLookupResult {
-  /** 英文词形还原后的原形 */
+  /** 当前词属于实义词还是语法词 */
+  kind: WordLookupKind
+  /** 实义词的原形，或语法词展开后的完整形式，例如 didn't → did not */
   lemma: string
+  /** 实义词脱离当前句时最常见的中文字面义；语法词不提供 */
+  literalMeaning?: string
   /** 当前语境中的简体中文释义 */
   meaning: string
+  /** 为什么在这个句中应取当前释义 */
+  contextNote?: string
+  /** 该词为什么位于当前句法位置，以及移动后可能产生的语气变化 */
+  wordOrderNote?: string
   /** 译文中直接对应的连续表达；没有可靠对应时为空字符串 */
   targetText: string
 }
@@ -141,30 +152,52 @@ export const parseWordLookupResult = (
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
 
   const item = parsed as {
+    kind?: unknown
     lemma?: unknown
+    literalMeaning?: unknown
     meaning?: unknown
+    contextNote?: unknown
+    wordOrderNote?: unknown
     targetText?: unknown
     confidence?: unknown
   }
   const confidence = typeof item.confidence === 'string' ? item.confidence.trim().toLowerCase() : ''
   if (confidence !== 'high') return null
 
+  const kind = item.kind === 'lexical' || item.kind === 'grammar' ? item.kind : null
   const lemma = typeof item.lemma === 'string' ? item.lemma.trim() : ''
+  const literalMeaning =
+    typeof item.literalMeaning === 'string' ? item.literalMeaning.trim().replace(/\s+/g, ' ') : ''
   const meaning = typeof item.meaning === 'string' ? item.meaning.trim().replace(/\s+/g, ' ') : ''
+  const contextNote =
+    typeof item.contextNote === 'string' ? item.contextNote.trim().replace(/\s+/g, ' ') : ''
+  const wordOrderNote =
+    typeof item.wordOrderNote === 'string' ? item.wordOrderNote.trim().replace(/\s+/g, ' ') : ''
   const targetText =
     typeof item.targetText === 'string' ? item.targetText.trim().replace(/\s+/g, ' ') : ''
 
-  if (!lemma || lemma.length > 80) return null
+  if (!kind || !lemma || lemma.length > 80) return null
+  if (kind === 'lexical' && !literalMeaning) return null
+  if (literalMeaning.length > 80) return null
   if (!meaning || meaning.length > 80) return null
+  if (contextNote.length > 120) return null
+  if (wordOrderNote.length > 160) return null
   if (!/^[A-Za-z][A-Za-z'’ -]*$/.test(lemma)) return null
+  if (literalMeaning && !/[\u3400-\u9fff]/.test(literalMeaning)) return null
   if (!/[\u3400-\u9fff]/.test(meaning)) return null
+  if (contextNote && !/[\u3400-\u9fff]/.test(contextNote)) return null
+  if (wordOrderNote && !/[\u3400-\u9fff]/.test(wordOrderNote)) return null
   if (targetText.length > 120) return null
   if (targetText && !/[\u3400-\u9fff]/.test(targetText)) return null
   if (targetText && !targetSentence.includes(targetText)) return null
 
   return {
+    kind,
     lemma,
+    ...(kind === 'lexical' ? { literalMeaning } : {}),
     meaning,
+    ...(contextNote ? { contextNote } : {}),
+    ...(wordOrderNote ? { wordOrderNote } : {}),
     targetText
   }
 }

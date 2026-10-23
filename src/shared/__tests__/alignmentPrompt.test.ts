@@ -59,27 +59,11 @@ test('句级对齐消息不产生空词级字段', () => {
   assert.equal('learningHints' in payload, false)
 })
 
-test('英译中 Prompt 要求最多提取三个原文学习高亮', () => {
-  const prompt = buildAlignmentSystemPrompt('source')
+test('对齐 Prompt 只负责句级配对，不再自动推荐单词或短语', () => {
+  const prompt = buildAlignmentSystemPrompt()
 
-  assert.match(prompt, /1 to 3/)
-  assert.match(prompt, /"side":"source"/)
-  assert.match(prompt, /exact contiguous substring of the source text/)
-  assert.match(prompt, /"highlights"/)
-})
-
-test('中译英 Prompt 要求从英文译文提取地道表达并说明原因', () => {
-  const prompt = buildAlignmentSystemPrompt('target')
-
-  assert.match(prompt, /1 to 2/)
-  assert.match(prompt, /"side":"target"/)
-  assert.match(prompt, /highlight side must be "target"/)
-  assert.match(prompt, /generated English target segments/)
-  assert.match(prompt, /why the English expression is natural or idiomatic/)
-})
-
-test('不支持的学习方向要求返回空高亮数组', () => {
-  const prompt = buildAlignmentSystemPrompt(null)
-
-  assert.match(prompt, /highlights as an empty array/)
+  assert.match(prompt, /"pairs"/)
+  assert.match(prompt, /"highlights":\[\]/)
+  assert.match(prompt, /highlights must always be an empty array/)
+  assert.match(prompt, /Do not recommend/)
 })
