@@ -80,27 +80,60 @@ body {
 }
 
 /* ==========================================================================
-   头部：语言流向一行（英语 · 自动 ⇄ 中文 · 置顶）
+   头部第一行：模式切换 + 窗口操作
    ========================================================================== */
 
-.lang-bar {
+.window-bar {
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  /* 顶边距 12.7px：中文的墨迹在行盒里比盒顶低 2.3px，这样"英语"的字面才落在距窗口上边 15px 的网格线上 */
+  /* 顶部留白 12.7px + 24px 控制行，保持第一行与窗口顶边的既有视觉节奏 */
   padding: 12.7px 15px 0;
-  /* 语言浮层的定位基准放在整行上，浮层才能对齐正文栏的左右边线 */
-  position: relative;
   -webkit-app-region: drag;
 }
 
+.window-bar-main {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.window-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  /* 让最右侧图钉的可见笔画落在 343px 内容边线上 */
+  margin-right: -6px;
+  -webkit-app-region: no-drag;
+}
+
+/* ==========================================================================
+   头部第二行：仅位于右侧 358px 阅读列内的语言流向
+   ========================================================================== */
+
+.language-bar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 3px;
+  height: 28px;
+  /* 与第一行相距 6px；下方 10px 延续原先正文顶部留白 */
+  margin: 6px 0 10px;
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+
 .lang-slot {
-  /* 用 flex 消掉行盒 strut，头部高度只由 24px 图标行决定（36px 恒定） */
   display: flex;
   align-items: center;
   min-width: 0;
   -webkit-app-region: no-drag;
+}
+
+.lang-slot-target {
+  justify-content: flex-end;
 }
 
 .lang-trigger {
@@ -114,15 +147,15 @@ body {
   background: transparent;
   color: inherit;
   font: inherit;
-  /* 行高取成和图标按钮同高（24px），一行里文字与图标的垂直中心才对得齐 */
-  line-height: 24px;
+  /* 第二行固定 28px，语言名称成为顶部区域的视觉重点 */
+  line-height: 28px;
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
 .lang-name {
   overflow: hidden;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   line-height: inherit;
   color: var(--app-fg);
@@ -134,7 +167,7 @@ body {
 .lang-sub {
   font-size: 10.5px;
   font-weight: 400;
-  /* 行高压到 1：小字基线更靠下，用 24px 行高会把整行撑高 1px */
+  /* 行高压到 1，避免辅助文字撑高第二行的 28px 行盒 */
   line-height: 1;
   color: #a4a4ac;
   white-space: nowrap;
@@ -149,17 +182,12 @@ body {
   display: inline-flex;
   flex-shrink: 0;
   margin: 0 3px;
-  /* 箭头不参与行盒高度计算，避免头部高度因 svg 基线多出 0.4px */
+  /* 箭头不参与行盒高度计算，避免语言行因 svg 基线多出 0.4px */
   line-height: 0;
   color: #bcbcc4;
 }
 
-/* 顶部模式切换：语言流向靠左，翻译/学习贴着窗口操作区 */
-.header-spacer {
-  flex: 1 1 auto;
-  min-width: 2px;
-}
-
+/* 顶部模式切换：靠左放置，与右侧窗口操作区分开 */
 .mode-tabs {
   display: inline-flex;
   flex: 0 0 auto;
@@ -208,9 +236,9 @@ body {
 .lang-menu {
   position: absolute;
   top: calc(100% + 8px);
-  /* 浮层左右贴住正文栏（15 / 343），所以无论点哪一侧的语言都不会溢出窗口 */
-  left: 15px;
-  right: 15px;
+  /* 语言行本身已位于 15px 正文内边距中，浮层贴住语言行左右边线 */
+  left: 0;
+  right: 0;
   z-index: 30;
   /* 11 种语言排成两列（6 行），整屏可见，不需要滚动 */
   display: grid;
@@ -321,26 +349,6 @@ body {
   color: var(--app-danger);
 }
 
-/*
- * 齿轮是窗口级入口，靠右摆放：auto 左边距把"齿轮 + 图钉"这一组一起推到头部右端。
- * top 上提 4.2px 的理由同图钉 —— 图形的墨迹在 24px 盒里比中文字面更靠下。
- */
-.settings-btn {
-  position: relative;
-  /* 齿轮墨迹高 9.9px，比图钉矮 0.4px；上提 4.7px 后两者墨迹顶与中心都落在同一条 15px 网格线上 */
-  top: -4.7px;
-  /* 24px 命中盒比 13px 图标宽，负 margin 把与图钉的墨迹间距收到 15.7px */
-  margin-right: -4px;
-}
-
-.pin-btn {
-  /* 图钉是斜置图形，墨迹在 24px 盒里比中文字面更靠下，单独上提 4.2px 才和左上角文字同高 */
-  position: relative;
-  top: -4.2px;
-  /* 24px 命中盒比 13px 图标大一圈，负 margin 把盒子外推，墨迹才落在 343 这条右边线上 */
-  margin-right: -6.5px;
-}
-
 /* 置顶是"真状态"，用全屏唯一一个正向色标记；不做填充块，保持无底板 */
 .pin-btn-on {
   color: var(--app-accent);
@@ -360,8 +368,11 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* 底边距取 7px：底部工具行的图标墨迹正好落在距窗口下边 15px 的同一网格线上 */
-  padding: 10px 15px 7px;
+  /*
+   * 语言行已放在阅读列内部，顶部 10px 留白由语言行的下外边距承担。
+   * 底边距取 7px：底部工具行的图标墨迹正好落在距窗口下边 15px 的同一网格线上。
+   */
+  padding: 0 15px 7px;
 }
 
 .reading-column {
@@ -923,9 +934,7 @@ body {
 .vocab-flashcard-crowd-front {
   padding: 0;
   border-top-style: solid;
-  background:
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.58), transparent 38%),
-    #f5f4f0;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.58), transparent 38%), #f5f4f0;
 }
 
 .vocab-flashcard-crowd-stage {
@@ -1722,7 +1731,8 @@ body {
 .structure-layout .reading-column {
   width: 358px;
   min-width: 0;
-  padding: 10px 15px 0;
+  /* 左栏从第一行下方开始，语言行只保留在右侧阅读列内 */
+  padding: 0 15px 0;
 }
 
 .structure-layout .learning-structure-panel {
