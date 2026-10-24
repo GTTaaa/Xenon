@@ -720,79 +720,384 @@ body {
   color: #b0b0b8;
 }
 
-/* 学习模式空状态：用一张轻量闪卡替代空白译文区 */
+/* 学习模式空状态：用可自动轮播的轻量闪卡替代空白译文区 */
+.vocab-flashcard-carousel {
+  /* 轮播外层保持相对定位，供隐藏的自动播放计时器定位 */
+  position: relative;
+  width: calc(100% - 6px);
+}
+
+.vocab-flashcard-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vocab-flashcard-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: rgba(71, 91, 98, 0.64);
+  transform: scaleX(0);
+  transform-origin: left center;
+  /* 每张停留 8 秒；悬停、聚焦或固定释义时由下方状态暂停 */
+  animation: vocab-flashcard-progress 8000ms linear forwards;
+}
+
+.vocab-flashcard-progress-paused span {
+  animation-play-state: paused;
+}
+
+@keyframes vocab-flashcard-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.vocab-flashcard-stage {
+  overflow: hidden;
+}
+
 .vocab-flashcard {
   position: relative;
-  padding: 10px 11px 9px 13px;
-  border: 1px solid rgba(77, 111, 130, 0.14);
-  border-left: 2px solid rgba(77, 111, 130, 0.46);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(77, 111, 130, 0.045), transparent 58%), rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  padding: 0 2px 3px;
   cursor: pointer;
 }
 
+.vocab-flashcard:focus-visible {
+  outline: 2px solid rgba(59, 121, 79, 0.32);
+  outline-offset: 3px;
+}
+
+.vocab-flashcard-enter-next {
+  animation: vocab-flashcard-in-next 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.vocab-flashcard-enter-prev {
+  animation: vocab-flashcard-in-prev 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes vocab-flashcard-in-next {
+  from {
+    opacity: 0.45;
+    transform: translateX(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes vocab-flashcard-in-prev {
+  from {
+    opacity: 0.45;
+    transform: translateX(-14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .vocab-flashcard-kicker {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  color: #78909d;
-  font-family: var(--app-mono);
+  gap: 10px;
+  min-height: 14px;
+}
+
+.vocab-flashcard-encounter,
+.vocab-flashcard-status {
+  display: inline-flex;
+  align-items: center;
+  color: #7e898d;
   font-size: 8.5px;
   line-height: 1.2;
-  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.vocab-flashcard-encounter {
+  gap: 2px;
+  font-family: var(--app-mono);
+  letter-spacing: 0.2px;
+}
+
+.vocab-flashcard-encounter-label {
+  margin-right: 2px;
+  color: #56686e;
+  font-weight: 600;
+}
+
+.vocab-flashcard-encounter-unit {
+  color: #8c9497;
+  font-size: 8px;
+}
+
+.vocab-flashcard-encounter strong {
+  margin: 0 1px;
+  color: #40595f;
+  font-family: var(--app-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.vocab-flashcard-status {
+  font-family: var(--app-mono);
+  font-size: 7.5px;
+  letter-spacing: 0.2px;
+}
+
+.vocab-flashcard-status-paused {
+  color: #a0927d;
 }
 
 .vocab-flashcard-sentence {
-  margin: 9px 0 0;
-  color: var(--app-fg-read);
-  font-size: 14px;
-  line-height: 1.55;
-  letter-spacing: -0.05px;
+  position: relative;
+  z-index: 1;
+  margin: 12px 0 0;
+  color: #1b282c;
+  font-size: 15px;
+  line-height: 1.58;
+  letter-spacing: -0.12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .vocab-flashcard-sentence mark {
-  padding: 0 1px;
-  border-radius: 2px;
-  background: rgba(77, 111, 130, 0.11);
-  color: #355b6d;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: inset 0 -2px 0 #5b7076;
+  color: #253b41;
+  font-family: 'Iowan Old Style', 'Baskerville', 'Songti SC', serif;
+  font-size: 20px;
   font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.45px;
+}
+
+.vocab-flashcard-reveal {
+  position: relative;
+  z-index: 1;
+  height: 94px;
+  margin-top: 13px;
+  perspective: 720px;
+}
+
+.vocab-flashcard-flap-rotor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 440ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vocab-flashcard-flap-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 8px 6px;
+  border-top: 1px solid #d9ddde;
+  border-radius: 2px;
+  background: #f7f8f8;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.vocab-flashcard-flap-front {
+  border-top-style: dashed;
+  background: linear-gradient(to bottom, rgba(248, 249, 249, 0.84), #f7f8f8);
+}
+
+.vocab-flashcard-crowd-front {
+  padding: 0;
+  border-top-style: solid;
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.58), transparent 38%),
+    #f5f4f0;
+}
+
+.vocab-flashcard-crowd-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.vocab-flashcard-crowd-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+.vocab-flashcard-crowd-ground {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  left: 0;
+  z-index: 2;
+  height: 2px;
+  background: #30383a;
+  opacity: 0.72;
+}
+
+.vocab-flashcard-crowd-crop {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  bottom: 10px;
+  z-index: 2;
+  width: 1px;
+  background: rgba(48, 56, 58, 0.2);
+  box-shadow: 5px 0 0 rgba(48, 56, 58, 0.07);
+}
+
+.vocab-flashcard-flap-back {
+  transform: rotateX(180deg);
+}
+
+.vocab-flashcard-revealed .vocab-flashcard-flap-rotor {
+  transform: rotateX(180deg);
 }
 
 .vocab-flashcard-answer {
-  margin-top: 7px;
-  color: var(--app-fg-body);
-  filter: blur(4px);
-  opacity: 0.55;
-  transition:
-    filter 170ms ease,
-    opacity 170ms ease;
+  user-select: none;
 }
 
 .vocab-flashcard-answer p {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.5;
 }
 
-.vocab-flashcard-answer p + p {
-  margin-top: 2px;
-  color: var(--app-fg-muted);
+.vocab-flashcard-meaning {
+  color: #2c4b51;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.vocab-flashcard-answer .vocab-flashcard-context {
+  margin-top: 4px;
+  color: #777d80;
+  font-size: 10.5px;
+  line-height: 1.58;
 }
 
 .vocab-flashcard-revealed .vocab-flashcard-answer {
-  filter: blur(0);
-  opacity: 1;
+  user-select: text;
 }
 
-.vocab-flashcard-hint {
-  margin-top: 7px;
-  color: var(--app-fg-faint);
-  font-size: 9px;
-  line-height: 1.3;
+.vocab-flashcard-controls {
+  display: grid;
+  width: 100%;
+  align-items: center;
+  grid-template-columns: 40px minmax(0, 1fr) 18px 18px;
+  gap: 7px;
+  min-height: 20px;
+  margin-top: 8px;
+  padding: 0 1px;
+}
+
+.vocab-flashcard-position {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  color: #8f999c;
+  font-family: 'Iowan Old Style', 'Baskerville', 'Songti SC', serif;
+  font-size: 7px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.vocab-flashcard-position strong {
+  color: #2c3d42;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.8px;
+}
+
+.vocab-flashcard-rail {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 3px;
+  height: 18px;
+}
+
+.vocab-flashcard-rail-mark {
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.vocab-flashcard-rail-mark::before {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 5px;
+  margin: 0 auto;
+  border: 1px solid #b8c0c2;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.vocab-flashcard-rail-mark:hover::before {
+  border-color: #929b9e;
+}
+
+.vocab-flashcard-rail-mark-active::before {
+  border-color: #2c3d42;
+  background: #2c3d42;
+  transform: scale(1.35);
+}
+
+.vocab-flashcard-rail-mark:focus-visible,
+.vocab-flashcard-arrow:focus-visible {
+  outline: 2px solid rgba(59, 121, 79, 0.3);
+  outline-offset: 1px;
+}
+
+.vocab-flashcard-arrow {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: #969da0;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.vocab-flashcard-arrow:hover {
+  background: rgba(0, 0, 0, 0.045);
+  color: var(--app-fg-body);
 }
 
 .vocab-flashcard-loading,
@@ -1575,6 +1880,20 @@ body {
   .structure-layout .learning-structure-panel,
   .structure-layout.structure-layout-collapsing .learning-structure-panel {
     animation: none;
+    transition: none;
+  }
+
+  /* 降低动态效果时不自动翻卡，底部圆点与箭头仍可手动浏览 */
+  .vocab-flashcard-progress {
+    display: none;
+  }
+
+  .vocab-flashcard-enter-next,
+  .vocab-flashcard-enter-prev {
+    animation: none;
+  }
+
+  .vocab-flashcard-flap-rotor {
     transition: none;
   }
 }

@@ -44,7 +44,7 @@ import {
 } from './scrollAlignment'
 import {
   findCachedVocab,
-  getRandomVocabFlashcard,
+  getVocabFlashcards,
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
   normalizeVocabLemma,
@@ -66,6 +66,7 @@ import {
   STRUCTURE_LAYOUT_COLLAPSE_MS,
   STRUCTURE_LAYOUT_TRANSITION_MS
 } from '../../shared/windowLayout'
+import { EncounterCrowdCanvas } from './components/EncounterCrowdCanvas'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
@@ -83,6 +84,8 @@ const RESULT_MIN_HEIGHT = 16 * 1.6 * 3
 const MAX_ALIGNMENT_CACHE_ENTRIES = 8
 // 单词释义按“当前句 + 对应译文”缓存，避免重复点击同一语境时产生额外模型请求
 const MAX_WORD_LOOKUP_CACHE_ENTRIES = 64
+// 空状态一次准备多张闪卡，既够轮播一轮，也不会让开始学习前的读取过重
+const VOCAB_FLASHCARD_LIMIT = 8
 // 调整对齐规则或提示词后递增缓存版本，主动淘汰旧结果
 const ALIGNMENT_CACHE_VERSION = 'learning-v7'
 // 程序化平滑滚动期间短暂忽略滚动事件，避免自动定位被当成用户滚动而关闭悬停状态
@@ -868,6 +871,254 @@ function SegmentedText({
   return <>{nodes}</>
 }
 
+interface VocabFlashcardCarouselProps {
+  /** 已按随机顺序准备好的复习闪卡 */
+  cards: VocabFlashcard[]
+  /** 当前轮播卡片编号 */
+  activeIndex: number
+  /** 切换轮播卡片 */
+  onIndexChange: (index: number) => void
+}
+
+/** 学习模式空状态的多卡片复习轮播 */
+function VocabFlashcardCarousel({
+  cards,
+  activeIndex,
+  onIndexChange
+}: VocabFlashcardCarouselProps): React.JSX.Element | null {
+  const [direction, setDirection] = useState<'next' | 'prev'>('next')
+  const [isCarouselHovered, setIsCarouselHovered] = useState(false)
+  const [isCardHovered, setIsCardHovered] = useState(false)
+  const [isFocusWithin, setIsFocusWithin] = useState(false)
+  // 用卡片键记录固定状态，换卡后旧键自然失效，无需在 Effect 里额外重置
+  const [pinnedCardKey, setPinnedCardKey] = useState<string | null>(null)
+  const activeCard = cards[activeIndex] ?? cards[0]
+
+  const sentenceParts = useMemo(() => {
+    if (!activeCard) return null
+    return splitSentenceAroundVocab(
+      activeCard.context.sourceSentence,
+      activeCard.context.surface || activeCard.item.surface || activeCard.item.lemma
+    )
+  }, [activeCard])
+
+  if (!activeCard || !sentenceParts) return null
+
+  const cardKey = `${activeCard.item.lemmaLower}-${
+    activeCard.context.id ?? activeCard.context.sourceSentenceKey
+  }`
+  const isAnswerPinned = pinnedCardKey === cardKey
+  const isRevealed = isCardHovered || isAnswerPinned
+  const isPaused = isCarouselHovered || isFocusWithin || isAnswerPinned
+  const hasMultipleCards = cards.length > 1
+
+  /** 保留切换方向，让前后两张卡可以从对应方向滑入 */
+  const navigateTo = (nextIndex: number, nextDirection: 'next' | 'prev'): void => {
+    setDirection(nextDirection)
+    onIndexChange(nextIndex)
+  }
+
+  const goToPrevious = (): void => {
+    if (!hasMultipleCards) return
+    navigateTo((activeIndex - 1 + cards.length) % cards.length, 'prev')
+  }
+
+  const goToNext = (): void => {
+    if (!hasMultipleCards) return
+    navigateTo((activeIndex + 1) % cards.length, 'next')
+  }
+
+  /** 进度条播放完自动翻到下一张，悬停或固定答案时动画会暂停 */
+  const handleProgressEnd = (event: React.AnimationEvent<HTMLSpanElement>): void => {
+    if (event.animationName !== 'vocab-flashcard-progress') return
+    goToNext()
+  }
+
+  const togglePinnedAnswer = (): void => {
+    setPinnedCardKey((current) => (current === cardKey ? null : cardKey))
+  }
+
+  // 固定释义才需要额外状态；自动暂停不额外占用正文注意力
+  const statusText = isAnswerPinned ? '释义已固定' : null
+
+  return (
+    <div
+      className="vocab-flashcard-carousel"
+      role="group"
+      aria-roledescription="轮播"
+      aria-label="偶遇复习轮播"
+      onMouseEnter={() => setIsCarouselHovered(true)}
+      onMouseLeave={() => {
+        setIsCarouselHovered(false)
+        setIsCardHovered(false)
+      }}
+      onFocusCapture={() => setIsFocusWithin(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsFocusWithin(false)
+        }
+      }}
+    >
+      {hasMultipleCards ? (
+        <span
+          className={`vocab-flashcard-progress${
+            isPaused ? ' vocab-flashcard-progress-paused' : ''
+          }`}
+          aria-hidden="true"
+        >
+          <span key={activeIndex} onAnimationEnd={handleProgressEnd} />
+        </span>
+      ) : null}
+
+      <div
+        className="vocab-flashcard-stage"
+        onMouseEnter={() => setIsCardHovered(true)}
+        onMouseLeave={() => setIsCardHovered(false)}
+      >
+        <div
+          key={cardKey}
+          className={`vocab-flashcard vocab-flashcard-enter-${direction}${
+            isRevealed ? ' vocab-flashcard-revealed' : ''
+          }`}
+          role="button"
+          tabIndex={0}
+          aria-pressed={isAnswerPinned}
+          aria-label={
+            isRevealed
+              ? '偶遇复习闪卡，中文释义已显示，点击可固定或取消固定'
+              : '偶遇复习闪卡，悬停或按回车键显示中文释义'
+          }
+          onClick={togglePinnedAnswer}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              togglePinnedAnswer()
+              return
+            }
+            if (event.key === 'ArrowLeft') {
+              event.preventDefault()
+              goToPrevious()
+            } else if (event.key === 'ArrowRight') {
+              event.preventDefault()
+              goToNext()
+            }
+          }}
+        >
+          <div className="vocab-flashcard-kicker">
+            <span className="vocab-flashcard-encounter">
+              <span className="vocab-flashcard-encounter-label">偶遇</span>
+              <strong>{activeCard.item.encounterCount}</strong>
+              <span className="vocab-flashcard-encounter-unit">次</span>
+            </span>
+            {statusText ? (
+              <span className="vocab-flashcard-status vocab-flashcard-status-paused">
+                {statusText}
+              </span>
+            ) : null}
+          </div>
+          <p className="vocab-flashcard-sentence" lang="en">
+            {sentenceParts.match ? (
+              <>
+                {sentenceParts.before}
+                <mark>{sentenceParts.match}</mark>
+                {sentenceParts.after}
+              </>
+            ) : (
+              sentenceParts.before
+            )}
+          </p>
+          <div className="vocab-flashcard-reveal">
+            <div className="vocab-flashcard-flap-rotor">
+              <div
+                className="vocab-flashcard-flap-face vocab-flashcard-flap-front vocab-flashcard-crowd-front"
+                aria-hidden="true"
+              >
+                <EncounterCrowdCanvas />
+              </div>
+              <div className="vocab-flashcard-flap-face vocab-flashcard-flap-back">
+                <div className="vocab-flashcard-answer" aria-hidden={!isRevealed}>
+                  <p className="vocab-flashcard-meaning">{activeCard.item.meaning}</p>
+                  <p className="vocab-flashcard-context" lang="zh-CN">
+                    {activeCard.context.targetSentence}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {hasMultipleCards ? (
+        <div className="vocab-flashcard-controls">
+          <span
+            className="vocab-flashcard-position"
+            aria-label={`第 ${activeIndex + 1} 张，共 ${cards.length} 张`}
+          >
+            <strong>{String(activeIndex + 1).padStart(2, '0')}</strong>
+            <span>/ {String(cards.length).padStart(2, '0')}</span>
+          </span>
+          <div className="vocab-flashcard-rail" aria-label="闪卡进度">
+            {cards.map((card, index) => (
+              <button
+                key={`${card.item.lemmaLower}-${card.context.id ?? index}`}
+                type="button"
+                className={`vocab-flashcard-rail-mark${
+                  index === activeIndex ? ' vocab-flashcard-rail-mark-active' : ''
+                }`}
+                aria-label={`查看第 ${index + 1} 张闪卡`}
+                aria-current={index === activeIndex ? 'true' : undefined}
+                onClick={() => navigateTo(index, index < activeIndex ? 'prev' : 'next')}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            className="vocab-flashcard-arrow"
+            aria-label="上一张闪卡"
+            title="上一张闪卡"
+            onClick={goToPrevious}
+          >
+            <svg
+              width="9"
+              height="9"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="vocab-flashcard-arrow"
+            aria-label="下一张闪卡"
+            title="下一张闪卡"
+            onClick={goToNext}
+          >
+            <svg
+              width="9"
+              height="9"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function App(): React.JSX.Element {
   const [sourceText, setSourceText] = useState(INITIAL_SOURCE_TEXT)
   // const targetText = `你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。  你好，你今天怎么样？我正在测试专业工业手持翻译器的布局，以确保它能够通过固定高度和内部滚动机制妥善处理长文本内容。`
@@ -915,14 +1166,14 @@ function App(): React.JSX.Element {
   const [isStructureCollapsing, setIsStructureCollapsing] = useState(false)
   // 窗口宽度就绪后才允许左栏播放展开动画，避免动画前几帧被旧视口裁掉
   const [isStructureLayoutReady, setIsStructureLayoutReady] = useState(false)
-  // 学习模式空状态展示的随机复习闪卡
-  const [vocabFlashcard, setVocabFlashcard] = useState<VocabFlashcard | null>(null)
+  // 学习模式空状态展示的随机复习闪卡轮播
+  const [vocabFlashcards, setVocabFlashcards] = useState<VocabFlashcard[]>([])
+  // 当前轮播卡片编号，放在主组件里以便换卡后重新校准窗口高度
+  const [vocabFlashcardIndex, setVocabFlashcardIndex] = useState(0)
   // 区分闪卡加载中、数据库为空与正常展示三种状态
   const [vocabFlashcardState, setVocabFlashcardState] = useState<
     'hidden' | 'loading' | 'ready' | 'empty'
   >('hidden')
-  // 中文释义默认遮挡，鼠标悬停或点击后揭晓
-  const [isVocabFlashcardRevealed, setIsVocabFlashcardRevealed] = useState(false)
   // const [statusText, setStatusText] = useState('READY_V1.1')
   const [status, setStatus] = useState<TranslateStatus>(
     INITIAL_SOURCE_TEXT.trim() ? 'translating' : 'idle'
@@ -1436,15 +1687,6 @@ function App(): React.JSX.Element {
     targetText
   ])
 
-  // 闪卡英文例句围绕目标词切成三段，渲染时只强调真实命中词形
-  const flashcardSentenceParts = useMemo(() => {
-    if (!vocabFlashcard) return null
-    return splitSentenceAroundVocab(
-      vocabFlashcard.context.sourceSentence,
-      vocabFlashcard.context.surface || vocabFlashcard.item.surface || vocabFlashcard.item.lemma
-    )
-  }, [vocabFlashcard])
-
   const deviceRef = useRef<HTMLElement | null>(null)
   // 译文区滚动容器与底部工具行：量两者高度，窗口才能按"内容实际需要多高"来收放
   const resultScrollRef = useRef<HTMLDivElement | null>(null)
@@ -1667,7 +1909,7 @@ function App(): React.JSX.Element {
     syncWindowHeight,
     isVocabFlashcardVisible,
     vocabFlashcardState,
-    isVocabFlashcardRevealed,
+    vocabFlashcardIndex,
     displayedSentenceSyntax,
     syntaxLoadingPairId,
     wordLookup
@@ -2365,25 +2607,25 @@ function App(): React.JSX.Element {
     targetText
   ])
 
-  // 学习模式空状态随机抽取一条带语境的生词闪卡
+  // 学习模式空状态随机准备一组带语境的生词闪卡
   useEffect(() => {
     if (!isVocabFlashcardVisible) {
-      setVocabFlashcard(null)
+      setVocabFlashcards([])
+      setVocabFlashcardIndex(0)
       setVocabFlashcardState('hidden')
-      setIsVocabFlashcardRevealed(false)
       return
     }
 
     let cancelled = false
-    setVocabFlashcard(null)
+    setVocabFlashcards([])
+    setVocabFlashcardIndex(0)
     setVocabFlashcardState('loading')
-    setIsVocabFlashcardRevealed(false)
 
-    void getRandomVocabFlashcard()
-      .then((flashcard) => {
+    void getVocabFlashcards(VOCAB_FLASHCARD_LIMIT)
+      .then((flashcards) => {
         if (cancelled) return
-        setVocabFlashcard(flashcard)
-        setVocabFlashcardState(flashcard ? 'ready' : 'empty')
+        setVocabFlashcards(flashcards)
+        setVocabFlashcardState(flashcards.length > 0 ? 'ready' : 'empty')
       })
       .catch((error) => {
         if (cancelled) return
@@ -3791,46 +4033,12 @@ function App(): React.JSX.Element {
                     <span />
                   </div>
                 ) : isVocabFlashcardVisible ? (
-                  vocabFlashcardState === 'ready' && vocabFlashcard && flashcardSentenceParts ? (
-                    <div
-                      className={`vocab-flashcard${
-                        isVocabFlashcardRevealed ? ' vocab-flashcard-revealed' : ''
-                      }`}
-                      role="button"
-                      tabIndex={0}
-                      aria-label="偶遇复习闪卡，悬停或点击查看中文释义"
-                      onMouseEnter={() => setIsVocabFlashcardRevealed(true)}
-                      onClick={() => setIsVocabFlashcardRevealed(true)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          setIsVocabFlashcardRevealed(true)
-                        }
-                      }}
-                    >
-                      <div className="vocab-flashcard-kicker">
-                        <span>偶遇复习</span>
-                        <span>已偶遇 {vocabFlashcard.item.encounterCount} 次</span>
-                      </div>
-                      <p className="vocab-flashcard-sentence" lang="en">
-                        {flashcardSentenceParts.match ? (
-                          <>
-                            {flashcardSentenceParts.before}
-                            <mark>{flashcardSentenceParts.match}</mark>
-                            {flashcardSentenceParts.after}
-                          </>
-                        ) : (
-                          flashcardSentenceParts.before
-                        )}
-                      </p>
-                      <div className="vocab-flashcard-answer">
-                        <p>{vocabFlashcard.item.meaning}</p>
-                        <p lang="zh-CN">{vocabFlashcard.context.targetSentence}</p>
-                      </div>
-                      <div className="vocab-flashcard-hint">
-                        {isVocabFlashcardRevealed ? '再次偶遇，记得更牢' : '悬停或点击揭晓释义'}
-                      </div>
-                    </div>
+                  vocabFlashcardState === 'ready' && vocabFlashcards.length > 0 ? (
+                    <VocabFlashcardCarousel
+                      cards={vocabFlashcards}
+                      activeIndex={Math.min(vocabFlashcardIndex, vocabFlashcards.length - 1)}
+                      onIndexChange={setVocabFlashcardIndex}
+                    />
                   ) : vocabFlashcardState === 'loading' || vocabFlashcardState === 'hidden' ? (
                     <div className="vocab-flashcard-loading" role="status">
                       正在翻阅生词…

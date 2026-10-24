@@ -465,24 +465,52 @@ export const incrementPassiveVocabEncounters = async (
   })
 }
 
+/**
+ * 从本地词库随机抽取一组互不重复的闪卡。
+ * 以词条而不是语境作为随机单位，避免同一生词的多个例句占满整个轮播。
+ */
+export const getVocabFlashcards = async (
+  limit = 8,
+  database: VocabDatabase = vocabDatabase
+): Promise<VocabFlashcard[]> => {
+  const safeLimit = Math.max(1, Math.min(20, Math.floor(limit)))
+  const itemCount = await database.vocabItems.count()
+  if (itemCount === 0) return []
+
+  const firstOffset = Math.floor(Math.random() * itemCount)
+  const maximumAttempts = Math.min(itemCount, Math.max(safeLimit * 4, 24))
+  const flashcards: VocabFlashcard[] = []
+
+  for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
+    const offset = (firstOffset + attempt) % itemCount
+    const item = await database.vocabItems.orderBy('updatedAt').offset(offset).first()
+    if (!item) continue
+
+    const contextCount = await database.vocabContexts
+      .where('lemmaLower')
+      .equals(item.lemmaLower)
+      .count()
+    if (contextCount === 0) continue
+
+    const contextOffset = Math.floor(Math.random() * contextCount)
+    const context = await database.vocabContexts
+      .where('lemmaLower')
+      .equals(item.lemmaLower)
+      .offset(contextOffset)
+      .first()
+    if (!context) continue
+
+    flashcards.push({ item, context })
+    if (flashcards.length >= safeLimit) break
+  }
+
+  return flashcards
+}
+
 /** 从本地库随机抽取一条带完整语境的闪卡 */
 export const getRandomVocabFlashcard = async (
   database: VocabDatabase = vocabDatabase
 ): Promise<VocabFlashcard | null> => {
-  const contextCount = await database.vocabContexts.count()
-  if (contextCount === 0) return null
-
-  const firstOffset = Math.floor(Math.random() * contextCount)
-  const maximumAttempts = Math.min(contextCount, 12)
-
-  for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
-    const offset = (firstOffset + attempt) % contextCount
-    const context = await database.vocabContexts.orderBy('createdAt').offset(offset).first()
-    if (!context) continue
-
-    const item = await database.vocabItems.where('lemmaLower').equals(context.lemmaLower).first()
-    if (item) return { item, context }
-  }
-
-  return null
+  const [flashcard] = await getVocabFlashcards(1, database)
+  return flashcard ?? null
 }

@@ -54,3 +54,7 @@ pnpm build:mac    # macOS
 pnpm build:win    # Windows
 pnpm build:linux  # Linux
 ```
+
+## 第三方资源
+
+偶遇复习卡片中的人群插画与动画参考来源，请见 [第三方资源说明](THIRD_PARTY_NOTICES.md)。

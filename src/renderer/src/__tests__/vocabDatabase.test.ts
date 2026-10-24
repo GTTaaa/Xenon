@@ -5,6 +5,7 @@ import {
   VocabDatabase,
   findCachedVocab,
   getRandomVocabFlashcard,
+  getVocabFlashcards,
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
   normalizeVocabSentence,
@@ -370,6 +371,43 @@ test('随机闪卡会返回互相关联的主词与完整语境', async (context
   assert.equal(flashcard?.item.lemmaLower, 'craft')
   assert.equal(flashcard?.context.lemmaLower, 'craft')
   assert.equal(flashcard?.context.surface, 'crafted')
+})
+
+test('批量闪卡按词条去重，并为每张卡保留对应语境', async (context) => {
+  const database = createTestDatabase()
+  context.after(() => database.delete())
+
+  const words = [
+    ['craft', '精心制作', 'The speech was carefully crafted.'],
+    ['subtle', '微妙的', 'There is a subtle difference.'],
+    ['resilient', '有韧性的', 'She remained resilient through the crisis.'],
+    ['tender', '温柔的', 'He gave her a tender look.'],
+    ['vivid', '生动的', 'The memory is still vivid.'],
+    ['stern', '严厉的', 'Her tone was unusually stern.']
+  ]
+
+  for (const [lemma, meaning, sentence] of words) {
+    await recordVocabEncounter(
+      {
+        lemma,
+        surface: lemma,
+        meaning,
+        targetText: meaning,
+        side: 'source',
+        englishSentence: sentence,
+        chineseSentence: `这是 ${lemma} 的中文语境。`
+      },
+      database
+    )
+  }
+
+  const flashcards = await getVocabFlashcards(4, database)
+  assert.equal(flashcards.length, 4)
+  assert.equal(new Set(flashcards.map((flashcard) => flashcard.item.lemmaLower)).size, 4)
+
+  for (const flashcard of flashcards) {
+    assert.equal(flashcard.item.lemmaLower, flashcard.context.lemmaLower)
+  }
 })
 
 test('旧数据库升级时会合并重复主词与重复语境', async (context) => {
