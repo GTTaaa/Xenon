@@ -18,7 +18,7 @@ export const HEADER_EXTRA_HEIGHT = 34
 
 /**
  * 学习模式专属附加高度。
- * 当前为 0，后续增加学习模式子切换行时只需在这里叠加，
+ * 后续增加学习模式专属行时在这里继续累加，
  * 普通翻译模式的最大高度不会随之变化。
  */
 export const LEARNING_ONLY_EXTRA_HEIGHT = 0

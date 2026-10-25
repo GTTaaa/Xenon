@@ -6,6 +6,7 @@ import {
   findCachedVocab,
   getRandomVocabFlashcard,
   getVocabFlashcards,
+  getVocabItemCount,
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
   normalizeVocabSentence,
@@ -408,6 +409,34 @@ test('批量闪卡按词条去重，并为每张卡保留对应语境', async (c
   for (const flashcard of flashcards) {
     assert.equal(flashcard.item.lemmaLower, flashcard.context.lemmaLower)
   }
+})
+
+test('生词数量按唯一词条统计', async (context) => {
+  const database = createTestDatabase()
+  context.after(() => database.delete())
+
+  assert.equal(await getVocabItemCount(database), 0)
+
+  const encounter = {
+    lemma: 'craft',
+    surface: 'crafted',
+    meaning: '精心制作',
+    targetText: '精心打磨',
+    side: 'source' as const,
+    englishSentence: 'The speech was carefully crafted.',
+    chineseSentence: '这篇演讲经过精心打磨。'
+  }
+  await recordVocabEncounter(encounter, database)
+  await recordVocabEncounter(
+    {
+      ...encounter,
+      englishSentence: 'She crafted a careful response.',
+      chineseSentence: '她精心拟了一份回复。'
+    },
+    database
+  )
+
+  assert.equal(await getVocabItemCount(database), 1)
 })
 
 test('旧数据库升级时会合并重复主词与重复语境', async (context) => {

@@ -24,8 +24,8 @@ interface AppAPI {
   fetchModels: (params: { baseUrl: string; apiKey: string }) => Promise<FetchModelsResult>
   onApplySourceText: (callback: (text: string) => void) => () => void
   onOcrStatus: (callback: (status: OcrStatus) => void) => () => void
-  setWindowHeight: (height: number) => Promise<void>
-  setWindowLayout: (layout: WindowLayoutMode) => Promise<void>
+  setWindowHeight: (height: number, allowCompactHeight?: boolean) => Promise<void>
+  setWindowLayout: (layout: WindowLayoutMode, allowCompactHeight?: boolean) => Promise<void>
   openConfigWindow: () => Promise<void>
   closeConfigWindow: () => Promise<void>
   toggleAlwaysOnTop: () => Promise<boolean>

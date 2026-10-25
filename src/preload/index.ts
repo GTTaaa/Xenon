@@ -91,11 +91,11 @@ const api = {
       ipcRenderer.removeListener('translate:ocr-status', listener)
     }
   },
-  setWindowHeight: (height: number): Promise<void> => {
-    return ipcRenderer.invoke('window:set-height', height)
+  setWindowHeight: (height: number, allowCompactHeight?: boolean): Promise<void> => {
+    return ipcRenderer.invoke('window:set-height', height, allowCompactHeight)
   },
-  setWindowLayout: (layout: WindowLayoutMode): Promise<void> => {
-    return ipcRenderer.invoke('window:set-layout', layout)
+  setWindowLayout: (layout: WindowLayoutMode, allowCompactHeight?: boolean): Promise<void> => {
+    return ipcRenderer.invoke('window:set-layout', layout, allowCompactHeight)
   },
   openConfigWindow: (): Promise<void> => {
     return ipcRenderer.invoke('app:open-config')

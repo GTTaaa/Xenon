@@ -472,45 +472,55 @@ app.whenReady().then(async () => {
   })
 
   // 学习模式需要更宽的并排阅读空间；窗口只切换一次宽度，视觉过渡交给页面内的左栏
-  ipcMain.handle('window:set-layout', async (_, layout: WindowLayoutMode) => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
+  ipcMain.handle(
+    'window:set-layout',
+    async (_, layout: WindowLayoutMode, allowCompactHeight = false) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return
 
-    const nextWidth = layout === 'learning' ? LEARNING_WINDOW_WIDTH : MAIN_WINDOW_WIDTH
-    const bounds = mainWindow.getBounds()
-    const { workArea } = screen.getDisplayMatching(bounds)
-    const rightEdge = bounds.x + bounds.width
-    const fixedY = Math.max(workArea.y, bounds.y)
-    const maxHeight = Math.max(
-      MAIN_WINDOW_HEIGHT_MIN,
-      Math.min(MAIN_WINDOW_HEIGHT_MAX, workArea.height)
-    )
+      const nextWidth = layout === 'learning' ? LEARNING_WINDOW_WIDTH : MAIN_WINDOW_WIDTH
+      // 复习内容按自然高度显示；切换宽度时也不能被常规最小高度重新撑高
+      const minimumHeight = allowCompactHeight ? 0 : MAIN_WINDOW_HEIGHT_MIN
+      const bounds = mainWindow.getBounds()
+      const { workArea } = screen.getDisplayMatching(bounds)
+      const rightEdge = bounds.x + bounds.width
+      const fixedY = Math.max(workArea.y, bounds.y)
+      const maxHeight = Math.max(
+        MAIN_WINDOW_HEIGHT_MIN,
+        Math.min(MAIN_WINDOW_HEIGHT_MAX, workArea.height)
+      )
 
-    // macOS 会合并连续 setBounds，逐帧缩放在视觉上必然呈现台阶。
-    // 这里先放宽宽度约束，一次提交目标宽度，再用页面合成的左栏动画吸收视觉跳变。
-    mainWindow.setMinimumSize(MAIN_WINDOW_WIDTH, MAIN_WINDOW_HEIGHT_MIN)
-    mainWindow.setMaximumSize(Math.max(MAIN_WINDOW_WIDTH, LEARNING_WINDOW_WIDTH), maxHeight)
-    mainWindow.setBounds(
-      {
-        x: Math.max(workArea.x, rightEdge - nextWidth),
-        y: fixedY,
-        width: nextWidth,
-        height: bounds.height
-      },
-      false
-    )
-    mainWindow.setMinimumSize(nextWidth, MAIN_WINDOW_HEIGHT_MIN)
-    mainWindow.setMaximumSize(nextWidth, maxHeight)
-  })
+      // macOS 会合并连续 setBounds，逐帧缩放在视觉上必然呈现台阶。
+      // 这里先放宽宽度约束，一次提交目标宽度，再用页面合成的左栏动画吸收视觉跳变。
+      mainWindow.setMinimumSize(MAIN_WINDOW_WIDTH, minimumHeight)
+      mainWindow.setMaximumSize(Math.max(MAIN_WINDOW_WIDTH, LEARNING_WINDOW_WIDTH), maxHeight)
+      mainWindow.setBounds(
+        {
+          x: Math.max(workArea.x, rightEdge - nextWidth),
+          y: fixedY,
+          width: nextWidth,
+          height: bounds.height
+        },
+        false
+      )
+      mainWindow.setMinimumSize(nextWidth, minimumHeight)
+      mainWindow.setMaximumSize(nextWidth, maxHeight)
+    }
+  )
 
   // 窗口高度实时同步设置，上限跟随创建窗口时为当前屏幕计算出的可用高度
-  ipcMain.handle('window:set-height', (_, targetHeight: number) => {
+  ipcMain.handle('window:set-height', (_, targetHeight: number, allowCompactHeight = false) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     const [width, currentHeight] = mainWindow.getContentSize()
     const [, maxHeight] = mainWindow.getMaximumSize()
+    // 普通阅读保留原有最小高度；复习闪卡按实际内容高度收缩，消除底部空白
+    const minimumHeight = allowCompactHeight ? 0 : MAIN_WINDOW_HEIGHT_MIN
     const clampedTargetHeight = Math.max(
-      MAIN_WINDOW_HEIGHT_MIN,
+      minimumHeight,
       Math.min(Math.round(targetHeight), maxHeight)
     )
+
+    // 先同步原生最小高度，否则 setContentSize 仍会被旧下限截断
+    mainWindow.setMinimumSize(width, minimumHeight)
     if (Math.abs(currentHeight - clampedTargetHeight) >= 2) {
       mainWindow.setContentSize(width, clampedTargetHeight, false)
     }

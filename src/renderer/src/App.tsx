@@ -45,6 +45,7 @@ import {
 import {
   findCachedVocab,
   getVocabFlashcards,
+  getVocabItemCount,
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
   normalizeVocabLemma,
@@ -69,6 +70,8 @@ import {
 import { EncounterCrowdCanvas } from './components/EncounterCrowdCanvas'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
+type PrimaryView = 'translate' | 'learn' | 'review'
+type ReviewReturnView = Exclude<PrimaryView, 'review'>
 
 const INITIAL_SOURCE_TEXT = ''
 // 普通模式输入字号 14px × 行高 1.55，用来把输入框内容高度换算成行数
@@ -878,13 +881,16 @@ interface VocabFlashcardCarouselProps {
   activeIndex: number
   /** 切换轮播卡片 */
   onIndexChange: (index: number) => void
+  /** 是否启用自动轮播；复习模式固定关闭 */
+  autoAdvance?: boolean
 }
 
-/** 学习模式空状态的多卡片复习轮播 */
+/** 复习视图的多卡片闪卡组 */
 function VocabFlashcardCarousel({
   cards,
   activeIndex,
-  onIndexChange
+  onIndexChange,
+  autoAdvance = true
 }: VocabFlashcardCarouselProps): React.JSX.Element | null {
   const [direction, setDirection] = useState<'next' | 'prev'>('next')
   const [isCarouselHovered, setIsCarouselHovered] = useState(false)
@@ -959,7 +965,7 @@ function VocabFlashcardCarousel({
         }
       }}
     >
-      {hasMultipleCards ? (
+      {autoAdvance && hasMultipleCards ? (
         <span
           className={`vocab-flashcard-progress${
             isPaused ? ' vocab-flashcard-progress-paused' : ''
@@ -1126,9 +1132,9 @@ function App(): React.JSX.Element {
   const [targetText, setTargetText] = useState('')
   // 后台二次对齐结果；为空时译文仍按普通字符串渲染
   const [alignment, setAlignment] = useState<TextAlignment | null>(null)
-  // 学习模式是可选能力，默认关闭，避免干扰只想快速看译文的用户
-  const [learningMode, setLearningMode] = useState(() => {
-    return localStorage.getItem('learningMode') === '1'
+  // 主视图只有一个状态；复习不会写入本地偏好，重启后回到最近一次翻译或学习
+  const [primaryView, setPrimaryView] = useState<PrimaryView>(() => {
+    return localStorage.getItem('learningMode') === '1' ? 'learn' : 'translate'
   })
   // 已收藏词标记默认关闭，避免自动装饰打断阅读
   const [showCollectedWordMarks, setShowCollectedWordMarks] = useState(() => {
@@ -1170,6 +1176,8 @@ function App(): React.JSX.Element {
   const [vocabFlashcards, setVocabFlashcards] = useState<VocabFlashcard[]>([])
   // 当前轮播卡片编号，放在主组件里以便换卡后重新校准窗口高度
   const [vocabFlashcardIndex, setVocabFlashcardIndex] = useState(0)
+  // 生词库唯一词条总数，供“复习 (n)”入口展示
+  const [vocabItemCount, setVocabItemCount] = useState(0)
   // 区分闪卡加载中、数据库为空与正常展示三种状态
   const [vocabFlashcardState, setVocabFlashcardState] = useState<
     'hidden' | 'loading' | 'ready' | 'empty'
@@ -1207,6 +1215,14 @@ function App(): React.JSX.Element {
   const sourceInputRef = useRef<HTMLTextAreaElement | null>(null)
   const sourceMirrorRef = useRef<HTMLDivElement | null>(null)
   const sourceHitBoxesRef = useRef<SourceHitBox[]>([])
+  // 事件回调读取当前主视图，避免闭包持有切换前的旧状态
+  const primaryViewRef = useRef<PrimaryView>(primaryView)
+  // 记录进入复习前是翻译还是学习
+  const reviewReturnViewRef = useRef<ReviewReturnView>('translate')
+  // 快捷入口恢复学习视图前，需要确认当前语言组合仍支持学习
+  const learningSupportedRef = useRef(false)
+  // 复习主体：窗口高度按它的自然内容高度测量，不能再依赖已隐藏的阅读列
+  const reviewViewRef = useRef<HTMLElement | null>(null)
   const sourceHoverFrameRef = useRef<number | null>(null)
   const isAutoScrollingSourceRef = useRef(false)
   const isAutoScrollingResultRef = useRef(false)
@@ -1348,7 +1364,8 @@ function App(): React.JSX.Element {
   const isLearningSupported =
     (effectiveSourceLang === 'en' && effectiveTargetLang === 'zh') ||
     (effectiveSourceLang === 'zh' && effectiveTargetLang === 'en')
-  const isLearningActive = learningMode && isLearningSupported
+  const isLearningActive = primaryView === 'learn' && isLearningSupported
+  const isReviewActive = primaryView === 'review'
   // 英文位于原文还是译文，供本地词库与点词查义统一还原双语语序
   const learningHighlightSide = useMemo(
     () => resolveLearningHighlightSide(effectiveSourceLang, effectiveTargetLang),
@@ -1358,9 +1375,8 @@ function App(): React.JSX.Element {
   const hasTargetText = targetText.trim().length > 0
   // 有实际原文时才切换成上下等高的对照布局，空窗口仍保持紧凑
   const useLearningLayout = isLearningActive && hasSourceText
-  // 只有真正的学习模式空状态才展示复习闪卡，截图识别与错误提示优先
-  const isVocabFlashcardVisible =
-    isLearningActive && !hasSourceText && status === 'idle' && !isRecognizing && !errorMessage
+  // 只有复习主视图会加载闪卡
+  const isVocabReviewVisible = isReviewActive
 
   // 头部语言行：源语言名（自动模式下显示当前识别出的语言，识别不出就写"自动"）
   const sourceLanguageName = useMemo(() => {
@@ -1373,6 +1389,48 @@ function App(): React.JSX.Element {
     () => getShortLanguageLabel(effectiveTargetLang),
     [effectiveTargetLang]
   )
+
+  // 供快捷键与截图回调同步读取最新主视图和语言能力
+  useLayoutEffect(() => {
+    primaryViewRef.current = primaryView
+  }, [primaryView])
+
+  useLayoutEffect(() => {
+    learningSupportedRef.current = isLearningSupported
+  }, [isLearningSupported])
+
+  /** 快捷入口离开复习时，回到进入前的翻译或学习；学习不可用则回退翻译 */
+  const restoreViewBeforeReview = useCallback((): void => {
+    if (primaryViewRef.current !== 'review') return
+
+    const nextView =
+      reviewReturnViewRef.current === 'learn' && learningSupportedRef.current
+        ? 'learn'
+        : 'translate'
+    primaryViewRef.current = nextView
+    setPrimaryView(nextView)
+  }, [])
+
+  /** 从本地生词库重新读取唯一词条数量 */
+  const refreshVocabItemCount = useCallback((): void => {
+    void getVocabItemCount()
+      .then(setVocabItemCount)
+      .catch((error) => {
+        console.warn('[renderer] 读取生词数量失败:', error)
+      })
+  }, [])
+
+  // 当前语言组合不支持学习时，停留在学习视图没有意义，自动回到翻译
+  useEffect(() => {
+    if (primaryView === 'learn' && !isLearningSupported) {
+      setPrimaryView('translate')
+    }
+  }, [isLearningSupported, primaryView])
+
+  // 三个主视图都会展示复习数量，进入任一视图时从生词库刷新
+  useEffect(() => {
+    refreshVocabItemCount()
+  }, [primaryView, refreshVocabItemCount])
 
   // 预先建立"片段编号 → 对齐组编号"映射，避免悬停时反复遍历配对数组
   const alignmentView = useMemo(() => {
@@ -1817,11 +1875,48 @@ function App(): React.JSX.Element {
     // 展开与收起窗口期间只提交宽度，避免宽度刚变化又触发一次纵向跳动
     if (isStructureLayoutTransitioningRef.current) return
 
+    const panel = deviceRef.current
+    if (!panel) return
+
+    if (isReviewActive) {
+      // 加载中还没有可测量的真实内容，保留当前高度，避免先缩成一条再弹回
+      if (vocabFlashcardState === 'loading' || vocabFlashcardState === 'hidden') return
+
+      const reviewView = reviewViewRef.current
+      const reviewContent = reviewView?.firstElementChild
+      if (!reviewView || !(reviewContent instanceof HTMLElement)) return
+      // 仅已有闪卡时允许低于普通阅读窗口的最小高度，空态仍沿用统一下限
+      const allowCompactHeight = vocabFlashcardState === 'ready'
+      const minimumHeight = allowCompactHeight ? 0 : MAIN_WINDOW_HEIGHT_MIN
+
+      const reviewStyle = getComputedStyle(reviewView)
+      const reviewPadding =
+        parseFloat(reviewStyle.paddingTop || '0') + parseFloat(reviewStyle.paddingBottom || '0')
+      const lead = reviewView.getBoundingClientRect().top - panel.getBoundingClientRect().top
+      const body = panel.querySelector('.device-body')
+      const bottomPadding = body ? parseFloat(getComputedStyle(body).paddingBottom || '0') : 0
+      // scrollHeight 会补回亚像素布局与内部边距造成的 1～2px 溢出
+      const contentHeight = Math.max(
+        reviewContent.getBoundingClientRect().height,
+        reviewContent.scrollHeight
+      )
+      const measuredHeight = Math.ceil(
+        Math.min(
+          MAIN_WINDOW_HEIGHT_MAX,
+          Math.max(minimumHeight, lead + reviewPadding + contentHeight + bottomPadding)
+        )
+      )
+      if (Math.abs(lastSentHeightRef.current - measuredHeight) < 2) return
+
+      lastSentHeightRef.current = measuredHeight
+      void window.api.setWindowHeight(measuredHeight, allowCompactHeight)
+      return
+    }
+
     const textarea = sourceInputRef.current
     const scroll = resultScrollRef.current
     const toolbar = resultToolbarRef.current
-    const panel = deviceRef.current
-    if (!textarea || !scroll || !toolbar || !panel) return
+    if (!textarea || !scroll || !toolbar) return
 
     // 输入框先恢复自动高度，才能量到文本本身的真实行数，而不是上一次的容器高度
     textarea.style.height = 'auto'
@@ -1891,13 +1986,36 @@ function App(): React.JSX.Element {
 
     lastSentHeightRef.current = nextWindowHeight
     void window.api.setWindowHeight(nextWindowHeight)
-  }, [useLearningLayout, useStructureLayout, wordLookup])
+  }, [isReviewActive, useLearningLayout, useStructureLayout, vocabFlashcardState, wordLookup])
 
   // 窗口布局 Effect 只响应布局模式变化，始终通过 ref 调用最新的高度校准函数
   const syncWindowHeightRef = useRef(syncWindowHeight)
   useLayoutEffect(() => {
     syncWindowHeightRef.current = syncWindowHeight
   }, [syncWindowHeight])
+
+  // 翻卡会替换闪卡节点；监听主体尺寸变化，确保每次按新卡片的真实高度校准窗口
+  useEffect(() => {
+    if (!isReviewActive) return
+
+    const reviewContent = reviewViewRef.current?.firstElementChild
+    if (!(reviewContent instanceof HTMLElement)) return
+
+    let resizeFrame = 0
+    const resizeObserver = new ResizeObserver(() => {
+      if (resizeFrame) window.cancelAnimationFrame(resizeFrame)
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = 0
+        syncWindowHeightRef.current()
+      })
+    })
+    resizeObserver.observe(reviewContent)
+
+    return () => {
+      resizeObserver.disconnect()
+      if (resizeFrame) window.cancelAnimationFrame(resizeFrame)
+    }
+  }, [isReviewActive, vocabFlashcardState])
 
   useLayoutEffect(() => {
     syncWindowHeight()
@@ -1907,13 +2025,31 @@ function App(): React.JSX.Element {
     status,
     errorMessage,
     syncWindowHeight,
-    isVocabFlashcardVisible,
+    isVocabReviewVisible,
     vocabFlashcardState,
     vocabFlashcardIndex,
     displayedSentenceSyntax,
     syntaxLoadingPairId,
     wordLookup
   ])
+
+  // 阅读区从 display:none 恢复后，等布局完成再测量输入框与窗口高度
+  useLayoutEffect(() => {
+    if (isReviewActive) return
+
+    let firstFrame = 0
+    let secondFrame = 0
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        syncWindowHeightRef.current()
+      })
+    })
+
+    return () => {
+      if (firstFrame) window.cancelAnimationFrame(firstFrame)
+      if (secondFrame) window.cancelAnimationFrame(secondFrame)
+    }
+  }, [isReviewActive, primaryView])
 
   // 先提交窗口宽度，再分两帧启动左栏动画；动画结束后统一补做高度校准
   useEffect(() => {
@@ -1927,7 +2063,7 @@ function App(): React.JSX.Element {
     }
 
     void window.api
-      .setWindowLayout(useStructureWindowLayout ? 'learning' : 'normal')
+      .setWindowLayout(useStructureWindowLayout ? 'learning' : 'normal', isReviewActive)
       .then(() => {
         if (cancelled) return
 
@@ -1964,7 +2100,7 @@ function App(): React.JSX.Element {
       if (resizeFrame) window.cancelAnimationFrame(resizeFrame)
       if (revealFrame) window.cancelAnimationFrame(revealFrame)
     }
-  }, [useStructureWindowLayout])
+  }, [isReviewActive, useStructureWindowLayout])
 
   // 组件卸载时清理模型面板的退场定时器
   useEffect(() => {
@@ -2169,6 +2305,8 @@ function App(): React.JSX.Element {
   // 监听截图 OCR 提取出的文本并自动填充触发翻译
   useEffect(() => {
     return window.api.onApplySourceText((recognizedText) => {
+      // 识别完成时先离开复习，确保新译文和输入内容立即可见
+      restoreViewBeforeReview()
       const trimmed = recognizedText.trim()
       if (!trimmed) {
         abortActiveTranslationRequests()
@@ -2182,7 +2320,7 @@ function App(): React.JSX.Element {
       setErrorMessage('')
       markTranslationPending()
     })
-  }, [abortActiveTranslationRequests, markTranslationPending])
+  }, [abortActiveTranslationRequests, markTranslationPending, restoreViewBeforeReview])
 
   // 空态提示里的截图快捷键：跟随用户在设置里自定义的键位，读不到就退回默认值
   const [screenshotShortcut, setScreenshotShortcut] = useState('Alt+S')
@@ -2242,10 +2380,11 @@ function App(): React.JSX.Element {
     localStorage.setItem('sourceLanguage', sourceLanguage)
   }, [sourceLanguage])
 
-  // 学习模式偏好持久化，下次启动保持用户选择
+  // 只持久化翻译或学习；复习是临时主视图，重启后回到最近一次正式模式
   useEffect(() => {
-    localStorage.setItem('learningMode', learningMode ? '1' : '0')
-  }, [learningMode])
+    if (primaryView === 'review') return
+    localStorage.setItem('learningMode', primaryView === 'learn' ? '1' : '0')
+  }, [primaryView])
 
   // 已收藏词标记偏好持久化；关闭时只收起视觉标记，避免同一段文本重复累计偶遇次数
   useEffect(() => {
@@ -2607,9 +2746,9 @@ function App(): React.JSX.Element {
     targetText
   ])
 
-  // 学习模式空状态随机准备一组带语境的生词闪卡
+  // 进入复习子视图时随机准备一组带语境的生词闪卡
   useEffect(() => {
-    if (!isVocabFlashcardVisible) {
+    if (!isVocabReviewVisible) {
       setVocabFlashcards([])
       setVocabFlashcardIndex(0)
       setVocabFlashcardState('hidden')
@@ -2636,7 +2775,7 @@ function App(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [isVocabFlashcardVisible])
+  }, [isVocabReviewVisible])
 
   /** 同步透明测量层尺寸与滚动位置，并缓存单词与整句的屏幕命中矩形 */
   const measureSourceHitBoxes = useCallback((): void => {
@@ -2875,6 +3014,7 @@ function App(): React.JSX.Element {
         })
 
         upsertEncounterVocabItem(item, params.side)
+        refreshVocabItemCount()
         setWordLookup((current) =>
           current &&
           current.lookupAnchorId === params.lookupAnchorId &&
@@ -2910,7 +3050,14 @@ function App(): React.JSX.Element {
         persistenceInFlightRef.current.delete(persistenceKey)
       }
     },
-    [alignment, learningHighlightSide, sourceText, targetText, upsertEncounterVocabItem]
+    [
+      alignment,
+      learningHighlightSide,
+      refreshVocabItemCount,
+      sourceText,
+      targetText,
+      upsertEncounterVocabItem
+    ]
   )
 
   /** 二次偶遇高亮直接展示本地数据，不发起任何模型请求 */
@@ -3383,6 +3530,7 @@ function App(): React.JSX.Element {
     void removeVocabItem(wordLookup.result.lemma)
       .then(() => {
         // 已收藏词标记完全由该状态派生，移除词条后下划线与星标会立即消失。
+        refreshVocabItemCount()
         setEncounterVocabItems((current) =>
           current.filter((item) => item.lemmaLower !== lemmaLower)
         )
@@ -3531,6 +3679,65 @@ function App(): React.JSX.Element {
     }, STRUCTURE_LAYOUT_COLLAPSE_MS)
   }, [closeWordLookup, isStructureCollapsing])
 
+  /**
+   * 切换顶部主视图。
+   * 进入复习时记录来源模式；离开复习时保留阅读区全部状态。
+   */
+  const handlePrimaryViewChange = useCallback(
+    (nextView: PrimaryView): void => {
+      const currentView = primaryViewRef.current
+      if (nextView === currentView || (nextView === 'learn' && !isLearningSupported)) return
+
+      if (nextView !== 'review') {
+        const wasReview = currentView === 'review'
+        primaryViewRef.current = nextView
+        setPrimaryView(nextView)
+
+        // 普通学习切回翻译时沿用原行为；从复习返回时保留对齐和词义卡
+        if (nextView === 'translate' && !wasReview) {
+          closeWordLookup()
+          resetAlignment()
+        }
+        return
+      }
+
+      reviewReturnViewRef.current = currentView === 'learn' ? 'learn' : 'translate'
+      primaryViewRef.current = 'review'
+      setPrimaryView('review')
+      setIsSourceLangMenuOpen(false)
+      setIsTargetLangMenuOpen(false)
+      closeModelMenu()
+
+      if (!wantsStructureLayout && !isStructureCollapsing) return
+
+      setActiveAlignmentPairId(null)
+      setIsStructureCollapsing(true)
+      isStructureLayoutTransitioningRef.current = true
+
+      if (structureCollapseTimerRef.current !== null) {
+        window.clearTimeout(structureCollapseTimerRef.current)
+      }
+      if (structureLayoutTransitionTimerRef.current !== null) {
+        window.clearTimeout(structureLayoutTransitionTimerRef.current)
+        structureLayoutTransitionTimerRef.current = null
+      }
+      structureCollapseTimerRef.current = window.setTimeout(() => {
+        structureCollapseTimerRef.current = null
+        setSyntaxTargetPairId(null)
+        setIsStructureCollapsing(false)
+        setIsStructureLayoutReady(false)
+      }, STRUCTURE_LAYOUT_COLLAPSE_MS)
+    },
+    [
+      closeModelMenu,
+      closeWordLookup,
+      isLearningSupported,
+      isStructureCollapsing,
+      resetAlignment,
+      wantsStructureLayout
+    ]
+  )
+
   /** 词义卡里的“整句”按钮需要真正打开当前词所属句子的结构 */
   const handleOpenLookupSentence = useCallback((): void => {
     const pairId = wordLookup?.pairId
@@ -3584,11 +3791,27 @@ function App(): React.JSX.Element {
   }
 
   useEffect(() => {
-    return window.api.onFocusInput(() => {
-      sourceInputRef.current?.focus()
-      sourceInputRef.current?.select()
+    let firstFrame = 0
+    let secondFrame = 0
+    const unsubscribe = window.api.onFocusInput(() => {
+      // display:none 的阅读区无法获得焦点，等 React 完成主视图恢复后再聚焦
+      restoreViewBeforeReview()
+      if (firstFrame) window.cancelAnimationFrame(firstFrame)
+      if (secondFrame) window.cancelAnimationFrame(secondFrame)
+      firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(() => {
+          sourceInputRef.current?.focus()
+          sourceInputRef.current?.select()
+        })
+      })
     })
-  }, [])
+
+    return () => {
+      unsubscribe()
+      if (firstFrame) window.cancelAnimationFrame(firstFrame)
+      if (secondFrame) window.cancelAnimationFrame(secondFrame)
+    }
+  }, [restoreViewBeforeReview])
 
   // 模型选择持久化：没有可用模型时清掉记忆值，避免下次启动读到一个已经失效的模型名
   useEffect(() => {
@@ -3647,17 +3870,6 @@ function App(): React.JSX.Element {
     setCopyState('idle')
   }
 
-  /** 顶部模式切换：翻译保持轻量，学习模式负责加载对齐与结构分析 */
-  const handleModeChange = (nextLearningMode: boolean): void => {
-    if (nextLearningMode === learningMode || (nextLearningMode && !isLearningSupported)) return
-    setLearningMode(nextLearningMode)
-
-    if (!nextLearningMode) {
-      closeWordLookup()
-      resetAlignment()
-    }
-  }
-
   const handleCopyTarget = async (): Promise<void> => {
     if (!targetText.trim()) return
 
@@ -3691,21 +3903,34 @@ function App(): React.JSX.Element {
             <div className="mode-tabs" role="group" aria-label="工作模式">
               <button
                 type="button"
-                className={`mode-tab${!isLearningActive ? ' mode-tab-active' : ''}`}
-                aria-pressed={!isLearningActive}
-                onClick={() => handleModeChange(false)}
+                className={`mode-tab${primaryView === 'translate' ? ' mode-tab-active' : ''}`}
+                aria-pressed={primaryView === 'translate'}
+                onClick={() => handlePrimaryViewChange('translate')}
               >
                 翻译
               </button>
               <button
                 type="button"
-                className={`mode-tab${isLearningActive ? ' mode-tab-active' : ''}`}
-                aria-pressed={isLearningActive}
+                className={`mode-tab${primaryView === 'learn' ? ' mode-tab-active' : ''}`}
+                aria-pressed={primaryView === 'learn'}
                 disabled={!isLearningSupported}
                 title={isLearningSupported ? '进入学习模式' : '学习模式仅支持英语与简体中文互译'}
-                onClick={() => handleModeChange(true)}
+                onClick={() => handlePrimaryViewChange('learn')}
               >
                 学习
+              </button>
+              <button
+                type="button"
+                className={`mode-tab${primaryView === 'review' ? ' mode-tab-active' : ''}`}
+                aria-pressed={primaryView === 'review'}
+                aria-label={vocabItemCount > 0 ? `复习，生词库共 ${vocabItemCount} 个生词` : '复习'}
+                title="复习生词"
+                onClick={() => handlePrimaryViewChange('review')}
+              >
+                复习
+                {vocabItemCount > 0 ? (
+                  <span className="mode-tab-count">{vocabItemCount}</span>
+                ) : null}
               </button>
             </div>
 
@@ -3838,385 +4063,401 @@ function App(): React.JSX.Element {
           ) : null}
 
           <div className="reading-column">
-            <div className="language-bar">
-              <div className="lang-slot" ref={sourceLangSelectorRef}>
-                <button
-                  type="button"
-                  className="lang-trigger"
-                  aria-haspopup="listbox"
-                  aria-expanded={isSourceLangMenuOpen}
-                  title="切换源语言"
-                  onClick={() => {
-                    setIsSourceLangMenuOpen((open) => !open)
-                    setIsTargetLangMenuOpen(false)
-                    closeModelMenu()
-                  }}
-                >
-                  <span className="lang-name">{sourceLanguageName}</span>
-                  {sourceLanguage === 'auto' && hasSourceText ? (
-                    <span className="lang-sub">自动</span>
+            {!isReviewActive ? (
+              <div className="language-bar">
+                <div className="lang-slot" ref={sourceLangSelectorRef}>
+                  <button
+                    type="button"
+                    className="lang-trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded={isSourceLangMenuOpen}
+                    title="切换源语言"
+                    onClick={() => {
+                      setIsSourceLangMenuOpen((open) => !open)
+                      setIsTargetLangMenuOpen(false)
+                      closeModelMenu()
+                    }}
+                  >
+                    <span className="lang-name">{sourceLanguageName}</span>
+                    {sourceLanguage === 'auto' && hasSourceText ? (
+                      <span className="lang-sub">自动</span>
+                    ) : null}
+                  </button>
+
+                  {isSourceLangMenuOpen ? (
+                    <div className="lang-menu" role="listbox" aria-label="源语言选择">
+                      {SUPPORTED_LANGUAGES.map((lang) => {
+                        const isSelected = lang.code === sourceLanguage
+
+                        return (
+                          <button
+                            key={lang.code}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            className={`lang-option${isSelected ? ' lang-option-on' : ''}`}
+                            onClick={() => {
+                              setIsSourceLangMenuOpen(false)
+                              if (sourceLanguage === lang.code) return
+                              setSourceLanguage(lang.code)
+                              if (sourceText.trim()) {
+                                markTranslationPending()
+                              }
+                            }}
+                          >
+                            {lang.label}
+                          </button>
+                        )
+                      })}
+                    </div>
                   ) : null}
-                </button>
+                </div>
 
-                {isSourceLangMenuOpen ? (
-                  <div className="lang-menu" role="listbox" aria-label="源语言选择">
-                    {SUPPORTED_LANGUAGES.map((lang) => {
-                      const isSelected = lang.code === sourceLanguage
+                <span className="flow-swap" aria-hidden="true">
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 8h13M14 5l3 3-3 3" />
+                    <path d="M20 16H7M10 13l-3 3 3 3" />
+                  </svg>
+                </span>
 
-                      return (
-                        <button
-                          key={lang.code}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          className={`lang-option${isSelected ? ' lang-option-on' : ''}`}
-                          onClick={() => {
-                            setIsSourceLangMenuOpen(false)
-                            if (sourceLanguage === lang.code) return
-                            setSourceLanguage(lang.code)
-                            if (sourceText.trim()) {
-                              markTranslationPending()
-                            }
-                          }}
-                        >
-                          {lang.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : null}
+                <div className="lang-slot lang-slot-target" ref={targetLangSelectorRef}>
+                  <button
+                    type="button"
+                    className="lang-trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded={isTargetLangMenuOpen}
+                    title="切换目标语言"
+                    onClick={() => {
+                      setIsTargetLangMenuOpen((open) => !open)
+                      setIsSourceLangMenuOpen(false)
+                      closeModelMenu()
+                    }}
+                  >
+                    <span className="lang-name">{targetLanguageName}</span>
+                  </button>
+
+                  {isTargetLangMenuOpen ? (
+                    <div className="lang-menu" role="listbox" aria-label="目标语言选择">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={manualTargetLang === null}
+                        className={`lang-option${manualTargetLang === null ? ' lang-option-on' : ''}`}
+                        title="跟随源语言自动匹配"
+                        onClick={() => {
+                          setIsTargetLangMenuOpen(false)
+                          if (manualTargetLang === null) return
+                          setManualTargetLang(null)
+                          if (sourceText.trim()) {
+                            markTranslationPending()
+                          }
+                        }}
+                      >
+                        自动匹配
+                      </button>
+
+                      {SUPPORTED_LANGUAGES.filter((lang) => lang.code !== 'auto').map((lang) => {
+                        const isSelected = manualTargetLang === lang.code
+
+                        return (
+                          <button
+                            key={lang.code}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            className={`lang-option${isSelected ? ' lang-option-on' : ''}`}
+                            onClick={() => {
+                              setIsTargetLangMenuOpen(false)
+                              if (manualTargetLang === lang.code) return
+                              setManualTargetLang(lang.code)
+                              if (sourceText.trim()) {
+                                markTranslationPending()
+                              }
+                            }}
+                          >
+                            {lang.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <div className={`reading-view${isReviewActive ? ' reading-view-hidden' : ''}`}>
+              <div className="compose">
+                <div className="compose-stage">
+                  {isLearningActive && alignment && alignmentView ? (
+                    <div className="compose-mirror" aria-hidden="true" ref={sourceMirrorRef}>
+                      <SegmentedText
+                        text={sourceText}
+                        segments={alignment.sourceSegments}
+                        pairBySegmentId={alignmentView.sourcePairBySegmentId}
+                        activePairId={activeAlignmentPairId}
+                        side="source"
+                        lookupTokensBySegmentId={sourceWordView?.tokensBySegmentId}
+                        encounterHighlights={
+                          encounterWordView?.side === 'source'
+                            ? encounterWordView.highlights
+                            : undefined
+                        }
+                        activeLookupWordId={
+                          hoveredSourceWordId ??
+                          (wordLookup?.side === 'source' ? wordLookup.lookupAnchorId : null)
+                        }
+                        activeSyntaxHighlight={activeSyntaxWordHighlight}
+                        activeEncounterId={
+                          wordLookup?.origin === 'encounter' && wordLookup.side === 'source'
+                            ? wordLookup.lookupAnchorId
+                            : null
+                        }
+                      />
+                    </div>
+                  ) : null}
+
+                  <textarea
+                    ref={sourceInputRef}
+                    className="compose-input"
+                    value={sourceText}
+                    onChange={handleSourceTextChange}
+                    onClick={handleSourceClick}
+                    onMouseMove={handleSourceMouseMove}
+                    onMouseLeave={handleSourceMouseLeave}
+                    placeholder={`截图 ${screenshotShortcut}，或直接输入 / 粘贴文字`}
+                    rows={1}
+                    spellCheck={false}
+                    aria-label="源文本输入框"
+                  />
+                </div>
               </div>
 
-              <span className="flow-swap" aria-hidden="true">
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M4 8h13M14 5l3 3-3 3" />
-                  <path d="M20 16H7M10 13l-3 3 3 3" />
-                </svg>
-              </span>
+              <section className="result">
+                <div className="result-scroll" ref={resultScrollRef} onScroll={handleResultScroll}>
+                  {errorMessage ? (
+                    <p className="result-error" role="status" aria-live="polite">
+                      {errorMessage}
+                    </p>
+                  ) : null}
 
-              <div className="lang-slot lang-slot-target" ref={targetLangSelectorRef}>
-                <button
-                  type="button"
-                  className="lang-trigger"
-                  aria-haspopup="listbox"
-                  aria-expanded={isTargetLangMenuOpen}
-                  title="切换目标语言"
-                  onClick={() => {
-                    setIsTargetLangMenuOpen((open) => !open)
-                    setIsSourceLangMenuOpen(false)
-                    closeModelMenu()
-                  }}
-                >
-                  <span className="lang-name">{targetLanguageName}</span>
-                </button>
+                  {isRecognizing ? (
+                    <div className="result-pending" role="status" aria-live="polite">
+                      <p>正在识别截图文字…</p>
+                      {ocrSlowHint ? (
+                        <p className="result-pending-hint">
+                          首次使用需要初始化识别模型，可能需要半分钟，请稍候
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : status === 'translating' && !targetText.trim() ? (
+                    <div className="result-loader" aria-live="polite" aria-label="正在翻译">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                  ) : isLearningActive &&
+                    !hasSourceText &&
+                    status === 'idle' &&
+                    !isRecognizing &&
+                    !errorMessage ? (
+                    <p className="result-text result-placeholder result-reading-empty">
+                      粘贴英文开始阅读
+                    </p>
+                  ) : isLearningActive && alignment && alignmentView ? (
+                    <p className="result-text" onMouseLeave={clearHoverState}>
+                      <SegmentedText
+                        text={targetText}
+                        segments={alignment.targetSegments}
+                        pairBySegmentId={alignmentView.targetPairBySegmentId}
+                        activePairId={activeAlignmentPairId}
+                        side="target"
+                        lookupTokensBySegmentId={targetWordView?.tokensBySegmentId}
+                        encounterHighlights={
+                          encounterWordView?.side === 'target'
+                            ? encounterWordView.highlights
+                            : undefined
+                        }
+                        activeLookupWordId={
+                          hoveredTargetWordId ??
+                          (wordLookup?.side === 'target' ? wordLookup.lookupAnchorId : null)
+                        }
+                        activeEncounterId={
+                          wordLookup?.origin === 'encounter' && wordLookup.side === 'target'
+                            ? wordLookup.lookupAnchorId
+                            : null
+                        }
+                        onPairEnter={handleTargetPairEnter}
+                        onPairClick={handleTargetPairClick}
+                        onLookupWordClick={handleTargetWordClick}
+                        onLookupWordEnter={handleTargetWordEnter}
+                        onLookupWordLeave={handleTargetLookupLeave}
+                        onEncounterClick={handleTargetEncounterLookup}
+                        onEncounterEnter={handleTargetEncounterEnter}
+                        onEncounterLeave={handleTargetLookupLeave}
+                      />
+                    </p>
+                  ) : (
+                    <p
+                      className={`result-text${targetText ? '' : ' result-placeholder'}${
+                        status === 'translating' && targetText ? ' result-text-streaming' : ''
+                      }`}
+                    >
+                      {targetText || '译文会显示在这里'}
+                    </p>
+                  )}
+                </div>
 
-                {isTargetLangMenuOpen ? (
-                  <div className="lang-menu" role="listbox" aria-label="目标语言选择">
+                {wordLookup ? (
+                  <aside
+                    ref={learningDrawerRef}
+                    className="learning-drawer learning-drawer-word"
+                    role="region"
+                    aria-label={
+                      wordLookup.result?.kind === 'grammar'
+                        ? '当前语法词的语境说明'
+                        : '当前单词的语境释义'
+                    }
+                    aria-live="polite"
+                  >
+                    <span className="learning-drawer-word-rail" aria-hidden="true" />
+                    <div className="learning-drawer-body word-compact-body">
+                      <WordLookupCompactView
+                        lookup={wordLookup}
+                        onClose={handleOpenLookupSentence}
+                        onPersist={handlePersistCurrentLookup}
+                        onRemove={handleRemoveCurrentLookup}
+                      />
+                    </div>
+                  </aside>
+                ) : null}
+
+                <div className="result-toolbar" ref={resultToolbarRef}>
+                  <div className="toolbar-left">
                     <button
+                      className="icon-btn"
                       type="button"
-                      role="option"
-                      aria-selected={manualTargetLang === null}
-                      className={`lang-option${manualTargetLang === null ? ' lang-option-on' : ''}`}
-                      title="跟随源语言自动匹配"
+                      onClick={handleClearSource}
+                      disabled={!hasSourceText}
+                      aria-label="清空输入"
+                      title="清空输入"
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M6 6l12 12M18 6L6 18" />
+                      </svg>
+                    </button>
+
+                    <button
+                      ref={modelSelectorRef}
+                      className="model-entry"
+                      type="button"
+                      aria-haspopup="listbox"
+                      aria-expanded={isModelMenuOpen}
+                      aria-label={
+                        activeProvider
+                          ? `当前服务商: ${activeProvider.name}，模型: ${selectedModel}，点击打开模型面板`
+                          : '当前没有启用任何服务商，点击打开模型面板查看'
+                      }
+                      title={
+                        activeProvider
+                          ? `服务商: ${activeProvider.name}\n模型: ${selectedModel}\n地址: ${activeProvider.baseUrl}`
+                          : '当前没有启用任何服务商，请在偏好设置里启用一个'
+                      }
                       onClick={() => {
+                        setIsSourceLangMenuOpen(false)
                         setIsTargetLangMenuOpen(false)
-                        if (manualTargetLang === null) return
-                        setManualTargetLang(null)
-                        if (sourceText.trim()) {
-                          markTranslationPending()
+                        if (isModelMenuOpen) {
+                          closeModelMenu()
+                        } else {
+                          openModelMenu()
                         }
                       }}
                     >
-                      自动匹配
+                      {selectedModel || '未配置模型'}
                     </button>
-
-                    {SUPPORTED_LANGUAGES.filter((lang) => lang.code !== 'auto').map((lang) => {
-                      const isSelected = manualTargetLang === lang.code
-
-                      return (
-                        <button
-                          key={lang.code}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          className={`lang-option${isSelected ? ' lang-option-on' : ''}`}
-                          onClick={() => {
-                            setIsTargetLangMenuOpen(false)
-                            if (manualTargetLang === lang.code) return
-                            setManualTargetLang(lang.code)
-                            if (sourceText.trim()) {
-                              markTranslationPending()
-                            }
-                          }}
-                        >
-                          {lang.label}
-                        </button>
-                      )
-                    })}
                   </div>
-                ) : null}
-              </div>
-            </div>
 
-            <div className="compose">
-              <div className="compose-stage">
-                {isLearningActive && alignment && alignmentView ? (
-                  <div className="compose-mirror" aria-hidden="true" ref={sourceMirrorRef}>
-                    <SegmentedText
-                      text={sourceText}
-                      segments={alignment.sourceSegments}
-                      pairBySegmentId={alignmentView.sourcePairBySegmentId}
-                      activePairId={activeAlignmentPairId}
-                      side="source"
-                      lookupTokensBySegmentId={sourceWordView?.tokensBySegmentId}
-                      encounterHighlights={
-                        encounterWordView?.side === 'source'
-                          ? encounterWordView.highlights
-                          : undefined
-                      }
-                      activeLookupWordId={
-                        hoveredSourceWordId ??
-                        (wordLookup?.side === 'source' ? wordLookup.lookupAnchorId : null)
-                      }
-                      activeSyntaxHighlight={activeSyntaxWordHighlight}
-                      activeEncounterId={
-                        wordLookup?.origin === 'encounter' && wordLookup.side === 'source'
-                          ? wordLookup.lookupAnchorId
-                          : null
-                      }
-                    />
-                  </div>
-                ) : null}
-
-                <textarea
-                  ref={sourceInputRef}
-                  className="compose-input"
-                  value={sourceText}
-                  onChange={handleSourceTextChange}
-                  onClick={handleSourceClick}
-                  onMouseMove={handleSourceMouseMove}
-                  onMouseLeave={handleSourceMouseLeave}
-                  placeholder={`截图 ${screenshotShortcut}，或直接输入 / 粘贴文字`}
-                  rows={1}
-                  spellCheck={false}
-                  aria-label="源文本输入框"
-                />
-              </div>
-            </div>
-
-            <section className="result">
-              <div className="result-scroll" ref={resultScrollRef} onScroll={handleResultScroll}>
-                {errorMessage ? (
-                  <p className="result-error" role="status" aria-live="polite">
-                    {errorMessage}
-                  </p>
-                ) : null}
-
-                {isRecognizing ? (
-                  <div className="result-pending" role="status" aria-live="polite">
-                    <p>正在识别截图文字…</p>
-                    {ocrSlowHint ? (
-                      <p className="result-pending-hint">
-                        首次使用需要初始化识别模型，可能需要半分钟，请稍候
-                      </p>
-                    ) : null}
-                  </div>
-                ) : status === 'translating' && !targetText.trim() ? (
-                  <div className="result-loader" aria-live="polite" aria-label="正在翻译">
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                ) : isVocabFlashcardVisible ? (
-                  vocabFlashcardState === 'ready' && vocabFlashcards.length > 0 ? (
-                    <VocabFlashcardCarousel
-                      cards={vocabFlashcards}
-                      activeIndex={Math.min(vocabFlashcardIndex, vocabFlashcards.length - 1)}
-                      onIndexChange={setVocabFlashcardIndex}
-                    />
-                  ) : vocabFlashcardState === 'loading' || vocabFlashcardState === 'hidden' ? (
-                    <div className="vocab-flashcard-loading" role="status">
-                      正在翻阅生词…
-                    </div>
-                  ) : (
-                    <div className="vocab-flashcard-empty">
-                      <span>偶遇复习</span>
-                      <p>查过的重点词会在这里变成闪卡</p>
-                    </div>
-                  )
-                ) : isLearningActive && alignment && alignmentView ? (
-                  <p className="result-text" onMouseLeave={clearHoverState}>
-                    <SegmentedText
-                      text={targetText}
-                      segments={alignment.targetSegments}
-                      pairBySegmentId={alignmentView.targetPairBySegmentId}
-                      activePairId={activeAlignmentPairId}
-                      side="target"
-                      lookupTokensBySegmentId={targetWordView?.tokensBySegmentId}
-                      encounterHighlights={
-                        encounterWordView?.side === 'target'
-                          ? encounterWordView.highlights
-                          : undefined
-                      }
-                      activeLookupWordId={
-                        hoveredTargetWordId ??
-                        (wordLookup?.side === 'target' ? wordLookup.lookupAnchorId : null)
-                      }
-                      activeEncounterId={
-                        wordLookup?.origin === 'encounter' && wordLookup.side === 'target'
-                          ? wordLookup.lookupAnchorId
-                          : null
-                      }
-                      onPairEnter={handleTargetPairEnter}
-                      onPairClick={handleTargetPairClick}
-                      onLookupWordClick={handleTargetWordClick}
-                      onLookupWordEnter={handleTargetWordEnter}
-                      onLookupWordLeave={handleTargetLookupLeave}
-                      onEncounterClick={handleTargetEncounterLookup}
-                      onEncounterEnter={handleTargetEncounterEnter}
-                      onEncounterLeave={handleTargetLookupLeave}
-                    />
-                  </p>
-                ) : (
-                  <p
-                    className={`result-text${targetText ? '' : ' result-placeholder'}${
-                      status === 'translating' && targetText ? ' result-text-streaming' : ''
+                  <button
+                    className={`icon-btn${copyState === 'done' ? ' icon-btn-done' : ''}${
+                      copyState === 'error' ? ' icon-btn-error' : ''
                     }`}
-                  >
-                    {targetText || '译文会显示在这里'}
-                  </p>
-                )}
-              </div>
-
-              {wordLookup ? (
-                <aside
-                  ref={learningDrawerRef}
-                  className="learning-drawer learning-drawer-word"
-                  role="region"
-                  aria-label={
-                    wordLookup.result?.kind === 'grammar'
-                      ? '当前语法词的语境说明'
-                      : '当前单词的语境释义'
-                  }
-                  aria-live="polite"
-                >
-                  <span className="learning-drawer-word-rail" aria-hidden="true" />
-                  <div className="learning-drawer-body word-compact-body">
-                    <WordLookupCompactView
-                      lookup={wordLookup}
-                      onClose={handleOpenLookupSentence}
-                      onPersist={handlePersistCurrentLookup}
-                      onRemove={handleRemoveCurrentLookup}
-                    />
-                  </div>
-                </aside>
-              ) : null}
-
-              <div className="result-toolbar" ref={resultToolbarRef}>
-                <div className="toolbar-left">
-                  <button
-                    className="icon-btn"
                     type="button"
-                    onClick={handleClearSource}
-                    disabled={!hasSourceText}
-                    aria-label="清空输入"
-                    title="清空输入"
+                    onClick={() => void handleCopyTarget()}
+                    disabled={!hasTargetText || status === 'translating'}
+                    aria-label={copyState === 'done' ? '复制完成' : '复制输出'}
+                    title={copyState === 'done' ? '复制完成' : '复制输出'}
                   >
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M6 6l12 12M18 6L6 18" />
-                    </svg>
-                  </button>
-
-                  <button
-                    ref={modelSelectorRef}
-                    className="model-entry"
-                    type="button"
-                    aria-haspopup="listbox"
-                    aria-expanded={isModelMenuOpen}
-                    aria-label={
-                      activeProvider
-                        ? `当前服务商: ${activeProvider.name}，模型: ${selectedModel}，点击打开模型面板`
-                        : '当前没有启用任何服务商，点击打开模型面板查看'
-                    }
-                    title={
-                      activeProvider
-                        ? `服务商: ${activeProvider.name}\n模型: ${selectedModel}\n地址: ${activeProvider.baseUrl}`
-                        : '当前没有启用任何服务商，请在偏好设置里启用一个'
-                    }
-                    onClick={() => {
-                      setIsSourceLangMenuOpen(false)
-                      setIsTargetLangMenuOpen(false)
-                      if (isModelMenuOpen) {
-                        closeModelMenu()
-                      } else {
-                        openModelMenu()
-                      }
-                    }}
-                  >
-                    {selectedModel || '未配置模型'}
+                    {copyState === 'done' ? (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M15.25 8.75V4C15.25 3.30964 14.6904 2.75 14 2.75H4C3.30964 2.75 2.75 3.30964 2.75 4V14C2.75 14.6904 3.30964 15.25 4 15.25H8.75M10 8.75H20C20.6904 8.75 21.25 9.30964 21.25 10V20C21.25 20.6904 20.6904 21.25 20 21.25H10C9.30964 21.25 8.75 20.6904 8.75 20V10C8.75 9.30964 9.30964 8.75 10 8.75Z" />
+                      </svg>
+                    )}
                   </button>
                 </div>
+              </section>
+            </div>
 
-                <button
-                  className={`icon-btn${copyState === 'done' ? ' icon-btn-done' : ''}${
-                    copyState === 'error' ? ' icon-btn-error' : ''
-                  }`}
-                  type="button"
-                  onClick={() => void handleCopyTarget()}
-                  disabled={!hasTargetText || status === 'translating'}
-                  aria-label={copyState === 'done' ? '复制完成' : '复制输出'}
-                  title={copyState === 'done' ? '复制完成' : '复制输出'}
-                >
-                  {copyState === 'done' ? (
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M15.25 8.75V4C15.25 3.30964 14.6904 2.75 14 2.75H4C3.30964 2.75 2.75 3.30964 2.75 4V14C2.75 14.6904 3.30964 15.25 4 15.25H8.75M10 8.75H20C20.6904 8.75 21.25 9.30964 21.25 10V20C21.25 20.6904 20.6904 21.25 20 21.25H10C9.30964 21.25 8.75 20.6904 8.75 20V10C8.75 9.30964 9.30964 8.75 10 8.75Z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </section>
+            {isReviewActive ? (
+              <section className="review-view" aria-label="生词复习" ref={reviewViewRef}>
+                {vocabFlashcardState === 'ready' && vocabFlashcards.length > 0 ? (
+                  <VocabFlashcardCarousel
+                    cards={vocabFlashcards}
+                    activeIndex={Math.min(vocabFlashcardIndex, vocabFlashcards.length - 1)}
+                    onIndexChange={setVocabFlashcardIndex}
+                    autoAdvance={false}
+                  />
+                ) : vocabFlashcardState === 'loading' || vocabFlashcardState === 'hidden' ? (
+                  <div className="vocab-flashcard-loading" role="status" aria-live="polite">
+                    正在翻阅生词…
+                  </div>
+                ) : (
+                  <div className="vocab-review-empty" role="status" aria-live="polite">
+                    还没有收藏的生词，阅读时点击单词即可收藏
+                  </div>
+                )}
+              </section>
+            ) : null}
           </div>
         </div>
 

@@ -437,6 +437,13 @@ export const getPhraseVocabItems = async (
   return database.vocabItems.filter((item) => item.lemmaLower.includes(' ')).toArray()
 }
 
+/** 读取生词库中的唯一词条总数，供学习模式复习入口展示数量 */
+export const getVocabItemCount = async (
+  database: VocabDatabase = vocabDatabase
+): Promise<number> => {
+  return database.vocabItems.count()
+}
+
 /**
  * 翻译完成后批量增加被动偶遇次数。
  * 调用方必须先在单次翻译内去重，避免同一句重复出现时反复累加。
