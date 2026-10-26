@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { VocabFlashcard, VocabItem } from '../services/vocabDatabase.ts'
-import { filterVocabItems, removeVocabFlashcardFromQueue } from '../vocabReview.ts'
+import {
+  filterVocabItems,
+  getVocabPagerMode,
+  removeVocabFlashcardFromQueue
+} from '../vocabReview.ts'
 
 /** 构造列表与队列测试所需的最小词条 */
 const createItem = (lemma: string, surface = lemma): VocabItem => ({
@@ -31,6 +35,16 @@ const createCard = (lemma: string): VocabFlashcard => {
     }
   }
 }
+
+test('单卡隐藏翻页组，6 张以内显示圆点，超过 6 张显示页码', () => {
+  assert.equal(getVocabPagerMode(0), 'hidden')
+  assert.equal(getVocabPagerMode(1), 'hidden')
+  assert.equal(getVocabPagerMode(2), 'dots')
+  assert.equal(getVocabPagerMode(4), 'dots')
+  assert.equal(getVocabPagerMode(6), 'dots')
+  assert.equal(getVocabPagerMode(7), 'page')
+  assert.equal(getVocabPagerMode(12), 'page')
+})
 
 test('生词列表搜索同时匹配词元和最近词形', () => {
   const items = [createItem('migrate', 'migrated'), createItem('deprecate', 'deprecated')]

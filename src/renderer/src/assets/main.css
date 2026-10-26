@@ -858,6 +858,54 @@ body {
   gap: 10px;
 }
 
+.vocab-flashcard-navigation {
+  display: inline-flex;
+  height: 14px;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.vocab-flashcard-arrow,
+.vocab-flashcard-dot-button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.vocab-flashcard-arrow {
+  /* 28px 点击热区通过负外边距扩展，不增加顶部行的布局高度 */
+  width: 28px;
+  height: 28px;
+  margin: -7px 0;
+  color: #5a5a62;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.vocab-flashcard-arrow:hover {
+  color: var(--app-fg);
+}
+
+.vocab-flashcard-dot-button {
+  /* 24px 点击热区围绕 5px 圆点居中，顶部行仍保持 14px 高 */
+  width: 24px;
+  height: 24px;
+  margin: -5px 0;
+}
+
+.vocab-flashcard-arrow:focus-visible,
+.vocab-flashcard-dot-button:focus-visible {
+  border-radius: 5px;
+  outline: 1px solid rgba(59, 121, 79, 0.48);
+  outline-offset: -2px;
+}
+
 .vocab-flashcard-status {
   display: inline-flex;
   align-items: center;
@@ -878,7 +926,6 @@ body {
   flex-shrink: 0;
   height: 14px;
   align-items: center;
-  gap: 7px;
 }
 
 .vocab-flashcard-dot {
@@ -891,6 +938,18 @@ body {
 
 .vocab-flashcard-dot-active {
   background: #40595f;
+}
+
+.vocab-flashcard-position {
+  min-width: 42px;
+  color: #737d80;
+  font-family: var(--app-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .vocab-flashcard-sentence {
@@ -1086,6 +1145,7 @@ body {
 
 .review-all-vocab-link {
   flex: 0 0 auto;
+  margin-left: auto;
   padding: 0;
   border: 0;
   background: transparent;

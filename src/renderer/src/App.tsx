@@ -70,7 +70,7 @@ import {
   VOCAB_LIBRARY_WINDOW_HEIGHT_MIN
 } from '../../shared/windowLayout'
 import { EncounterCrowdCanvas } from './components/EncounterCrowdCanvas'
-import { filterVocabItems, removeVocabFlashcardFromQueue } from './vocabReview'
+import { filterVocabItems, getVocabPagerMode, removeVocabFlashcardFromQueue } from './vocabReview'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 type PrimaryView = 'translate' | 'learn' | 'review'
@@ -926,6 +926,7 @@ function VocabFlashcardCarousel({
   const isRevealed = isCardHovered || isAnswerPinned
   const isPaused = isCarouselHovered || isFocusWithin || isAnswerPinned
   const hasMultipleCards = cards.length > 1
+  const pagerMode = getVocabPagerMode(cards.length)
 
   /** 保留切换方向，让前后两张卡可以从对应方向滑入 */
   const navigateTo = (nextIndex: number, nextDirection: 'next' | 'prev'): void => {
@@ -987,21 +988,59 @@ function VocabFlashcardCarousel({
 
       <div className="vocab-flashcard-kicker">
         <span className="vocab-flashcard-kicker-start">
-          <span
-            className="vocab-flashcard-dots"
-            role="img"
-            aria-label={`第 ${activeIndex + 1} 张，共 ${cards.length} 张`}
-          >
-            {cards.map((card, index) => (
-              <span
-                key={`${card.item.lemmaLower}-${card.context.id ?? card.context.sourceSentenceKey ?? index}`}
-                className={`vocab-flashcard-dot${
-                  index === activeIndex ? ' vocab-flashcard-dot-active' : ''
-                }`}
-                aria-hidden="true"
-              />
-            ))}
-          </span>
+          {pagerMode !== 'hidden' ? (
+            <span className="vocab-flashcard-navigation" role="group" aria-label="闪卡翻页">
+              <button
+                type="button"
+                className="vocab-flashcard-arrow"
+                aria-label="上一张闪卡"
+                title="上一张"
+                onClick={goToPrevious}
+              >
+                <span aria-hidden="true">‹</span>
+              </button>
+
+              {pagerMode === 'dots' ? (
+                <span className="vocab-flashcard-dots" role="group" aria-label="选择闪卡">
+                  {cards.map((card, index) => (
+                    <button
+                      key={`${card.item.lemmaLower}-${card.context.id ?? card.context.sourceSentenceKey ?? index}`}
+                      type="button"
+                      className="vocab-flashcard-dot-button"
+                      aria-label={`第 ${index + 1} 张闪卡`}
+                      aria-current={index === activeIndex ? 'true' : undefined}
+                      onClick={() => navigateTo(index, index < activeIndex ? 'prev' : 'next')}
+                    >
+                      <span
+                        className={`vocab-flashcard-dot${
+                          index === activeIndex ? ' vocab-flashcard-dot-active' : ''
+                        }`}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ))}
+                </span>
+              ) : (
+                <span
+                  className="vocab-flashcard-position"
+                  aria-live="polite"
+                  aria-label={`第 ${activeIndex + 1} 张，共 ${cards.length} 张`}
+                >
+                  {activeIndex + 1} / {cards.length}
+                </span>
+              )}
+
+              <button
+                type="button"
+                className="vocab-flashcard-arrow"
+                aria-label="下一张闪卡"
+                title="下一张"
+                onClick={goToNext}
+              >
+                <span aria-hidden="true">›</span>
+              </button>
+            </span>
+          ) : null}
           {statusText ? (
             <span className="vocab-flashcard-status vocab-flashcard-status-paused">
               {statusText}

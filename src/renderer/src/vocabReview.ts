@@ -1,5 +1,16 @@
 import type { VocabFlashcard, VocabItem } from './services/vocabDatabase'
 
+/** 闪卡数量不超过该值时显示可点击圆点，超过后改显示页码 */
+export const VOCAB_PAGER_DOTS_MAX = 6
+
+export type VocabPagerMode = 'hidden' | 'dots' | 'page'
+
+/** 按闪卡总数决定顶部翻页区的形态 */
+export const getVocabPagerMode = (cardCount: number): VocabPagerMode => {
+  if (cardCount <= 1) return 'hidden'
+  return cardCount <= VOCAB_PAGER_DOTS_MAX ? 'dots' : 'page'
+}
+
 /** 按词元或最近词形做大小写不敏感的模糊筛选 */
 export const filterVocabItems = (items: VocabItem[], query: string): VocabItem[] => {
   const normalizedQuery = query.trim().toLowerCase()
