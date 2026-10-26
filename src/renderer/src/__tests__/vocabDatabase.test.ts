@@ -10,6 +10,7 @@ import {
   getVocabItems,
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
+  incrementPassiveVocabEncountersInText,
   normalizeVocabSentence,
   recordVocabEncounter,
   removeVocabItem
@@ -350,6 +351,60 @@ test('被动偶遇会批量增加计数且不会创建新词条', async (context
   assert.equal(updatedItems.length, 1)
   assert.equal(updatedItems[0].encounterCount, 2)
   assert.equal(await database.vocabItems.count(), 1)
+})
+
+test('文本级被动偶遇会匹配原形与最近词形，并按文本和单词持久去重', async (context) => {
+  const database = createTestDatabase()
+  context.after(() => database.delete())
+
+  await recordVocabEncounter(
+    {
+      lemma: 'deprecate',
+      surface: 'deprecated',
+      meaning: '已弃用的',
+      targetText: '已弃用',
+      side: 'source',
+      englishSentence: 'This function is deprecated.',
+      chineseSentence: '这个函数已弃用。'
+    },
+    database
+  )
+
+  const first = await incrementPassiveVocabEncountersInText(
+    'This function is deprecated.',
+    database
+  )
+  const repeated = await incrementPassiveVocabEncountersInText(
+    '  This   function is deprecated.  ',
+    database
+  )
+  const differentText = await incrementPassiveVocabEncountersInText(
+    'The deprecated function is still available.',
+    database
+  )
+
+  assert.equal(first.length, 1)
+  assert.equal(first[0].lemmaLower, 'deprecate')
+  assert.equal(first[0].encounterCount, 2)
+  assert.equal(repeated.length, 0)
+  assert.equal(differentText.length, 1)
+  assert.equal(differentText[0].encounterCount, 3)
+  assert.equal(await database.vocabItems.count(), 1)
+  assert.equal(await database.passiveEncounters.count(), 2)
+})
+
+test('文本级被动偶遇不会为未收藏词创建记录', async (context) => {
+  const database = createTestDatabase()
+  context.after(() => database.delete())
+
+  const updated = await incrementPassiveVocabEncountersInText(
+    'A subtle difference appears here.',
+    database
+  )
+
+  assert.deepEqual(updated, [])
+  assert.equal(await database.vocabItems.count(), 0)
+  assert.equal(await database.passiveEncounters.count(), 0)
 })
 
 test('随机闪卡会返回互相关联的主词与完整语境', async (context) => {

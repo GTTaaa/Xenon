@@ -26,8 +26,6 @@ import {
   type SentenceSyntaxInsight,
   type SentenceSyntaxSegment
 } from '../../shared/sentenceSyntax'
-import { isGrammarContraction } from '../../shared/englishGrammar.ts'
-
 import {
   detectLanguage,
   getLanguageInfo,
@@ -47,20 +45,14 @@ import {
   getVocabFlashcards,
   getVocabItemCount,
   getVocabItems,
-  getVocabItemsByWordForms,
-  incrementPassiveVocabEncounters,
+  incrementPassiveVocabEncountersInText,
   normalizeVocabLemma,
   recordVocabEncounter,
   removeVocabItem,
   type VocabFlashcard,
   type VocabItem
 } from './services/vocabDatabase'
-import {
-  collectUniqueEnglishWords,
-  findVocabTextMatches,
-  splitSentenceAroundVocab,
-  type VocabTextMatch
-} from './services/vocabMatching'
+import { splitSentenceAroundVocab } from './services/vocabMatching'
 import {
   MAIN_WINDOW_HEIGHT_MAX,
   MAIN_WINDOW_HEIGHT_MIN,
@@ -172,9 +164,9 @@ function getShortLanguageLabel(code: SupportedLanguage): string {
 
 /** 输入框透明测量层缓存的命中区域 */
 interface SourceHitBox {
-  /** 命中类型：生词偶遇优先于普通单词 */
-  kind: 'encounter' | 'word'
-  /** 生词偶遇编号或单词编号 */
+  /** 命中类型 */
+  kind: 'word'
+  /** 单词编号 */
   id: string
   /** 片段在屏幕上的所有行矩形 */
   rects: DOMRect[]
@@ -285,8 +277,8 @@ interface WordLookupDisplay extends WordLookupPosition {
   side: WordLookupSide
   /** 当前查询状态 */
   status: 'loading' | 'ready' | 'error'
-  /** 当前数据来自本地词库、模型查询还是二次偶遇 */
-  origin?: 'database' | 'llm' | 'encounter'
+  /** 当前数据来自本地词库还是模型查询 */
+  origin?: 'database' | 'llm'
   /** 查询成功后的上下文释义 */
   result?: WordLookupResult
   /** 词义卡附带的地道表达说明 */
@@ -494,18 +486,6 @@ function WordLookupCompactView({
   )
 }
 
-/** 二次偶遇高亮：本地词条在英文文本中的可交互范围 */
-interface EncounterVocabHighlight extends VocabTextMatch {
-  /** 渲染与交互使用的稳定编号 */
-  id: string
-  /** 命中位置所属的自然句片段编号 */
-  segmentId: string
-  /** 命中位置所属的对齐组编号 */
-  pairId: string
-  /** 当前英文文本位于原文还是译文 */
-  side: WordLookupSide
-}
-
 /** 根据鼠标位置计算查词浮层坐标，并预留窗口边缘安全距离 */
 const getWordLookupPosition = (x: number, y: number): WordLookupPosition => {
   return {
@@ -705,14 +685,10 @@ interface SegmentedTextProps {
   onPairClick?: (pairId: string) => void
   /** 当前侧全部英文词片段，按自然句归组 */
   lookupTokensBySegmentId?: ReadonlyMap<string, AlignmentToken[]>
-  /** 当前侧命中的本地已收录词 */
-  encounterHighlights?: EncounterVocabHighlight[]
   /** 当前鼠标指向或固定的普通英文词编号 */
   activeLookupWordId?: string | null
   /** 当前结构语义块覆盖的英文词编号 */
   activeSyntaxHighlight?: SyntaxWordHighlight | null
-  /** 当前浮层固定的二次偶遇词条编号 */
-  activeEncounterId?: string | null
   /** 点击普通英文词时的回调 */
   onLookupWordClick?: (
     token: AlignmentToken,
@@ -723,18 +699,6 @@ interface SegmentedTextProps {
   onLookupWordEnter?: (token: AlignmentToken, pairId: string) => void
   /** 鼠标离开普通英文词时的回调 */
   onLookupWordLeave?: () => void
-  /** 点击二次偶遇词时的回调 */
-  onEncounterClick?: (
-    match: EncounterVocabHighlight,
-    event: React.MouseEvent<HTMLSpanElement>
-  ) => void
-  /** 鼠标进入二次偶遇词时的回调 */
-  onEncounterEnter?: (
-    match: EncounterVocabHighlight,
-    event: React.MouseEvent<HTMLSpanElement>
-  ) => void
-  /** 鼠标离开二次偶遇词时的回调 */
-  onEncounterLeave?: () => void
 }
 
 /**
@@ -750,16 +714,11 @@ function SegmentedText({
   onPairEnter,
   onPairClick,
   lookupTokensBySegmentId,
-  encounterHighlights = [],
   activeLookupWordId = null,
   activeSyntaxHighlight = null,
-  activeEncounterId = null,
   onLookupWordClick,
   onLookupWordEnter,
-  onLookupWordLeave,
-  onEncounterClick,
-  onEncounterEnter,
-  onEncounterLeave
+  onLookupWordLeave
 }: SegmentedTextProps): React.JSX.Element {
   const nodes: React.ReactNode[] = []
   let cursor = 0
@@ -774,40 +733,8 @@ function SegmentedText({
     const segmentTokens = (lookupTokensBySegmentId?.get(segment.id) ?? []).filter(
       (token) => token.start >= segment.start && token.end <= segment.end
     )
-    const segmentEncounterHighlights = encounterHighlights.filter(
-      (highlight) => highlight.start < segment.end && highlight.end > segment.start
-    )
 
     while (segmentCursor < segment.end) {
-      const encounterHighlight = segmentEncounterHighlights.find(
-        (item) => item.start <= segmentCursor && item.end > segmentCursor
-      )
-      if (encounterHighlight) {
-        const end = Math.min(encounterHighlight.end, segment.end)
-        const isEncounterActive = encounterHighlight.id === activeEncounterId
-        segmentNodes.push(
-          <span
-            key={`encounter-${encounterHighlight.id}-${segmentCursor}`}
-            className={`encounter-highlight encounter-highlight-${side}${
-              isEncounterActive ? ' encounter-highlight-active' : ''
-            }`}
-            data-source-encounter-id={side === 'source' ? encounterHighlight.id : undefined}
-            data-target-encounter-id={side === 'target' ? encounterHighlight.id : undefined}
-            onClick={
-              onEncounterClick ? (event) => onEncounterClick(encounterHighlight, event) : undefined
-            }
-            onMouseEnter={
-              onEncounterEnter ? (event) => onEncounterEnter(encounterHighlight, event) : undefined
-            }
-            onMouseLeave={onEncounterLeave}
-          >
-            {text.slice(segmentCursor, end)}
-          </span>
-        )
-        segmentCursor = end
-        continue
-      }
-
       const token = segmentTokens.find(
         (item) => item.start <= segmentCursor && item.end > segmentCursor
       )
@@ -846,9 +773,6 @@ function SegmentedText({
 
       const nextBoundary = Math.min(
         segment.end,
-        ...segmentEncounterHighlights
-          .map((item) => item.start)
-          .filter((start) => start > segmentCursor),
         ...segmentTokens.map((item) => item.start).filter((start) => start > segmentCursor)
       )
       const end = nextBoundary > segmentCursor ? nextBoundary : segment.end
@@ -1134,10 +1058,6 @@ function App(): React.JSX.Element {
   const [primaryView, setPrimaryView] = useState<PrimaryView>(() => {
     return localStorage.getItem('learningMode') === '1' ? 'learn' : 'translate'
   })
-  // 已收藏词标记默认关闭，避免自动装饰打断阅读
-  const [showCollectedWordMarks, setShowCollectedWordMarks] = useState(() => {
-    return localStorage.getItem('showCollectedWordMarks') === '1'
-  })
   // 当前悬停或指向的对齐组编号
   const [activeAlignmentPairId, setActiveAlignmentPairId] = useState<string | null>(null)
   // 当前鼠标指向的普通英文词，用于输入框透明层上的词级底色
@@ -1152,8 +1072,6 @@ function App(): React.JSX.Element {
   } | null>(null)
   // 点击单词后显示的上下文释义浮层
   const [wordLookup, setWordLookup] = useState<WordLookupDisplay | null>(null)
-  // 当前英文句子里命中的本地词条，用于二次偶遇高亮与悬停解析
-  const [encounterVocabItems, setEncounterVocabItems] = useState<VocabItem[]>([])
   // 按对齐组缓存的语法分析，重复展开同一句不会再次消耗 Token
   const [sentenceSyntaxByPairId, setSentenceSyntaxByPairId] = useState<
     Record<string, SentenceSyntaxAnalysis>
@@ -1788,62 +1706,6 @@ function App(): React.JSX.Element {
     }
   }, [alignment, effectiveTargetLang, isLearningActive, targetText])
 
-  // 翻译完成后把英文侧已收录词转换为带偏移的高亮片段
-  const encounterWordView = useMemo(() => {
-    if (
-      !isLearningActive ||
-      !alignment ||
-      !alignmentView ||
-      !learningHighlightSide ||
-      !showCollectedWordMarks ||
-      status !== 'idle' ||
-      encounterVocabItems.length === 0
-    ) {
-      return null
-    }
-
-    const englishText = learningHighlightSide === 'source' ? sourceText : targetText
-    const segments =
-      learningHighlightSide === 'source' ? alignment.sourceSegments : alignment.targetSegments
-    const pairBySegmentId =
-      learningHighlightSide === 'source'
-        ? alignmentView.sourcePairBySegmentId
-        : alignmentView.targetPairBySegmentId
-    const highlights: EncounterVocabHighlight[] = []
-
-    for (const match of findVocabTextMatches(englishText, encounterVocabItems, {
-      includePhrases: false
-    })) {
-      const segment = segments.find((item) => match.start >= item.start && match.start < item.end)
-      const pairId = segment ? pairBySegmentId.get(segment.id) : null
-      if (!segment || !pairId) continue
-
-      highlights.push({
-        ...match,
-        id: `${learningHighlightSide}:${match.item.lemmaLower}:${match.start}`,
-        segmentId: segment.id,
-        pairId,
-        side: learningHighlightSide
-      })
-    }
-
-    return {
-      side: learningHighlightSide,
-      highlights,
-      matchById: new Map(highlights.map((highlight) => [highlight.id, highlight]))
-    }
-  }, [
-    alignment,
-    alignmentView,
-    encounterVocabItems,
-    isLearningActive,
-    learningHighlightSide,
-    showCollectedWordMarks,
-    sourceText,
-    status,
-    targetText
-  ])
-
   const deviceRef = useRef<HTMLElement | null>(null)
   // 译文区滚动容器与底部工具行：量两者高度，窗口才能按"内容实际需要多高"来收放
   const resultScrollRef = useRef<HTMLDivElement | null>(null)
@@ -2361,7 +2223,6 @@ function App(): React.JSX.Element {
     wordLookupRequestIdRef.current += 1
     passiveEncounterSignatureRef.current = ''
     setAlignment(null)
-    setEncounterVocabItems([])
     setActiveAlignmentPairId(null)
     setHoveredSourceWordId(null)
     setHoveredTargetWordId(null)
@@ -2526,13 +2387,10 @@ function App(): React.JSX.Element {
     localStorage.setItem('learningMode', primaryView === 'learn' ? '1' : '0')
   }, [primaryView])
 
-  // 已收藏词标记偏好持久化；关闭时只收起视觉标记，避免同一段文本重复累计偶遇次数
+  // 旧版本曾保存正文收藏标记偏好，启动时清理废弃键
   useEffect(() => {
-    localStorage.setItem('showCollectedWordMarks', showCollectedWordMarks ? '1' : '0')
-    if (showCollectedWordMarks) return
-
-    setWordLookup((current) => (current?.origin === 'encounter' ? null : current))
-  }, [showCollectedWordMarks])
+    localStorage.removeItem('showCollectedWordMarks')
+  }, [])
 
   // 手动目标语言选择持久化
   useEffect(() => {
@@ -2823,12 +2681,11 @@ function App(): React.JSX.Element {
     isLearningActive
   ])
 
-  // 翻译完成后批量检查英文文本中的已收录词；同一次翻译只累计一次被动偶遇
+  // 翻译完成后批量检查英文文本中的已收录词；学习模式下始终执行
   useEffect(() => {
     if (
       !isLearningActive ||
       !learningHighlightSide ||
-      !showCollectedWordMarks ||
       status !== 'idle' ||
       !sourceText.trim() ||
       !targetText.trim()
@@ -2843,48 +2700,17 @@ function App(): React.JSX.Element {
 
     let cancelled = false
 
-    const loadPassiveEncounters = async (): Promise<void> => {
-      const words = collectUniqueEnglishWords(englishText)
-      const wordItems = await getVocabItemsByWordForms(words)
-      const itemByLemma = new Map<string, VocabItem>()
-      for (const item of wordItems) {
-        itemByLemma.set(item.lemmaLower, item)
-      }
-
-      const matchedItems = Array.from(itemByLemma.values()).filter(
-        (item) => findVocabTextMatches(englishText, [item], { includePhrases: false }).length > 0
-      )
-      if (matchedItems.length === 0) {
-        if (!cancelled) setEncounterVocabItems([])
-        return
-      }
-
-      const updatedItems = await incrementPassiveVocabEncounters(
-        matchedItems.map((item) => item.lemmaLower)
-      )
+    void incrementPassiveVocabEncountersInText(englishText).catch((error) => {
       if (cancelled) return
-
-      setEncounterVocabItems(updatedItems)
-    }
-
-    void loadPassiveEncounters().catch((error) => {
-      if (cancelled) return
-      // 本地库不可用时只放弃偶遇标识，不影响翻译主流程
-      console.warn('[renderer] 读取生词偶遇数据失败:', error)
+      // 本地库不可用时不影响翻译主流程
+      console.warn('[renderer] 更新生词偶遇次数失败:', error)
       passiveEncounterSignatureRef.current = ''
     })
 
     return () => {
       cancelled = true
     }
-  }, [
-    isLearningActive,
-    learningHighlightSide,
-    showCollectedWordMarks,
-    sourceText,
-    status,
-    targetText
-  ])
+  }, [isLearningActive, learningHighlightSide, sourceText, status, targetText])
 
   // 进入复习子视图时随机准备一组带语境的生词闪卡
   useEffect(() => {
@@ -2957,10 +2783,6 @@ function App(): React.JSX.Element {
         setVocabFlashcardIndex(nextQueue.activeIndex)
         setVocabFlashcardState(nextQueue.cards.length > 0 ? 'ready' : 'empty')
 
-        setEncounterVocabItems((current) =>
-          current.filter((candidate) => candidate.lemmaLower !== lemmaLower)
-        )
-
         const nextCount = await getVocabItemCount()
         setVocabItemCount(nextCount)
         if (nextCount === 0) {
@@ -2997,22 +2819,6 @@ function App(): React.JSX.Element {
 
     const hitBoxes: SourceHitBox[] = []
 
-    // 已收录词优先于普通单词命中，确保点击时直接读取本地释义
-    const encounterElements = mirror.querySelectorAll<HTMLElement>('[data-source-encounter-id]')
-    for (const element of encounterElements) {
-      const encounterId = element.dataset.sourceEncounterId
-      if (!encounterId) continue
-
-      const range = document.createRange()
-      range.selectNodeContents(element)
-      const rects = Array.from(range.getClientRects()).filter(
-        (rect) => rect.width > 0 && rect.height > 0
-      )
-      if (rects.length > 0) {
-        hitBoxes.push({ kind: 'encounter', id: encounterId, rects })
-      }
-    }
-
     // 所有英文词都建立独立命中区，鼠标落在具体单词上时不退回整句
     const wordElements = mirror.querySelectorAll<HTMLElement>('[data-source-word-id]')
     for (const element of wordElements) {
@@ -3040,7 +2846,7 @@ function App(): React.JSX.Element {
 
     const frame = window.requestAnimationFrame(measureSourceHitBoxes)
     return () => window.cancelAnimationFrame(frame)
-  }, [alignment, encounterWordView, measureSourceHitBoxes, sourceWordView])
+  }, [alignment, measureSourceHitBoxes, sourceWordView])
 
   useEffect(() => {
     if (!alignment) return
@@ -3056,7 +2862,7 @@ function App(): React.JSX.Element {
       observer.disconnect()
       window.removeEventListener('resize', measureSourceHitBoxes)
     }
-  }, [alignment, encounterWordView, measureSourceHitBoxes, sourceWordView])
+  }, [alignment, measureSourceHitBoxes, sourceWordView])
 
   useEffect(() => {
     return () => {
@@ -3107,23 +2913,6 @@ function App(): React.JSX.Element {
       if (oldestKey) cache.delete(oldestKey)
     }
   }, [])
-
-  /** 把新收录或计数更新后的词条同步到当前英文文本的偶遇标识 */
-  const upsertEncounterVocabItem = useCallback(
-    (item: VocabItem, side: WordLookupSide): void => {
-      if (learningHighlightSide !== side) return
-
-      setEncounterVocabItems((current) => {
-        const index = current.findIndex((entry) => entry.lemmaLower === item.lemmaLower)
-        if (index < 0) return [...current, item]
-
-        const next = [...current]
-        next[index] = item
-        return next
-      })
-    },
-    [learningHighlightSide]
-  )
 
   /**
    * 主动查词成功后写入本地词库。
@@ -3217,7 +3006,6 @@ function App(): React.JSX.Element {
           chineseSentence: pairSentences.chineseSentence
         })
 
-        upsertEncounterVocabItem(item, params.side)
         refreshVocabItemCount()
         setWordLookup((current) =>
           current &&
@@ -3254,78 +3042,7 @@ function App(): React.JSX.Element {
         persistenceInFlightRef.current.delete(persistenceKey)
       }
     },
-    [
-      alignment,
-      learningHighlightSide,
-      refreshVocabItemCount,
-      sourceText,
-      targetText,
-      upsertEncounterVocabItem
-    ]
-  )
-
-  /** 二次偶遇高亮直接展示本地数据，不发起任何模型请求 */
-  const showEncounterLookup = useCallback(
-    (match: EncounterVocabHighlight, position: WordLookupPosition): void => {
-      wordLookupRequestIdRef.current += 1
-      setActiveAlignmentPairId(match.pairId)
-      const pairSentences = alignment
-        ? getAlignmentPairSentences(
-            alignment,
-            sourceText,
-            targetText,
-            match.pairId,
-            learningHighlightSide
-          )
-        : null
-      const correspondingSentence =
-        match.side === 'source' ? pairSentences?.targetSentence : pairSentences?.sourceSentence
-      const contextualTargetText =
-        match.item.targetText && correspondingSentence?.includes(match.item.targetText)
-          ? match.item.targetText
-          : ''
-
-      if (match.side === 'source') {
-        setHoveredSourceWordId(null)
-        setHoveredTargetWordId(null)
-        scrollResultToPair(match.pairId)
-      } else {
-        setHoveredSourceWordId(null)
-        setHoveredTargetWordId(null)
-        scrollSourceToPair(match.pairId)
-      }
-
-      setWordLookup({
-        ...position,
-        lookupText: match.surface,
-        lookupAnchorId: match.id,
-        pairId: match.pairId,
-        side: match.side,
-        status: 'ready',
-        origin: 'encounter',
-        result: {
-          kind: match.item.kind ?? 'lexical',
-          lemma: match.item.lemma,
-          ...(match.item.literalMeaning ? { literalMeaning: match.item.literalMeaning } : {}),
-          meaning: match.item.meaning,
-          ...(match.item.contextNote ? { contextNote: match.item.contextNote } : {}),
-          ...(match.item.wordOrderNote ? { wordOrderNote: match.item.wordOrderNote } : {}),
-          targetText: contextualTargetText
-        },
-        note: match.item.note,
-        encounterCount: match.item.encounterCount,
-        isPersisted: true,
-        canPersist: false
-      })
-    },
-    [
-      alignment,
-      learningHighlightSide,
-      scrollResultToPair,
-      scrollSourceToPair,
-      sourceText,
-      targetText
-    ]
+    [alignment, learningHighlightSide, refreshVocabItemCount, sourceText, targetText]
   )
 
   /** 对用户点击的英文词发起单点上下文查词 */
@@ -3522,9 +3239,7 @@ function App(): React.JSX.Element {
     sourceHoverFrameRef.current = window.requestAnimationFrame(() => {
       sourceHoverFrameRef.current = null
       let nextWordId: string | null = null
-      let nextEncounterId: string | null = null
       let bestVerticalDistance = Number.POSITIVE_INFINITY
-      let bestPriority = Number.POSITIVE_INFINITY
 
       for (const hitBox of sourceHitBoxesRef.current) {
         for (const rect of hitBox.rects) {
@@ -3538,28 +3253,20 @@ function App(): React.JSX.Element {
                 : 0
           if (verticalDistance > 4) continue
 
-          const priority = hitBox.kind === 'encounter' ? 0 : 1
           if (
             verticalDistance > bestVerticalDistance ||
-            (verticalDistance === bestVerticalDistance && priority >= bestPriority)
+            verticalDistance === bestVerticalDistance
           ) {
             continue
           }
 
           bestVerticalDistance = verticalDistance
-          bestPriority = priority
-          if (hitBox.kind === 'encounter') {
-            nextEncounterId = hitBox.id
-            nextWordId = null
-          } else {
-            nextEncounterId = null
-            nextWordId = hitBox.id
-          }
+          nextWordId = hitBox.id
         }
       }
 
       setHoveredSourceWordId(nextWordId)
-      textarea.style.cursor = nextWordId || nextEncounterId ? 'pointer' : 'text'
+      textarea.style.cursor = nextWordId ? 'pointer' : 'text'
     })
   }
 
@@ -3577,22 +3284,6 @@ function App(): React.JSX.Element {
 
     const clickOffset = textarea.selectionStart
     const selection = findEnglishWordAtOffset(sourceText, clickOffset)
-    // 语法缩写即使落在旧短语匹配范围里，也必须允许用户单独点选。
-    const preferStandaloneGrammarWord = selection ? isGrammarContraction(selection.text) : false
-    const clickedEncounter =
-      (preferStandaloneGrammarWord
-        ? undefined
-        : encounterWordView?.highlights.find(
-            (encounter) => clickOffset >= encounter.start && clickOffset < encounter.end
-          )) ??
-      (preferStandaloneGrammarWord
-        ? undefined
-        : encounterWordView?.highlights.find((encounter) => clickOffset === encounter.end))
-    if (clickedEncounter) {
-      showEncounterLookup(clickedEncounter, getWordLookupPosition(event.clientX, event.clientY))
-      return
-    }
-
     if (!selection || !sourceWordView) {
       const clickedSegment = alignment.sourceSegments.find(
         (segment) => clickOffset >= segment.start && clickOffset < segment.end
@@ -3680,21 +3371,6 @@ function App(): React.JSX.Element {
     scrollSourceToPair(pairId)
   }
 
-  /** 译文中的二次偶遇词悬停只同步句对，点击后再展示本地记录 */
-  const handleTargetEncounterEnter = (match: EncounterVocabHighlight): void => {
-    setActiveAlignmentPairId(match.pairId)
-    setHoveredTargetWordId(null)
-    scrollSourceToPair(match.pairId)
-  }
-
-  const handleTargetEncounterLookup = (
-    match: EncounterVocabHighlight,
-    event: React.MouseEvent<HTMLSpanElement>
-  ): void => {
-    event.stopPropagation()
-    showEncounterLookup(match, getWordLookupPosition(event.clientX, event.clientY))
-  }
-
   /** 浮层中的收藏按钮用于把当前词义主动写入本地词库 */
   const handlePersistCurrentLookup = (): void => {
     if (
@@ -3717,7 +3393,7 @@ function App(): React.JSX.Element {
     })
   }
 
-  /** 从气泡中移出当前词条，并同步清理文本中的偶遇标记 */
+  /** 从气泡中移出当前词条 */
   const handleRemoveCurrentLookup = (): void => {
     if (!wordLookup?.result || !wordLookup.isPersisted || wordLookup.isRemoving) return
 
@@ -3733,11 +3409,7 @@ function App(): React.JSX.Element {
 
     void removeVocabItem(wordLookup.result.lemma)
       .then(() => {
-        // 已收藏词标记完全由该状态派生，移除词条后下划线与星标会立即消失。
         refreshVocabItemCount()
-        setEncounterVocabItems((current) =>
-          current.filter((item) => item.lemmaLower !== lemmaLower)
-        )
         setWordLookup((current) =>
           current?.result && normalizeVocabLemma(current.result.lemma) === lemmaLower
             ? {
@@ -4211,19 +3883,6 @@ function App(): React.JSX.Element {
                   <div className="structure-compact-head-actions">
                     <button
                       type="button"
-                      className={`structure-compact-toggle${
-                        showCollectedWordMarks ? ' structure-compact-toggle-on' : ''
-                      }`}
-                      aria-label={showCollectedWordMarks ? '关闭已收藏词标记' : '显示已收藏词标记'}
-                      aria-pressed={showCollectedWordMarks}
-                      title="只标记已收藏的单词，不影响点击查词"
-                      onClick={() => setShowCollectedWordMarks((current) => !current)}
-                    >
-                      <span className="structure-compact-toggle-dot" aria-hidden="true" />
-                      收藏
-                    </button>
-                    <button
-                      type="button"
                       className="structure-compact-close"
                       aria-label="收起整句结构"
                       title="收起整句结构，回到竖向阅读"
@@ -4410,21 +4069,11 @@ function App(): React.JSX.Element {
                         activePairId={activeAlignmentPairId}
                         side="source"
                         lookupTokensBySegmentId={sourceWordView?.tokensBySegmentId}
-                        encounterHighlights={
-                          encounterWordView?.side === 'source'
-                            ? encounterWordView.highlights
-                            : undefined
-                        }
                         activeLookupWordId={
                           hoveredSourceWordId ??
                           (wordLookup?.side === 'source' ? wordLookup.lookupAnchorId : null)
                         }
                         activeSyntaxHighlight={activeSyntaxWordHighlight}
-                        activeEncounterId={
-                          wordLookup?.origin === 'encounter' && wordLookup.side === 'source'
-                            ? wordLookup.lookupAnchorId
-                            : null
-                        }
                       />
                     </div>
                   ) : null}
@@ -4485,28 +4134,15 @@ function App(): React.JSX.Element {
                         activePairId={activeAlignmentPairId}
                         side="target"
                         lookupTokensBySegmentId={targetWordView?.tokensBySegmentId}
-                        encounterHighlights={
-                          encounterWordView?.side === 'target'
-                            ? encounterWordView.highlights
-                            : undefined
-                        }
                         activeLookupWordId={
                           hoveredTargetWordId ??
                           (wordLookup?.side === 'target' ? wordLookup.lookupAnchorId : null)
-                        }
-                        activeEncounterId={
-                          wordLookup?.origin === 'encounter' && wordLookup.side === 'target'
-                            ? wordLookup.lookupAnchorId
-                            : null
                         }
                         onPairEnter={handleTargetPairEnter}
                         onPairClick={handleTargetPairClick}
                         onLookupWordClick={handleTargetWordClick}
                         onLookupWordEnter={handleTargetWordEnter}
                         onLookupWordLeave={handleTargetLookupLeave}
-                        onEncounterClick={handleTargetEncounterLookup}
-                        onEncounterEnter={handleTargetEncounterEnter}
-                        onEncounterLeave={handleTargetLookupLeave}
                       />
                     </p>
                   ) : (

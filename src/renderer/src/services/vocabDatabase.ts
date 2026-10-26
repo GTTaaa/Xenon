@@ -1,5 +1,6 @@
 import Dexie, { type Table, type Transaction } from 'dexie'
 import type { WordLookupKind, WordLookupSide } from '../../../shared/wordLookup'
+import { collectUniqueEnglishWords, findVocabTextMatches } from './vocabMatching.ts'
 
 /** 本地生词主表记录 */
 export interface VocabItem {
@@ -50,6 +51,16 @@ export interface VocabContext {
   /** 该句中的具体英文词形 */
   surface: string
   /** 语境记录时间戳 */
+  createdAt: number
+}
+
+/** 已完成的被动偶遇记录，用于跨输入清理和重新粘贴持久去重 */
+export interface PassiveVocabEncounter {
+  /** 规范化后的完整英文文本 */
+  textKey: string
+  /** 被累计过的归一化词元 */
+  lemmaLower: string
+  /** 首次完成累计的时间戳 */
   createdAt: number
 }
 
@@ -213,6 +224,8 @@ export class VocabDatabase extends Dexie {
   vocabItems!: Table<VocabItem, number>
   /** 生词语境表 */
   vocabContexts!: Table<VocabContext, number>
+  /** 被动偶遇去重表 */
+  passiveEncounters!: Table<PassiveVocabEncounter, [string, string]>
 
   constructor(databaseName = 'xenon-vocab') {
     super(databaseName)
@@ -234,8 +247,12 @@ export class VocabDatabase extends Dexie {
       vocab_items: '++id,&lemmaLower,updatedAt,createdAt',
       vocab_contexts: '++id,lemmaLower,createdAt,&[lemmaLower+sourceSentenceKey]'
     })
+    this.version(4).stores({
+      passive_encounters: '[textKey+lemmaLower],createdAt'
+    })
     this.vocabItems = this.table('vocab_items')
     this.vocabContexts = this.table('vocab_contexts')
+    this.passiveEncounters = this.table('passive_encounters')
   }
 }
 
@@ -485,6 +502,57 @@ export const incrementPassiveVocabEncounters = async (
       })
 
     return database.vocabItems.where('lemmaLower').anyOf(uniqueLemmaLowers).toArray()
+  })
+}
+
+/**
+ * 扫描一段英文文本并为其中已收藏的词各累计一次被动偶遇。
+ * 去重记录写入 IndexedDB，因此清空后重新粘贴同一段文本也不会重复累计。
+ */
+export const incrementPassiveVocabEncountersInText = async (
+  englishText: string,
+  database: VocabDatabase = vocabDatabase
+): Promise<VocabItem[]> => {
+  const normalizedText = normalizeVocabSentence(englishText)
+  if (!normalizedText) return []
+
+  const words = collectUniqueEnglishWords(englishText)
+  const candidateItems = await getVocabItemsByWordForms(words, database)
+  const matchedItems = candidateItems.filter(
+    (item) => findVocabTextMatches(englishText, [item], { includePhrases: false }).length > 0
+  )
+  const lemmaLowers = Array.from(new Set(matchedItems.map((item) => item.lemmaLower)))
+  if (lemmaLowers.length === 0) return []
+
+  const now = Date.now()
+  return database.transaction('rw', database.vocabItems, database.passiveEncounters, async () => {
+    const updatedItems: VocabItem[] = []
+
+    for (const lemmaLower of lemmaLowers) {
+      const seen = await database.passiveEncounters
+        .where('[textKey+lemmaLower]')
+        .equals([normalizedText, lemmaLower])
+        .first()
+      if (seen) continue
+
+      const item = await database.vocabItems.where('lemmaLower').equals(lemmaLower).first()
+      if (!item) continue
+
+      const updatedItem: VocabItem = {
+        ...item,
+        encounterCount: item.encounterCount + 1,
+        updatedAt: now
+      }
+      await database.vocabItems.put(updatedItem)
+      await database.passiveEncounters.add({
+        textKey: normalizedText,
+        lemmaLower,
+        createdAt: now
+      })
+      updatedItems.push(updatedItem)
+    }
+
+    return updatedItems
   })
 }
 
