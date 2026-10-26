@@ -37,3 +37,6 @@ export const MAIN_WINDOW_HEIGHT_MAX =
 
 /** 普通翻译模式的最大高度，保持紧凑，超出内容在译文区内部滚动 */
 export const NORMAL_WINDOW_HEIGHT_MAX = BASE_NORMAL_WINDOW_HEIGHT_MAX + HEADER_EXTRA_HEIGHT
+
+/** 生词列表覆盖层的最小窗口高度；列表超出后只在列表内部滚动 */
+export const VOCAB_LIBRARY_WINDOW_HEIGHT_MIN = 420

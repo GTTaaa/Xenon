@@ -843,58 +843,54 @@ body {
 }
 
 .vocab-flashcard-kicker {
-  position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   min-height: 14px;
+  padding: 0 2px;
 }
 
-.vocab-flashcard-encounter,
+.vocab-flashcard-kicker-start {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
 .vocab-flashcard-status {
   display: inline-flex;
   align-items: center;
   color: #7e898d;
-  font-size: 8.5px;
+  font-family: var(--app-mono);
+  font-size: 7.5px;
+  letter-spacing: 0.2px;
   line-height: 1.2;
   white-space: nowrap;
 }
 
-.vocab-flashcard-encounter {
-  gap: 2px;
-  font-family: var(--app-mono);
-  letter-spacing: 0.2px;
-}
-
-.vocab-flashcard-encounter-label {
-  margin-right: 2px;
-  color: #56686e;
-  font-weight: 600;
-}
-
-.vocab-flashcard-encounter-unit {
-  color: #8c9497;
-  font-size: 8px;
-}
-
-.vocab-flashcard-encounter strong {
-  margin: 0 1px;
-  color: #40595f;
-  font-family: var(--app-mono);
-  font-size: 9.5px;
-  font-weight: 600;
-}
-
-.vocab-flashcard-status {
-  font-family: var(--app-mono);
-  font-size: 7.5px;
-  letter-spacing: 0.2px;
-}
-
 .vocab-flashcard-status-paused {
   color: #a0927d;
+}
+
+.vocab-flashcard-dots {
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 14px;
+  align-items: center;
+  gap: 7px;
+}
+
+.vocab-flashcard-dot {
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #c9c9cf;
+}
+
+.vocab-flashcard-dot-active {
+  background: #40595f;
 }
 
 .vocab-flashcard-sentence {
@@ -1044,104 +1040,6 @@ body {
   user-select: text;
 }
 
-.vocab-flashcard-controls {
-  display: grid;
-  width: 100%;
-  align-items: center;
-  grid-template-columns: 40px minmax(0, 1fr) 18px 18px;
-  gap: 7px;
-  min-height: 20px;
-  margin-top: 8px;
-  padding: 0 1px;
-}
-
-.vocab-flashcard-position {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
-  color: #8f999c;
-  font-family: 'Iowan Old Style', 'Baskerville', 'Songti SC', serif;
-  font-size: 7px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.vocab-flashcard-position strong {
-  color: #2c3d42;
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: -0.8px;
-}
-
-.vocab-flashcard-rail {
-  display: grid;
-  min-width: 0;
-  align-items: center;
-  grid-auto-columns: 1fr;
-  grid-auto-flow: column;
-  gap: 3px;
-  height: 18px;
-}
-
-.vocab-flashcard-rail-mark {
-  height: 18px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.vocab-flashcard-rail-mark::before {
-  content: '';
-  display: block;
-  width: 5px;
-  height: 5px;
-  margin: 0 auto;
-  border: 1px solid #b8c0c2;
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    transform 160ms ease;
-}
-
-.vocab-flashcard-rail-mark:hover::before {
-  border-color: #929b9e;
-}
-
-.vocab-flashcard-rail-mark-active::before {
-  border-color: #2c3d42;
-  background: #2c3d42;
-  transform: scale(1.35);
-}
-
-.vocab-flashcard-rail-mark:focus-visible,
-.vocab-flashcard-arrow:focus-visible {
-  outline: 2px solid rgba(59, 121, 79, 0.3);
-  outline-offset: 1px;
-}
-
-.vocab-flashcard-arrow {
-  display: grid;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 2px;
-  background: transparent;
-  color: #969da0;
-  cursor: pointer;
-  transition:
-    color 120ms ease,
-    background-color 120ms ease;
-}
-
-.vocab-flashcard-arrow:hover {
-  background: rgba(0, 0, 0, 0.045);
-  color: var(--app-fg-body);
-}
-
 .vocab-flashcard-loading,
 .vocab-flashcard-empty {
   color: var(--app-fg-faint);
@@ -1174,9 +1072,33 @@ body {
   padding-top: 12px;
 }
 
+/* 复习内容按自然高度排列，供窗口高度测量使用 */
+.review-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
 /* 复习卡片不能被较小的旧窗口压缩，否则会量到截断后的错误高度 */
-.review-view > .vocab-flashcard-carousel {
+.review-content > .vocab-flashcard-carousel {
   flex: 0 0 auto;
+}
+
+.review-all-vocab-link {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-fg-muted);
+  font-family: inherit;
+  font-size: 10.5px;
+  line-height: 1.4;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.review-all-vocab-link:hover {
+  color: var(--app-fg-body);
 }
 
 .vocab-review-empty {
@@ -1960,7 +1882,7 @@ body {
     transition: none;
   }
 
-  /* 降低动态效果时不自动翻卡，底部圆点与箭头仍可手动浏览 */
+  /* 降低动态效果时不自动翻卡，底部箭头仍可手动浏览 */
   .vocab-flashcard-progress {
     display: none;
   }
@@ -2085,6 +2007,121 @@ body {
 .terminal-engine-deck-close:hover {
   color: var(--app-fg);
   background: var(--app-hover-bg);
+}
+
+.vocab-library-deck {
+  z-index: 21;
+}
+
+.vocab-library-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.vocab-library-search {
+  flex-shrink: 0;
+  width: 100%;
+  height: 30px;
+  margin: 2px 0 8px;
+  padding: 0 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  outline: none;
+  background: #f7f7f8;
+  color: var(--app-fg);
+  font-family: inherit;
+  font-size: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.vocab-library-search::placeholder {
+  color: #aaaab1;
+}
+
+.vocab-library-search:focus {
+  border-color: #c8c8ce;
+  background: #ffffff;
+}
+
+.vocab-library-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: 0 -7px;
+}
+
+.vocab-library-list::-webkit-scrollbar {
+  width: 3px;
+}
+
+.vocab-library-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.vocab-library-list::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.vocab-library-item {
+  display: grid;
+  min-height: 38px;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 9px;
+  padding: 7px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.045);
+}
+
+.vocab-library-word {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-fg);
+  font-family: var(--app-mono);
+  font-size: 12.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.vocab-library-encounter {
+  color: var(--app-fg-muted);
+  font-size: 9.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.vocab-library-remove {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-fg-muted);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.vocab-library-remove:hover:not(:disabled) {
+  color: var(--app-danger);
+}
+
+.vocab-library-remove:disabled {
+  color: #c2c2c8;
+  cursor: default;
+}
+
+.vocab-library-status {
+  margin: auto;
+  padding: 24px 10px;
+  color: var(--app-fg-muted);
+  font-size: 12px;
+  line-height: 1.65;
+  text-align: center;
 }
 
 .terminal-engine-models-list {

@@ -7,6 +7,7 @@ import {
   getRandomVocabFlashcard,
   getVocabFlashcards,
   getVocabItemCount,
+  getVocabItems,
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
   normalizeVocabSentence,
@@ -437,6 +438,48 @@ test('生词数量按唯一词条统计', async (context) => {
   )
 
   assert.equal(await getVocabItemCount(database), 1)
+})
+
+test('生词列表按偶遇次数降序排列，次数相同时最近收藏的在前', async (context) => {
+  const database = createTestDatabase()
+  context.after(() => database.delete())
+
+  const baseItem = {
+    surface: 'word',
+    meaning: '释义',
+    targetText: '释义',
+    side: 'source' as const,
+    updatedAt: 1
+  }
+  await database.vocabItems.bulkAdd([
+    {
+      ...baseItem,
+      lemma: 'alpha',
+      lemmaLower: 'alpha',
+      encounterCount: 2,
+      createdAt: 100
+    },
+    {
+      ...baseItem,
+      lemma: 'beta',
+      lemmaLower: 'beta',
+      encounterCount: 8,
+      createdAt: 50
+    },
+    {
+      ...baseItem,
+      lemma: 'gamma',
+      lemmaLower: 'gamma',
+      encounterCount: 2,
+      createdAt: 300
+    }
+  ])
+
+  const items = await getVocabItems(database)
+  assert.deepEqual(
+    items.map((item) => item.lemma),
+    ['beta', 'gamma', 'alpha']
+  )
 })
 
 test('旧数据库升级时会合并重复主词与重复语境', async (context) => {

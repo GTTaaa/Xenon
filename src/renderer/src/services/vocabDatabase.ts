@@ -445,6 +445,22 @@ export const getVocabItemCount = async (
 }
 
 /**
+ * 读取全部生词主记录，供“我的生词”列表展示。
+ * 先按偶遇次数降序；次数相同时按首次收藏时间降序，保证结果稳定。
+ */
+export const getVocabItems = async (
+  database: VocabDatabase = vocabDatabase
+): Promise<VocabItem[]> => {
+  const items = await database.vocabItems.toArray()
+  return items.sort(
+    (left, right) =>
+      right.encounterCount - left.encounterCount ||
+      right.createdAt - left.createdAt ||
+      (right.id ?? 0) - (left.id ?? 0)
+  )
+}
+
+/**
  * 翻译完成后批量增加被动偶遇次数。
  * 调用方必须先在单次翻译内去重，避免同一句重复出现时反复累加。
  * 返回事务内更新后的主词，界面可据此显示准确次数。

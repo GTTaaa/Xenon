@@ -46,6 +46,7 @@ import {
   findCachedVocab,
   getVocabFlashcards,
   getVocabItemCount,
+  getVocabItems,
   getVocabItemsByWordForms,
   incrementPassiveVocabEncounters,
   normalizeVocabLemma,
@@ -65,9 +66,11 @@ import {
   MAIN_WINDOW_HEIGHT_MIN,
   NORMAL_WINDOW_HEIGHT_MAX,
   STRUCTURE_LAYOUT_COLLAPSE_MS,
-  STRUCTURE_LAYOUT_TRANSITION_MS
+  STRUCTURE_LAYOUT_TRANSITION_MS,
+  VOCAB_LIBRARY_WINDOW_HEIGHT_MIN
 } from '../../shared/windowLayout'
 import { EncounterCrowdCanvas } from './components/EncounterCrowdCanvas'
+import { filterVocabItems, removeVocabFlashcardFromQueue } from './vocabReview'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 type PrimaryView = 'translate' | 'learn' | 'review'
@@ -883,6 +886,10 @@ interface VocabFlashcardCarouselProps {
   onIndexChange: (index: number) => void
   /** 是否启用自动轮播；复习模式固定关闭 */
   autoAdvance?: boolean
+  /** 是否在闪卡顶部展示“全部生词”入口 */
+  showAllVocabLink?: boolean
+  /** 打开生词列表覆盖层 */
+  onOpenVocabLibrary?: () => void
 }
 
 /** 复习视图的多卡片闪卡组 */
@@ -890,7 +897,9 @@ function VocabFlashcardCarousel({
   cards,
   activeIndex,
   onIndexChange,
-  autoAdvance = true
+  autoAdvance = true,
+  showAllVocabLink = false,
+  onOpenVocabLibrary
 }: VocabFlashcardCarouselProps): React.JSX.Element | null {
   const [direction, setDirection] = useState<'next' | 'prev'>('next')
   const [isCarouselHovered, setIsCarouselHovered] = useState(false)
@@ -976,6 +985,36 @@ function VocabFlashcardCarousel({
         </span>
       ) : null}
 
+      <div className="vocab-flashcard-kicker">
+        <span className="vocab-flashcard-kicker-start">
+          <span
+            className="vocab-flashcard-dots"
+            role="img"
+            aria-label={`第 ${activeIndex + 1} 张，共 ${cards.length} 张`}
+          >
+            {cards.map((card, index) => (
+              <span
+                key={`${card.item.lemmaLower}-${card.context.id ?? card.context.sourceSentenceKey ?? index}`}
+                className={`vocab-flashcard-dot${
+                  index === activeIndex ? ' vocab-flashcard-dot-active' : ''
+                }`}
+                aria-hidden="true"
+              />
+            ))}
+          </span>
+          {statusText ? (
+            <span className="vocab-flashcard-status vocab-flashcard-status-paused">
+              {statusText}
+            </span>
+          ) : null}
+        </span>
+        {showAllVocabLink ? (
+          <button type="button" className="review-all-vocab-link" onClick={onOpenVocabLibrary}>
+            全部生词 →
+          </button>
+        ) : null}
+      </div>
+
       <div
         className="vocab-flashcard-stage"
         onMouseEnter={() => setIsCardHovered(true)}
@@ -1010,18 +1049,6 @@ function VocabFlashcardCarousel({
             }
           }}
         >
-          <div className="vocab-flashcard-kicker">
-            <span className="vocab-flashcard-encounter">
-              <span className="vocab-flashcard-encounter-label">偶遇</span>
-              <strong>{activeCard.item.encounterCount}</strong>
-              <span className="vocab-flashcard-encounter-unit">次</span>
-            </span>
-            {statusText ? (
-              <span className="vocab-flashcard-status vocab-flashcard-status-paused">
-                {statusText}
-              </span>
-            ) : null}
-          </div>
           <p className="vocab-flashcard-sentence" lang="en">
             {sentenceParts.match ? (
               <>
@@ -1053,74 +1080,6 @@ function VocabFlashcardCarousel({
           </div>
         </div>
       </div>
-
-      {hasMultipleCards ? (
-        <div className="vocab-flashcard-controls">
-          <span
-            className="vocab-flashcard-position"
-            aria-label={`第 ${activeIndex + 1} 张，共 ${cards.length} 张`}
-          >
-            <strong>{String(activeIndex + 1).padStart(2, '0')}</strong>
-            <span>/ {String(cards.length).padStart(2, '0')}</span>
-          </span>
-          <div className="vocab-flashcard-rail" aria-label="闪卡进度">
-            {cards.map((card, index) => (
-              <button
-                key={`${card.item.lemmaLower}-${card.context.id ?? index}`}
-                type="button"
-                className={`vocab-flashcard-rail-mark${
-                  index === activeIndex ? ' vocab-flashcard-rail-mark-active' : ''
-                }`}
-                aria-label={`查看第 ${index + 1} 张闪卡`}
-                aria-current={index === activeIndex ? 'true' : undefined}
-                onClick={() => navigateTo(index, index < activeIndex ? 'prev' : 'next')}
-              />
-            ))}
-          </div>
-          <button
-            type="button"
-            className="vocab-flashcard-arrow"
-            aria-label="上一张闪卡"
-            title="上一张闪卡"
-            onClick={goToPrevious}
-          >
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="vocab-flashcard-arrow"
-            aria-label="下一张闪卡"
-            title="下一张闪卡"
-            onClick={goToNext}
-          >
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </button>
-        </div>
-      ) : null}
     </div>
   )
 }
@@ -1174,10 +1133,24 @@ function App(): React.JSX.Element {
   const [isStructureLayoutReady, setIsStructureLayoutReady] = useState(false)
   // 学习模式空状态展示的随机复习闪卡轮播
   const [vocabFlashcards, setVocabFlashcards] = useState<VocabFlashcard[]>([])
+  const vocabFlashcardsRef = useRef<VocabFlashcard[]>([])
   // 当前轮播卡片编号，放在主组件里以便换卡后重新校准窗口高度
   const [vocabFlashcardIndex, setVocabFlashcardIndex] = useState(0)
+  const vocabFlashcardIndexRef = useRef(0)
   // 生词库唯一词条总数，供“复习 (n)”入口展示
   const [vocabItemCount, setVocabItemCount] = useState(0)
+  // 生词列表覆盖层：独立于模型面板维护挂载与退出动画
+  const [isVocabLibraryOpen, setIsVocabLibraryOpen] = useState(false)
+  const [isVocabLibraryMounted, setIsVocabLibraryMounted] = useState(false)
+  const [isVocabLibraryClosing, setIsVocabLibraryClosing] = useState(false)
+  const [vocabLibraryItems, setVocabLibraryItems] = useState<VocabItem[]>([])
+  const [vocabLibraryState, setVocabLibraryState] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle')
+  const [vocabLibrarySearch, setVocabLibrarySearch] = useState('')
+  const [removingVocabLemmaLowers, setRemovingVocabLemmaLowers] = useState<Set<string>>(
+    () => new Set()
+  )
   // 区分闪卡加载中、数据库为空与正常展示三种状态
   const [vocabFlashcardState, setVocabFlashcardState] = useState<
     'hidden' | 'loading' | 'ready' | 'empty'
@@ -1312,6 +1285,8 @@ function App(): React.JSX.Element {
 
   // 记录深色面板退出动画定时器
   const deckClosingTimerRef = useRef<NodeJS.Timeout | null>(null)
+  // 记录生词列表覆盖层的退出动画定时器
+  const vocabLibraryClosingTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // 打开模型选择面板（立即挂载 DOM 并以纯 GPU 硬件加速滑入）
   const openModelMenu = useCallback((): void => {
@@ -1339,6 +1314,79 @@ function App(): React.JSX.Element {
       deckClosingTimerRef.current = null
     }, 100)
   }, [])
+
+  /** 打开全部生词覆盖层；每次打开都从空搜索开始并重新读取数据库 */
+  const openVocabLibrary = useCallback((): void => {
+    if (vocabLibraryClosingTimerRef.current) {
+      clearTimeout(vocabLibraryClosingTimerRef.current)
+      vocabLibraryClosingTimerRef.current = null
+    }
+    setVocabLibrarySearch('')
+    setVocabLibraryItems([])
+    setVocabLibraryState('loading')
+    setRemovingVocabLemmaLowers(new Set())
+    setIsVocabLibraryMounted(true)
+    setIsVocabLibraryClosing(false)
+    setIsVocabLibraryOpen(true)
+  }, [])
+
+  /** 关闭全部生词覆盖层，保留复习队列和当前位置 */
+  const closeVocabLibrary = useCallback((): void => {
+    setIsVocabLibraryClosing(true)
+    setIsVocabLibraryOpen(false)
+    if (vocabLibraryClosingTimerRef.current) {
+      clearTimeout(vocabLibraryClosingTimerRef.current)
+    }
+    vocabLibraryClosingTimerRef.current = setTimeout(() => {
+      setIsVocabLibraryMounted(false)
+      setIsVocabLibraryClosing(false)
+      vocabLibraryClosingTimerRef.current = null
+    }, 100)
+  }, [])
+
+  // 打开期间读取完整生词库；搜索只在已读取的本地数组上过滤
+  useEffect(() => {
+    if (!isVocabLibraryOpen) return
+
+    let cancelled = false
+    setVocabLibraryState('loading')
+    void getVocabItems()
+      .then((items) => {
+        if (cancelled) return
+        setVocabLibraryItems(items)
+        setVocabItemCount(items.length)
+        setVocabLibraryState('ready')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.warn('[renderer] 读取生词列表失败:', error)
+        setVocabLibraryState('error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isVocabLibraryOpen])
+
+  // Esc 两段行为：有搜索词时先清空，搜索为空时才关闭覆盖层
+  useEffect(() => {
+    if (!isVocabLibraryOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+
+      event.preventDefault()
+      event.stopPropagation()
+      if (vocabLibrarySearch.length > 0) {
+        setVocabLibrarySearch('')
+        return
+      }
+      closeVocabLibrary()
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [closeVocabLibrary, isVocabLibraryOpen, vocabLibrarySearch])
 
   // 毫秒级根据输入文本自动检测语言
   const detectedInfo = useMemo(() => {
@@ -1377,6 +1425,18 @@ function App(): React.JSX.Element {
   const useLearningLayout = isLearningActive && hasSourceText
   // 只有复习主视图会加载闪卡
   const isVocabReviewVisible = isReviewActive
+  // 搜索只在已加载的生词数组内做本地筛选
+  const filteredVocabLibraryItems = useMemo(
+    () => filterVocabItems(vocabLibraryItems, vocabLibrarySearch),
+    [vocabLibraryItems, vocabLibrarySearch]
+  )
+
+  // 快捷入口或模式切换离开复习时，同步收起仍然挂载的生词列表
+  useEffect(() => {
+    if (!isReviewActive && isVocabLibraryOpen) {
+      closeVocabLibrary()
+    }
+  }, [closeVocabLibrary, isReviewActive, isVocabLibraryOpen])
 
   // 头部语言行：源语言名（自动模式下显示当前识别出的语言，识别不出就写"自动"）
   const sourceLanguageName = useMemo(() => {
@@ -1874,6 +1934,8 @@ function App(): React.JSX.Element {
   const syncWindowHeight = useCallback((): void => {
     // 展开与收起窗口期间只提交宽度，避免宽度刚变化又触发一次纵向跳动
     if (isStructureLayoutTransitioningRef.current) return
+    // 生词列表打开期间保持现有高度，不随列表条目减少或闪卡队列变化收缩
+    if (isVocabLibraryOpen) return
 
     const panel = deviceRef.current
     if (!panel) return
@@ -1986,13 +2048,49 @@ function App(): React.JSX.Element {
 
     lastSentHeightRef.current = nextWindowHeight
     void window.api.setWindowHeight(nextWindowHeight)
-  }, [isReviewActive, useLearningLayout, useStructureLayout, vocabFlashcardState, wordLookup])
+  }, [
+    isReviewActive,
+    isVocabLibraryOpen,
+    useLearningLayout,
+    useStructureLayout,
+    vocabFlashcardState,
+    wordLookup
+  ])
 
   // 窗口布局 Effect 只响应布局模式变化，始终通过 ref 调用最新的高度校准函数
   const syncWindowHeightRef = useRef(syncWindowHeight)
   useLayoutEffect(() => {
     syncWindowHeightRef.current = syncWindowHeight
   }, [syncWindowHeight])
+
+  // 打开生词列表时临时抬高窗口；覆盖层内的后续变化不会再次推进高度
+  useLayoutEffect(() => {
+    if (!isVocabLibraryOpen) return
+
+    const currentHeight =
+      deviceRef.current?.getBoundingClientRect().height ?? MAIN_WINDOW_HEIGHT_MIN
+    const targetHeight = Math.max(Math.ceil(currentHeight), VOCAB_LIBRARY_WINDOW_HEIGHT_MIN)
+    lastSentHeightRef.current = targetHeight
+    void window.api.setWindowHeight(targetHeight, true)
+  }, [isVocabLibraryOpen])
+
+  // 覆盖层关闭后，等复习视图重新露出再按当前闪卡重新测量
+  useEffect(() => {
+    if (isVocabLibraryOpen || !isReviewActive) return
+
+    let firstFrame = 0
+    let secondFrame = 0
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        syncWindowHeightRef.current()
+      })
+    })
+
+    return () => {
+      if (firstFrame) window.cancelAnimationFrame(firstFrame)
+      if (secondFrame) window.cancelAnimationFrame(secondFrame)
+    }
+  }, [isReviewActive, isVocabLibraryOpen])
 
   // 翻卡会替换闪卡节点；监听主体尺寸变化，确保每次按新卡片的真实高度校准窗口
   useEffect(() => {
@@ -2107,6 +2205,9 @@ function App(): React.JSX.Element {
     return () => {
       if (deckClosingTimerRef.current) {
         clearTimeout(deckClosingTimerRef.current)
+      }
+      if (vocabLibraryClosingTimerRef.current) {
+        clearTimeout(vocabLibraryClosingTimerRef.current)
       }
       if (structureCollapseTimerRef.current !== null) {
         window.clearTimeout(structureCollapseTimerRef.current)
@@ -2749,6 +2850,8 @@ function App(): React.JSX.Element {
   // 进入复习子视图时随机准备一组带语境的生词闪卡
   useEffect(() => {
     if (!isVocabReviewVisible) {
+      vocabFlashcardsRef.current = []
+      vocabFlashcardIndexRef.current = 0
       setVocabFlashcards([])
       setVocabFlashcardIndex(0)
       setVocabFlashcardState('hidden')
@@ -2756,6 +2859,8 @@ function App(): React.JSX.Element {
     }
 
     let cancelled = false
+    vocabFlashcardsRef.current = []
+    vocabFlashcardIndexRef.current = 0
     setVocabFlashcards([])
     setVocabFlashcardIndex(0)
     setVocabFlashcardState('loading')
@@ -2763,6 +2868,8 @@ function App(): React.JSX.Element {
     void getVocabFlashcards(VOCAB_FLASHCARD_LIMIT)
       .then((flashcards) => {
         if (cancelled) return
+        vocabFlashcardsRef.current = flashcards
+        vocabFlashcardIndexRef.current = 0
         setVocabFlashcards(flashcards)
         setVocabFlashcardState(flashcards.length > 0 ? 'ready' : 'empty')
       })
@@ -2776,6 +2883,64 @@ function App(): React.JSX.Element {
       cancelled = true
     }
   }, [isVocabReviewVisible])
+
+  /** 同步闪卡编号到 ref，保证连续移出时读取的不是上一次渲染的旧位置 */
+  const handleVocabFlashcardIndexChange = useCallback((nextIndex: number): void => {
+    vocabFlashcardIndexRef.current = nextIndex
+    setVocabFlashcardIndex(nextIndex)
+  }, [])
+
+  /** 从“我的生词”覆盖层移出词条，并同步更新复习队列与唯一词数 */
+  const handleRemoveVocabLibraryItem = useCallback(
+    async (item: VocabItem): Promise<void> => {
+      const lemmaLower = normalizeVocabLemma(item.lemma)
+      if (!lemmaLower || vocabRemovalInFlightRef.current.has(lemmaLower)) return
+
+      vocabRemovalInFlightRef.current.add(lemmaLower)
+      setRemovingVocabLemmaLowers((current) => new Set(current).add(lemmaLower))
+
+      try {
+        const removed = await removeVocabItem(item.lemma)
+        if (!removed) return
+
+        setVocabLibraryItems((current) =>
+          current.filter((candidate) => candidate.lemmaLower !== lemmaLower)
+        )
+
+        const nextQueue = removeVocabFlashcardFromQueue(
+          vocabFlashcardsRef.current,
+          vocabFlashcardIndexRef.current,
+          lemmaLower
+        )
+        vocabFlashcardsRef.current = nextQueue.cards
+        vocabFlashcardIndexRef.current = nextQueue.activeIndex
+        setVocabFlashcards(nextQueue.cards)
+        setVocabFlashcardIndex(nextQueue.activeIndex)
+        setVocabFlashcardState(nextQueue.cards.length > 0 ? 'ready' : 'empty')
+
+        setEncounterVocabItems((current) =>
+          current.filter((candidate) => candidate.lemmaLower !== lemmaLower)
+        )
+
+        const nextCount = await getVocabItemCount()
+        setVocabItemCount(nextCount)
+        if (nextCount === 0) {
+          // 最后一条被移出后直接回到复习空态，避免空白覆盖层挡住结果
+          closeVocabLibrary()
+        }
+      } catch (error) {
+        console.warn('[renderer] 从生词列表移除词条失败:', error)
+      } finally {
+        vocabRemovalInFlightRef.current.delete(lemmaLower)
+        setRemovingVocabLemmaLowers((current) => {
+          const next = new Set(current)
+          next.delete(lemmaLower)
+          return next
+        })
+      }
+    },
+    [closeVocabLibrary]
+  )
 
   /** 同步透明测量层尺寸与滚动位置，并缓存单词与整句的屏幕命中矩形 */
   const measureSourceHitBoxes = useCallback((): void => {
@@ -4440,22 +4605,26 @@ function App(): React.JSX.Element {
 
             {isReviewActive ? (
               <section className="review-view" aria-label="生词复习" ref={reviewViewRef}>
-                {vocabFlashcardState === 'ready' && vocabFlashcards.length > 0 ? (
-                  <VocabFlashcardCarousel
-                    cards={vocabFlashcards}
-                    activeIndex={Math.min(vocabFlashcardIndex, vocabFlashcards.length - 1)}
-                    onIndexChange={setVocabFlashcardIndex}
-                    autoAdvance={false}
-                  />
-                ) : vocabFlashcardState === 'loading' || vocabFlashcardState === 'hidden' ? (
-                  <div className="vocab-flashcard-loading" role="status" aria-live="polite">
-                    正在翻阅生词…
-                  </div>
-                ) : (
-                  <div className="vocab-review-empty" role="status" aria-live="polite">
-                    还没有收藏的生词，阅读时点击单词即可收藏
-                  </div>
-                )}
+                <div className="review-content">
+                  {vocabFlashcardState === 'ready' && vocabFlashcards.length > 0 ? (
+                    <VocabFlashcardCarousel
+                      cards={vocabFlashcards}
+                      activeIndex={Math.min(vocabFlashcardIndex, vocabFlashcards.length - 1)}
+                      onIndexChange={handleVocabFlashcardIndexChange}
+                      autoAdvance={false}
+                      showAllVocabLink={vocabItemCount > 0}
+                      onOpenVocabLibrary={openVocabLibrary}
+                    />
+                  ) : vocabFlashcardState === 'loading' || vocabFlashcardState === 'hidden' ? (
+                    <div className="vocab-flashcard-loading" role="status" aria-live="polite">
+                      正在翻阅生词…
+                    </div>
+                  ) : (
+                    <div className="vocab-review-empty" role="status" aria-live="polite">
+                      还没有收藏的生词，阅读时点击单词即可收藏
+                    </div>
+                  )}
+                </div>
               </section>
             ) : null}
           </div>
@@ -4538,6 +4707,90 @@ function App(): React.JSX.Element {
                 还没有启用任何服务商，点右上角「设置」去启用
               </div>
             )}
+          </div>
+        ) : null}
+
+        {/* 生词列表覆盖层：复用模型面板的全窗口覆盖、进出动画与关闭按钮 */}
+        {isVocabLibraryMounted ? (
+          <div
+            className={`terminal-engine-deck vocab-library-deck${
+              isVocabLibraryClosing ? ' terminal-engine-deck-closing' : ''
+            }`}
+            role="dialog"
+            aria-label="我的生词"
+          >
+            <div className="terminal-engine-deck-header">
+              <div className="terminal-engine-deck-title vocab-library-title">
+                {`我的生词 (${
+                  vocabLibraryState === 'ready' ? vocabLibraryItems.length : vocabItemCount
+                })`}
+              </div>
+              <button
+                type="button"
+                className="terminal-engine-deck-close"
+                onClick={closeVocabLibrary}
+                aria-label="关闭生词列表"
+                title="关闭生词列表"
+              >
+                ✕
+              </button>
+            </div>
+
+            <input
+              type="search"
+              className="vocab-library-search"
+              value={vocabLibrarySearch}
+              onChange={(event) => setVocabLibrarySearch(event.target.value)}
+              placeholder="搜索生词"
+              aria-label="搜索生词"
+              spellCheck={false}
+            />
+
+            <div
+              className="vocab-library-list"
+              role="list"
+              aria-label="生词列表"
+              aria-busy={vocabLibraryState === 'loading'}
+            >
+              {vocabLibraryState === 'loading' ? (
+                <div className="vocab-library-status" role="status" aria-live="polite">
+                  正在读取生词…
+                </div>
+              ) : vocabLibraryState === 'error' ? (
+                <div className="vocab-library-status" role="status" aria-live="polite">
+                  读取生词失败，请稍后重试
+                </div>
+              ) : vocabLibraryItems.length === 0 ? (
+                <div className="vocab-library-status" role="status" aria-live="polite">
+                  还没有收藏的生词，阅读时点击单词即可收藏
+                </div>
+              ) : filteredVocabLibraryItems.length === 0 ? (
+                <div className="vocab-library-status" role="status" aria-live="polite">
+                  没有匹配的生词
+                </div>
+              ) : (
+                filteredVocabLibraryItems.map((item) => {
+                  const isRemoving = removingVocabLemmaLowers.has(item.lemmaLower)
+                  return (
+                    <div className="vocab-library-item" role="listitem" key={item.lemmaLower}>
+                      <span className="vocab-library-word" title={item.lemma}>
+                        {item.lemma}
+                      </span>
+                      <span className="vocab-library-encounter">偶遇 {item.encounterCount} 次</span>
+                      <button
+                        type="button"
+                        className="vocab-library-remove"
+                        onClick={() => void handleRemoveVocabLibraryItem(item)}
+                        disabled={isRemoving}
+                        aria-label={`移出生词 ${item.lemma}`}
+                      >
+                        {isRemoving ? '移出中' : '移出'}
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         ) : null}
       </section>
