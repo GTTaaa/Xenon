@@ -20,6 +20,7 @@ import type { TranslateRequest, TranslateStreamDeltaEvent } from '../shared/tran
 import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
 import { DEFAULT_SHORTCUTS } from '../shared/config'
 import {
+  MAIN_WINDOW_HEIGHT_EMPTY,
   MAIN_WINDOW_HEIGHT_MIN,
   MAIN_WINDOW_WIDTH,
   NORMAL_WINDOW_HEIGHT_MAX
@@ -132,8 +133,8 @@ function createWindow(): void {
 
   const windowWidth = MAIN_WINDOW_WIDTH
   // 主窗口高度按内容浮动，上限保持紧凑，超出内容在译文区内部滚动
-  // 初始高度按空态算：1 行输入 + 译文区保底 4 行，渲染进程挂载后会再校准一次
-  const windowHeight = MAIN_WINDOW_HEIGHT_MIN
+  // 初始高度按空态计算，渲染进程挂载后会根据实际内容再次校准
+  const windowHeight = MAIN_WINDOW_HEIGHT_EMPTY
   // 小屏幕以系统可用工作区为硬上限，避免窗口底部工具行被推出屏幕
   const maxWindowHeight = Math.max(
     MAIN_WINDOW_HEIGHT_MIN,
@@ -152,7 +153,7 @@ function createWindow(): void {
     height: windowHeight,
     minWidth: MAIN_WINDOW_WIDTH,
     maxWidth: MAIN_WINDOW_WIDTH,
-    minHeight: MAIN_WINDOW_HEIGHT_MIN,
+    minHeight: MAIN_WINDOW_HEIGHT_EMPTY,
     maxHeight: maxWindowHeight,
     resizable: false,
     frame: false,

@@ -8,17 +8,20 @@ import {
   SUPPORTED_LANGUAGES,
   type SupportedLanguage
 } from '../../shared/languageDetector'
-import { MAIN_WINDOW_HEIGHT_MIN, NORMAL_WINDOW_HEIGHT_MAX } from '../../shared/windowLayout'
-import xenonMark from './assets/xenon-mark.svg'
+import {
+  MAIN_WINDOW_HEIGHT_EMPTY,
+  MAIN_WINDOW_HEIGHT_MIN,
+  NORMAL_WINDOW_HEIGHT_MAX
+} from '../../shared/windowLayout'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
-// 普通模式输入字号 14px × 行高 1.55，用来把输入内容高度换算成行数。
-const INPUT_LINE_HEIGHT = 21.7
+// 输入字号 12.5px × 行高 1.62，用来把输入内容高度换算成行数。
+const INPUT_LINE_HEIGHT = 20.25
 // 输入区最多长到 5 行，再多交给输入框自己滚动。
 const MAX_INPUT_LINES = 5
-// 译文最少铺 3 行（16px 字号 × 1.6 行高），避免短内容留下过多空白。
-const RESULT_MIN_HEIGHT = 16 * 1.6 * 3
+// 译文最少铺 3 行（18px 字号 × 1.68 行高），避免短内容留下过多空白。
+const RESULT_MIN_HEIGHT = 18 * 1.68 * 3
 
 /** 把模型服务错误转换成面向用户的简短提示 */
 const getUserFriendlyErrorMessage = (code: string): string => {
@@ -189,6 +192,8 @@ function App(): React.JSX.Element {
 
   const hasSourceText = sourceText.trim().length > 0
   const hasTargetText = targetText.trim().length > 0
+  const isBlankState =
+    !hasSourceText && !hasTargetText && status === 'idle' && !errorMessage && !isRecognizing
 
   const handleTogglePin = async (): Promise<void> => {
     try {
@@ -585,7 +590,9 @@ function App(): React.JSX.Element {
       parseFloat(scrollStyle.paddingTop || '0') + parseFloat(scrollStyle.paddingBottom || '0')
 
     scroll.style.height = ''
-    const baseResultHeight = Math.max(RESULT_MIN_HEIGHT, scroll.scrollHeight - scrollPadding)
+    const baseResultHeight = isBlankState
+      ? 0
+      : Math.max(RESULT_MIN_HEIGHT, scroll.scrollHeight - scrollPadding)
     const body = panel.querySelector('.device-body')
     const bottomPadding = body ? parseFloat(getComputedStyle(body).paddingBottom || '0') : 0
     const toolbarHeight = toolbar.getBoundingClientRect().height
@@ -599,17 +606,15 @@ function App(): React.JSX.Element {
       scroll.style.height = `${resultHeight + scrollPadding}px`
     }
 
+    const minimumHeight = isBlankState ? MAIN_WINDOW_HEIGHT_EMPTY : MAIN_WINDOW_HEIGHT_MIN
     const nextWindowHeight = Math.round(
-      Math.max(
-        MAIN_WINDOW_HEIGHT_MIN,
-        Math.min(NORMAL_WINDOW_HEIGHT_MAX, fixedHeight + resultHeight)
-      )
+      Math.max(minimumHeight, Math.min(NORMAL_WINDOW_HEIGHT_MAX, fixedHeight + resultHeight))
     )
 
     if (Math.abs(lastSentHeightRef.current - nextWindowHeight) < 2) return
     lastSentHeightRef.current = nextWindowHeight
-    void window.api.setWindowHeight(nextWindowHeight)
-  }, [])
+    void window.api.setWindowHeight(nextWindowHeight, isBlankState)
+  }, [isBlankState])
 
   useLayoutEffect(() => {
     syncWindowHeight()
@@ -687,67 +692,7 @@ function App(): React.JSX.Element {
       <section className="device-panel">
         <header className="window-bar">
           <div className="window-bar-main">
-            <div className="app-identity" aria-label="Xenon 截图翻译">
-              <img className="app-identity-logo" src={xenonMark} alt="" aria-hidden="true" />
-              <span className="app-identity-name">Xenon</span>
-            </div>
-
-            <div className="window-actions">
-              <button
-                className="icon-btn settings-btn"
-                type="button"
-                aria-label="打开偏好设置"
-                title="偏好设置（Cmd+,）"
-                onClick={() => {
-                  setIsSourceLangMenuOpen(false)
-                  setIsTargetLangMenuOpen(false)
-                  closeModelMenu()
-                  void window.api.openConfigWindow()
-                }}
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M7.37506 3.98898C7.25044 4.06093 7.18813 4.0969 7.13585 4.1315C6.34815 4.65274 6.01706 5.6437 6.33322 6.53376C6.3542 6.59284 6.38237 6.65904 6.43871 6.79145L6.62174 7.2216C5.98033 7.94301 5.48186 8.79434 5.17077 9.73116L4.70884 9.78747C4.566 9.80488 4.49458 9.81359 4.43292 9.82495C3.50404 9.99618 2.81138 10.7784 2.75382 11.7212C2.75 11.7838 2.75 11.8557 2.75 11.9996C2.75 12.1435 2.75 12.2155 2.75382 12.278C2.81138 13.2208 3.50404 14.003 4.43292 14.1743C4.49458 14.1856 4.566 14.1943 4.70884 14.2117L5.1704 14.268C5.48144 15.2052 5.97999 16.0568 6.62157 16.7785L6.43873 17.2082C6.38239 17.3406 6.35422 17.4068 6.33324 17.4659C6.01708 18.3559 6.34817 19.3469 7.13587 19.8681C7.18815 19.9027 7.25046 19.9387 7.37508 20.0107C7.4997 20.0826 7.56201 20.1186 7.61811 20.1466C8.46337 20.5681 9.48712 20.3594 10.0998 19.6405C10.1405 19.5928 10.1838 19.5353 10.2703 19.4203L10.55 19.0484C11.0184 19.1442 11.5034 19.1946 12.0001 19.1946C12.4969 19.1946 12.9818 19.1442 13.4503 19.0484L13.7299 19.4201C13.8164 19.5351 13.8596 19.5926 13.9003 19.6403C14.513 20.3591 15.5368 20.5679 16.382 20.1463C16.4381 20.1184 16.5004 20.0824 16.6251 20.0104C16.7497 19.9385 16.812 19.9025 16.8643 19.8679C17.652 19.3467 17.9831 18.3557 17.6669 17.4657C17.6459 17.4066 17.6177 17.3404 17.5614 17.208L17.3786 16.7785C18.0202 16.0568 18.5188 15.2052 18.8298 14.268L19.2912 14.2117C19.434 14.1943 19.5054 14.1856 19.5671 14.1743C20.496 14.003 21.1886 13.2208 21.2462 12.278C21.25 12.2155 21.25 12.1435 21.25 11.9996C21.25 11.8557 21.25 11.7838 21.2462 11.7212C21.1886 10.7784 20.496 9.99618 19.5671 9.82495C19.5054 9.81359 19.434 9.80488 19.2912 9.78747L18.8294 9.73118C18.7517 9.49698 18.6622 9.26811 18.5617 9.04528C18.2601 8.37679 17.8594 7.76261 17.3784 7.22156L17.5613 6.7916C17.6176 6.65919 17.6458 6.59299 17.6668 6.53391C17.983 5.64385 17.6519 4.65289 16.8642 4.13165C16.8119 4.09705 16.7496 4.06107 16.625 3.98912C16.5003 3.91718 16.438 3.8812 16.3819 3.85322C15.5367 3.43168 14.5129 3.64043 13.9002 4.35925C13.8595 4.40697 13.8163 4.46447 13.7298 4.57946L13.4497 4.95176C12.9815 4.85594 12.4967 4.80569 12.0001 4.80569C11.5035 4.80569 11.0187 4.856 10.5504 4.95181L10.2702 4.57932C10.1837 4.46432 10.1405 4.40682 10.0998 4.35911C9.4871 3.64028 8.46335 3.43153 7.61809 3.85307C7.56199 3.88105 7.49968 3.91703 7.37506 3.98898Z" />
-                </svg>
-              </button>
-
-              <button
-                className={`icon-btn pin-btn${isPinned ? ' pin-btn-on' : ''}`}
-                type="button"
-                aria-label={isPinned ? '取消固定窗口' : '固定窗口置顶'}
-                title={isPinned ? '当前已置顶（点击取消）' : '点击置顶窗口'}
-                onClick={() => void handleTogglePin()}
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M8.375 15.625L12.2092 19.4592C13.3676 20.6175 15.351 19.9682 15.6001 18.3491L16.3396 13.5425C16.44 12.8901 16.8558 12.3292 17.4509 12.0435L20.2054 10.7214C21.4483 10.1248 21.729 8.47902 20.7542 7.50413L16.4959 3.24583C15.521 2.27093 13.8752 2.55164 13.2786 3.79458L11.9564 6.54908C11.6708 7.14417 11.1099 7.55999 10.4575 7.66036L5.65092 8.39984C4.03176 8.64894 3.38243 10.6324 4.54081 11.7908L8.375 15.625ZM8.375 15.625L3.75 20.25" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <div className="device-body">
-          <div className="reading-column">
-            <div className="language-bar">
+            <div className="header-language">
               <div className="lang-slot" ref={sourceLangSelectorRef}>
                 <button
                   type="button"
@@ -795,8 +740,8 @@ function App(): React.JSX.Element {
 
               <span className="flow-swap" aria-hidden="true">
                 <svg
-                  width="13"
-                  height="13"
+                  width="12"
+                  height="12"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -809,7 +754,7 @@ function App(): React.JSX.Element {
                 </svg>
               </span>
 
-              <div className="lang-slot lang-slot-target" ref={targetLangSelectorRef}>
+              <div className="lang-slot" ref={targetLangSelectorRef}>
                 <button
                   type="button"
                   className="lang-trigger"
@@ -870,6 +815,61 @@ function App(): React.JSX.Element {
               </div>
             </div>
 
+            <div className="window-actions">
+              <button
+                className="icon-btn settings-btn"
+                type="button"
+                aria-label="打开偏好设置"
+                title="偏好设置（Cmd+,）"
+                onClick={() => {
+                  setIsSourceLangMenuOpen(false)
+                  setIsTargetLangMenuOpen(false)
+                  closeModelMenu()
+                  void window.api.openConfigWindow()
+                }}
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M7.37506 3.98898C7.25044 4.06093 7.18813 4.0969 7.13585 4.1315C6.34815 4.65274 6.01706 5.6437 6.33322 6.53376C6.3542 6.59284 6.38237 6.65904 6.43871 6.79145L6.62174 7.2216C5.98033 7.94301 5.48186 8.79434 5.17077 9.73116L4.70884 9.78747C4.566 9.80488 4.49458 9.81359 4.43292 9.82495C3.50404 9.99618 2.81138 10.7784 2.75382 11.7212C2.75 11.7838 2.75 11.8557 2.75 11.9996C2.75 12.1435 2.75 12.2155 2.75382 12.278C2.81138 13.2208 3.50404 14.003 4.43292 14.1743C4.49458 14.1856 4.566 14.1943 4.70884 14.2117L5.1704 14.268C5.48144 15.2052 5.97999 16.0568 6.62157 16.7785L6.43873 17.2082C6.38239 17.3406 6.35422 17.4068 6.33324 17.4659C6.01708 18.3559 6.34817 19.3469 7.13587 19.8681C7.18815 19.9027 7.25046 19.9387 7.37508 20.0107C7.4997 20.0826 7.56201 20.1186 7.61811 20.1466C8.46337 20.5681 9.48712 20.3594 10.0998 19.6405C10.1405 19.5928 10.1838 19.5353 10.2703 19.4203L10.55 19.0484C11.0184 19.1442 11.5034 19.1946 12.0001 19.1946C12.4969 19.1946 12.9818 19.1442 13.4503 19.0484L13.7299 19.4201C13.8164 19.5351 13.8596 19.5926 13.9003 19.6403C14.513 20.3591 15.5368 20.5679 16.382 20.1463C16.4381 20.1184 16.5004 20.0824 16.6251 20.0104C16.7497 19.9385 16.812 19.9025 16.8643 19.8679C17.652 19.3467 17.9831 18.3557 17.6669 17.4657C17.6459 17.4066 17.6177 17.3404 17.5614 17.208L17.3786 16.7785C18.0202 16.0568 18.5188 15.2052 18.8298 14.268L19.2912 14.2117C19.434 14.1943 19.5054 14.1856 19.5671 14.1743C20.496 14.003 21.1886 13.2208 21.2462 12.278C21.25 12.2155 21.25 12.1435 21.25 11.9996C21.25 11.8557 21.25 11.7838 21.2462 11.7212C21.1886 10.7784 20.496 9.99618 19.5671 9.82495C19.5054 9.81359 19.434 9.80488 19.2912 9.78747L18.8294 9.73118C18.7517 9.49698 18.6622 9.26811 18.5617 9.04528C18.2601 8.37679 17.8594 7.76261 17.3784 7.22156L17.5613 6.7916C17.6176 6.65919 17.6458 6.59299 17.6668 6.53391C17.983 5.64385 17.6519 4.65289 16.8642 4.13165C16.8119 4.09705 16.7496 4.06107 16.625 3.98912C16.5003 3.91718 16.438 3.8812 16.3819 3.85322C15.5367 3.43168 14.5129 3.64043 13.9002 4.35925C13.8595 4.40697 13.8163 4.46447 13.7298 4.57946L13.4497 4.95176C12.9815 4.85594 12.4967 4.80569 12.0001 4.80569C11.5035 4.80569 11.0187 4.856 10.5504 4.95181L10.2702 4.57932C10.1837 4.46432 10.1405 4.40682 10.0998 4.35911C9.4871 3.64028 8.46335 3.43153 7.61809 3.85307C7.56199 3.88105 7.49968 3.91703 7.37506 3.98898Z" />
+                </svg>
+              </button>
+
+              <button
+                className={`icon-btn pin-btn${isPinned ? ' pin-btn-on' : ''}`}
+                type="button"
+                aria-label={isPinned ? '取消固定窗口' : '固定窗口置顶'}
+                title={isPinned ? '当前已置顶（点击取消）' : '点击置顶窗口'}
+                onClick={() => void handleTogglePin()}
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M8.375 15.625L12.2092 19.4592C13.3676 20.6175 15.351 19.9682 15.6001 18.3491L16.3396 13.5425C16.44 12.8901 16.8558 12.3292 17.4509 12.0435L20.2054 10.7214C21.4483 10.1248 21.729 8.47902 20.7542 7.50413L16.4959 3.24583C15.521 2.27093 13.8752 2.55164 13.2786 3.79458L11.9564 6.54908C11.6708 7.14417 11.1099 7.55999 10.4575 7.66036L5.65092 8.39984C4.03176 8.64894 3.38243 10.6324 4.54081 11.7908L8.375 15.625ZM8.375 15.625L3.75 20.25" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="device-body">
+          <div className="reading-column">
             <div className="reading-view">
               <div className="compose">
                 <div className="compose-stage">
@@ -892,9 +892,7 @@ function App(): React.JSX.Element {
                     <p className="result-error" role="status" aria-live="polite">
                       {errorMessage}
                     </p>
-                  ) : null}
-
-                  {isRecognizing ? (
+                  ) : isRecognizing ? (
                     <div className="result-pending" role="status" aria-live="polite">
                       <p>正在本地识别截图文字…</p>
                       {ocrSlowHint ? (
@@ -909,15 +907,15 @@ function App(): React.JSX.Element {
                       <span />
                       <span />
                     </div>
-                  ) : (
+                  ) : hasTargetText ? (
                     <p
-                      className={`result-text${targetText ? '' : ' result-placeholder'}${
-                        status === 'translating' && targetText ? ' result-text-streaming' : ''
+                      className={`result-text${
+                        status === 'translating' ? ' result-text-streaming' : ''
                       }`}
                     >
-                      {targetText || '译文会显示在这里'}
+                      {targetText}
                     </p>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="result-toolbar" ref={resultToolbarRef}>

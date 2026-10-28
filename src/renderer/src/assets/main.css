@@ -14,10 +14,11 @@
   --app-border: #e6e6ea;
   --app-divider: #e2e2e8;
 
-  /* 文本四级灰阶：近黑锚点 → 正文 → 译文 → 说明 → 弱化 */
+  /* 文本灰阶：近黑锚点 → 正文 → 译文 → 原文 → 说明 → 弱化 */
   --app-fg: #1c1c21;
   --app-fg-body: #5a5a62;
   --app-fg-read: #141418;
+  --app-fg-source: #72727a;
   --app-fg-muted: #8a8a92;
   --app-fg-faint: #b6b6be;
 
@@ -72,10 +73,12 @@ body {
 }
 
 /* ==========================================================================
-   头部第一行：产品字标 + 窗口操作
+   头部：语言流向 + 窗口操作
    ========================================================================== */
 
 .window-bar {
+  position: relative;
+  z-index: 10;
   flex-shrink: 0;
   /* 顶部留白 12.7px + 24px 控制行，保持第一行与窗口顶边的既有视觉节奏 */
   padding: 12.7px 15px 0;
@@ -83,6 +86,7 @@ body {
 }
 
 .window-bar-main {
+  position: relative;
   display: flex;
   min-height: 24px;
   align-items: center;
@@ -90,27 +94,14 @@ body {
   gap: 8px;
 }
 
-/* 公开版复用 macOS 菜单栏的气泡标记，与顶部常驻图标保持一致 */
-.app-identity {
-  display: inline-flex;
+/* 语言选择替代品牌字标，与设置、置顶共用同一条窗口工具行 */
+.header-language {
+  flex: 1 1 auto;
+  display: flex;
   min-width: 0;
   align-items: center;
-  gap: 7px;
-  -webkit-app-region: no-drag;
-}
-
-.app-identity-logo {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-}
-
-.app-identity-name {
-  color: var(--app-fg);
-  font-size: 11.5px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  line-height: 24px;
+  gap: 4px;
+  -webkit-app-region: drag;
 }
 
 .window-actions {
@@ -124,21 +115,8 @@ body {
 }
 
 /* ==========================================================================
-   头部第二行：仅位于右侧 358px 阅读列内的语言流向
+   顶栏语言流向与语言下拉
    ========================================================================== */
-
-.language-bar {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  column-gap: 3px;
-  height: 28px;
-  /* 与第一行相距 6px；下方 10px 延续原先正文顶部留白 */
-  margin: 6px 0 10px;
-  position: relative;
-  -webkit-app-region: no-drag;
-}
 
 .lang-slot {
   display: flex;
@@ -147,14 +125,10 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.lang-slot-target {
-  justify-content: flex-end;
-}
-
 .lang-trigger {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
+  gap: 3px;
   max-width: 100%;
   padding: 0;
   margin: 0;
@@ -162,15 +136,15 @@ body {
   background: transparent;
   color: inherit;
   font: inherit;
-  /* 第二行固定 28px，语言名称成为顶部区域的视觉重点 */
-  line-height: 28px;
+  /* 与 24px 窗口操作行共用基线，不再额外占据一行高度 */
+  line-height: 24px;
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
 .lang-name {
   overflow: hidden;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   line-height: inherit;
   color: var(--app-fg);
@@ -178,11 +152,12 @@ body {
   text-overflow: ellipsis;
 }
 
-/* 次级信息（自动检测）：10.5px 灰字，不加底板，避免出现第二层"药丸" */
+/* 次级信息（自动检测）：9.5px 灰字，不压过语言名称 */
 .lang-sub {
-  font-size: 10.5px;
+  margin-left: 2px;
+  font-size: 9.5px;
   font-weight: 400;
-  /* 行高压到 1，避免辅助文字撑高第二行的 28px 行盒 */
+  /* 行高压到 1，避免辅助文字撑高 24px 工具行 */
   line-height: 1;
   color: #a4a4ac;
   white-space: nowrap;
@@ -196,19 +171,17 @@ body {
 .flow-swap {
   display: inline-flex;
   flex-shrink: 0;
-  margin: 0 3px;
+  margin: 0 1px;
   /* 箭头不参与行盒高度计算，避免语言行因 svg 基线多出 0.4px */
   line-height: 0;
   color: #bcbcc4;
+  transform: scale(0.88);
 }
-
-/* 顶部模式切换：靠左放置，与右侧窗口操作区分开 */
-/* ---------- 语言下拉：浮层列表（替代旧磁带滑轨） ---------- */
 
 .lang-menu {
   position: absolute;
+  /* 语言浮层以整条窗口工具行为锚点，保持原来的双列宽度 */
   top: calc(100% + 8px);
-  /* 语言行本身已位于 15px 正文内边距中，浮层贴住语言行左右边线 */
   left: 0;
   right: 0;
   z-index: 30;
@@ -341,8 +314,8 @@ body {
   display: flex;
   flex-direction: column;
   /*
-   * 语言行已放在阅读列内部，顶部 10px 留白由语言行的下外边距承担。
-   * 底边距取 7px：底部工具行的图标墨迹正好落在距窗口下边 15px 的同一网格线上。
+   * 语言行已经并入顶栏，正文从输入区直接开始。
+   * 底边距取 7px：底部工具行的图标墨迹落在距窗口下边 15px 的网格线上。
    */
   padding: 0 15px 7px;
 }
@@ -365,33 +338,33 @@ body {
 
 .compose {
   flex: 0 0 auto;
-  padding-bottom: 9px;
-  border-bottom: 1px solid var(--app-divider);
+  /* 原文与译文只靠字阶和留白分层，不再额外画一条竞争注意力的分隔线。 */
+  padding: 3px 0 0;
 }
 
 .compose-stage {
   position: relative;
 }
 
-/* 输入框本体就是一段普通文字：高度随内容长到 5 行（108.5px）封顶，再多交给它自己滚动 */
+/* 输入框本体就是一段普通文字：最多显示 5 行，更多内容交给输入框自己滚动 */
 .compose-input {
   position: relative;
   z-index: 0;
   display: block;
   width: 100%;
-  height: 22px;
-  min-height: 22px;
-  /* 留 2.5px 余量：5 行内容正好 108.5px，卡着上限会因次像素舍入冒出滚动条 */
-  max-height: 111px;
+  height: 20.25px;
+  min-height: 20.25px;
+  /* 留 2.5px 余量：5 行内容正好 101.25px，避免次像素舍入冒出滚动条 */
+  max-height: 104px;
   overflow-y: auto;
   padding: 0;
   margin: 0;
   border: 0;
   background: transparent;
-  color: var(--app-fg-body);
+  color: var(--app-fg-source);
   font-family: inherit;
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 12.5px;
+  line-height: 1.62;
   resize: none;
   caret-color: var(--app-fg);
   -webkit-app-region: no-drag;
@@ -434,7 +407,7 @@ body {
   flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 0 2px;
+  padding: 17px 0 2px;
 }
 
 .result-scroll::-webkit-scrollbar {
@@ -450,13 +423,13 @@ body {
   border-radius: 3px;
 }
 
-/* 译文：比原文稍大，但缩小到 16px，避免普通模式上下字号跨度过于突兀 */
+/* 译文是唯一的主阅读层；原文只保留上下文，不参与视觉主导。 */
 .result-text {
   margin: 0;
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 1.6;
-  letter-spacing: -0.2px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.68;
+  letter-spacing: -0.32px;
   color: var(--app-fg-read);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -484,11 +457,6 @@ body {
   100% {
     opacity: 0.2;
   }
-}
-
-.result-placeholder {
-  font-weight: 400;
-  color: #b0b0b8;
 }
 
 /* 截图 OCR 进行中的占位提示：与译文同字号，避免识别时译文区空白导致误判为卡死 */
