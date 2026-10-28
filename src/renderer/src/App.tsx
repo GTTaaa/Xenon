@@ -9,6 +9,7 @@ import {
   type SupportedLanguage
 } from '../../shared/languageDetector'
 import { MAIN_WINDOW_HEIGHT_MIN, NORMAL_WINDOW_HEIGHT_MAX } from '../../shared/windowLayout'
+import xenonMark from './assets/xenon-mark.svg'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
@@ -687,8 +688,8 @@ function App(): React.JSX.Element {
         <header className="window-bar">
           <div className="window-bar-main">
             <div className="app-identity" aria-label="Xenon 截图翻译">
-              <span className="app-identity-mark">Xenon</span>
-              <span className="app-identity-mode">截图翻译</span>
+              <img className="app-identity-logo" src={xenonMark} alt="" aria-hidden="true" />
+              <span className="app-identity-name">Xenon</span>
             </div>
 
             <div className="window-actions">

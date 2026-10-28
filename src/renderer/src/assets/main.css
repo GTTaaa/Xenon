@@ -90,7 +90,7 @@ body {
   gap: 8px;
 }
 
-/* 公开版没有模式切换，用紧凑字标保留窗口身份与产品气质 */
+/* 公开版使用简化应用图标与字标保留窗口身份，不再重复说明功能模式 */
 .app-identity {
   display: inline-flex;
   min-width: 0;
@@ -99,22 +99,19 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.app-identity-mark {
-  color: var(--app-fg);
-  font-family: var(--app-mono);
-  font-size: 10.5px;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  line-height: 24px;
+.app-identity-logo {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 1px 1px rgba(21, 31, 17, 0.08));
 }
 
-.app-identity-mode {
-  padding-left: 7px;
-  border-left: 1px solid var(--app-divider);
-  color: var(--app-fg-faint);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  line-height: 1;
+.app-identity-name {
+  color: var(--app-fg);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 24px;
 }
 
 .window-actions {
