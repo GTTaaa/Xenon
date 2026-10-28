@@ -1358,7 +1358,7 @@ export const ConfigPage = (): React.JSX.Element => {
             onClick={handleSaveAll}
             disabled={isSaving}
           >
-            {isSaving ? '正在保存...' : '保存所有设置'}
+            {isSaving ? '正在保存...' : '保存'}
           </button>
         </div>
       </footer>
@@ -1746,18 +1746,10 @@ export const ConfigPage = (): React.JSX.Element => {
               <div className="pref-modal-footer-btns">
                 <button
                   type="button"
-                  className="pref-btn pref-btn-cancel"
+                  className="pref-btn pref-btn-save"
                   onClick={() => setIsProviderDialogOpen(false)}
                 >
                   完成
-                </button>
-                <button
-                  type="button"
-                  className="pref-btn pref-btn-save"
-                  onClick={handleSaveAll}
-                  disabled={isSaving}
-                >
-                  {isSaving ? '正在保存...' : '保存所有设置'}
                 </button>
               </div>
             </div>
