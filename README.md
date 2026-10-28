@@ -6,11 +6,11 @@
 
 截图翻译只是入口。Xenon 把任意屏幕上的英文内容，变成可对照、可拆解、可收藏、可复习的双语阅读材料。
 
-[![macOS 12+](https://img.shields.io/badge/macOS-12%2B-111111?style=flat-square&logo=apple)](https://www.apple.com/macos/)
-[![React 19](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=111111)](https://react.dev/)
+[![macOS 12+](https://img.shields.io/badge/macOS-12%2B-24292e?style=flat-square&logo=apple&logoColor=white)](https://www.apple.com/macos/)
+[![React 19](https://img.shields.io/badge/React-19-149eca?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
 [![Electron 39](https://img.shields.io/badge/Electron-39-47848F?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![BYOK](https://img.shields.io/badge/AI-BYOK-8B6F47?style=flat-square)](https://github.com/GTTaaa/Xenon#支持的模型服务)
-[![MIT](https://img.shields.io/badge/License-MIT-E5E0D8?style=flat-square&logo=opensourceinitiative&logoColor=111111)](LICENSE)
+[![BYOK](https://img.shields.io/badge/AI-BYOK-528265?style=flat-square&logoColor=white)](https://github.com/GTTaaa/Xenon#支持的模型服务)
+[![MIT](https://img.shields.io/badge/License-MIT-6B7280?style=flat-square&logo=opensourceinitiative&logoColor=white)](LICENSE)
 
 </div>
 
@@ -29,7 +29,7 @@ Xenon 还想继续回答三个问题：
 
 因此，Xenon 不是浏览器插件的桌面替代品，也不是只负责输出译文的翻译框，而是一套围绕真实英文材料搭建的精读工作流。
 
-### 三项核心能力
+### 四项核心能力
 
 #### 01 · 纯本地 macOS Swift Vision OCR
 
@@ -54,6 +54,12 @@ Xenon 还想继续回答三个问题：
 - 单词可收藏到本地生词库，并保留真实双语语境。
 - 已收录的词在后续文本中再次出现时，会自动累计「偶遇次数」。
 - 「复习」视图会从本地生词库抽取闪卡，以遮挡释义、悬停揭示、手动翻页的方式强化记忆。
+
+#### 04 · 杂志级纸白排版与无感常驻
+
+- 采用接近实体杂志排版的纸白配色与清晰的字阶梯度，视觉克制沉浸。
+- 默认 358px 紧凑窄窗贴靠屏幕右上角，支持快捷键瞬时呼出与一键置顶，不遮挡主阅读视线。
+- 展开整句结构时自适应延展，呈现清晰的双语分栏对照。
 
 ### 与其他工具的差异
 
@@ -190,7 +196,7 @@ flowchart LR
 | 层级     | 技术                                                    |
 | -------- | ------------------------------------------------------- |
 | 桌面壳层 | Electron 39 + electron-vite                             |
-| 界面     | React 19 + TypeScript + 原生 CSS                        |
+| 界面     | React 19 + TypeScript + 原生 CSS（现代纸白排版与自适应分栏） |
 | 状态管理 | React Hooks、组件状态、`localStorage`、IndexedDB        |
 | 原生 OCR | Swift + macOS Vision + 常驻 stdin/stdout 子进程         |
 | 模型接入 | OpenAI 兼容 Chat Completions、SSE 流式响应              |
