@@ -90,7 +90,7 @@ body {
   gap: 8px;
 }
 
-/* 公开版使用简化应用图标与字标保留窗口身份，不再重复说明功能模式 */
+/* 公开版复用 macOS 菜单栏的气泡标记，与顶部常驻图标保持一致 */
 .app-identity {
   display: inline-flex;
   min-width: 0;
@@ -103,7 +103,6 @@ body {
   width: 18px;
   height: 18px;
   flex: 0 0 auto;
-  filter: drop-shadow(0 1px 1px rgba(21, 31, 17, 0.08));
 }
 
 .app-identity-name {
