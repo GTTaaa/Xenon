@@ -1022,304 +1022,351 @@ export const ConfigPage = (): React.JSX.Element => {
           {/* ===================== 分类 2: 快捷键 (Shortcuts) ===================== */}
           {activeCategory === 'shortcuts' && (
             <div className="pref-panel-fade">
-              <section className="pref-card">
-                <div className="pref-card-header">
-                  <div className="pref-card-title-group">
-                    <h2 className="pref-card-title">全局呼出快捷键 (GLOBAL SHORTCUTS)</h2>
-                    <span className="pref-card-subtitle">
-                      在任何应用或前台全屏状态下，均可使用全局组合键呼出翻译功能
-                    </span>
+              <div className="pref-settings-bar">
+                <div className="pref-settings-bar-head">
+                  <span className="pref-settings-bar-title">全局呼出快捷键</span>
+                  <div className="pref-settings-bar-tools">
+                    <span className="pref-settings-count">3 项</span>
+                    <button
+                      type="button"
+                      className="pref-settings-action"
+                      onClick={() => {
+                        setShortcuts({ ...DEFAULT_SHORTCUTS })
+                        showFeedback('快捷键已重置为默认值')
+                      }}
+                    >
+                      恢复默认
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="pref-btn pref-btn-secondary"
-                    style={{ fontSize: '12px', padding: '4px 10px' }}
-                    onClick={() => {
-                      setShortcuts({ ...DEFAULT_SHORTCUTS })
-                      showFeedback('快捷键已重置为默认值')
-                    }}
-                  >
-                    恢复默认快捷键
-                  </button>
                 </div>
 
-                <div className="pref-fields-grid" style={{ marginTop: '6px' }}>
-                  {/* 截屏翻译 */}
-                  <div className="pref-field">
-                    <div className="pref-label-row">
-                      <label className="pref-label" htmlFor="sc-screenshot">
-                        截屏识别翻译
-                      </label>
-                      <span className="pref-shortcut-tip">推荐: Alt+S 或 Option+S</span>
-                    </div>
-                    <div className="pref-shortcut-input-group">
-                      <input
-                        id="sc-screenshot"
-                        type="text"
-                        className="pref-input"
-                        value={shortcuts.screenshot}
-                        onChange={(e) =>
-                          setShortcuts((prev) => ({ ...prev, screenshot: e.target.value.trim() }))
-                        }
-                        placeholder="例如: Alt+S 或 CommandOrControl+Shift+S"
-                        spellCheck={false}
-                      />
-                      <div className="pref-quick-chips">
-                        {['Alt+S', 'CommandOrControl+Shift+S', 'Alt+Shift+S'].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            className="pref-preset-chip"
-                            onClick={() =>
-                              setShortcuts((prev) => ({ ...prev, screenshot: preset }))
-                            }
-                          >
-                            {preset}
-                          </button>
-                        ))}
+                <div className="pref-settings-group">
+                  <div className="pref-settings-group-title">快捷键映射 · 3</div>
+                  <div className="pref-settings-list">
+                    {/* 截屏翻译 */}
+                    <div className="pref-settings-row">
+                      <div className="pref-settings-row-head">
+                        <div className="pref-settings-copy">
+                          <label className="pref-settings-name" htmlFor="sc-screenshot">
+                            截屏识别翻译
+                          </label>
+                          <span className="pref-settings-sub">
+                            框选屏幕区域，本地识别后直接生成译文
+                          </span>
+                        </div>
+                        <span className="pref-shortcut-tip">推荐: Alt+S 或 Option+S</span>
+                      </div>
+                      <div className="pref-shortcut-input-group">
+                        <input
+                          id="sc-screenshot"
+                          type="text"
+                          className="pref-input pref-settings-input"
+                          value={shortcuts.screenshot}
+                          onChange={(e) =>
+                            setShortcuts((prev) => ({
+                              ...prev,
+                              screenshot: e.target.value.trim()
+                            }))
+                          }
+                          placeholder="例如: Alt+S 或 CommandOrControl+Shift+S"
+                          spellCheck={false}
+                        />
+                        <div className="pref-quick-chips">
+                          {['Alt+S', 'CommandOrControl+Shift+S', 'Alt+Shift+S'].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              className="pref-preset-chip"
+                              onClick={() =>
+                                setShortcuts((prev) => ({ ...prev, screenshot: preset }))
+                              }
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* 输入翻译 */}
-                  <div className="pref-field">
-                    <div className="pref-label-row">
-                      <label className="pref-label" htmlFor="sc-input">
-                        呼出输入翻译窗口
-                      </label>
-                      <span className="pref-shortcut-tip">推荐: Alt+A 或 Option+A</span>
+                    {/* 输入翻译 */}
+                    <div className="pref-settings-row">
+                      <div className="pref-settings-row-head">
+                        <div className="pref-settings-copy">
+                          <label className="pref-settings-name" htmlFor="sc-input">
+                            呼出输入翻译窗口
+                          </label>
+                          <span className="pref-settings-sub">
+                            快速呼出输入框，粘贴或键入文本后立即翻译
+                          </span>
+                        </div>
+                        <span className="pref-shortcut-tip">推荐: Alt+A 或 Option+A</span>
+                      </div>
+                      <div className="pref-shortcut-input-group">
+                        <input
+                          id="sc-input"
+                          type="text"
+                          className="pref-input pref-settings-input"
+                          value={shortcuts.inputTranslate}
+                          onChange={(e) =>
+                            setShortcuts((prev) => ({
+                              ...prev,
+                              inputTranslate: e.target.value.trim()
+                            }))
+                          }
+                          placeholder="例如: Alt+A 或 CommandOrControl+Shift+A"
+                          spellCheck={false}
+                        />
+                        <div className="pref-quick-chips">
+                          {['Alt+A', 'CommandOrControl+Shift+A', 'Alt+Space'].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              className="pref-preset-chip"
+                              onClick={() =>
+                                setShortcuts((prev) => ({ ...prev, inputTranslate: preset }))
+                              }
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <div className="pref-shortcut-input-group">
+
+                    {/* 偏好设置窗口 */}
+                    <div className="pref-settings-row">
+                      <div className="pref-settings-row-head">
+                        <div className="pref-settings-copy">
+                          <label className="pref-settings-name" htmlFor="sc-pref">
+                            打开偏好设置
+                          </label>
+                          <span className="pref-settings-sub">
+                            打开当前窗口，调整模型、快捷键与翻译行为
+                          </span>
+                        </div>
+                        <span className="pref-shortcut-tip">通用规范: CommandOrControl+,</span>
+                      </div>
                       <input
-                        id="sc-input"
+                        id="sc-pref"
                         type="text"
-                        className="pref-input"
-                        value={shortcuts.inputTranslate}
+                        className="pref-input pref-settings-input"
+                        value={shortcuts.openPreferences}
                         onChange={(e) =>
                           setShortcuts((prev) => ({
                             ...prev,
-                            inputTranslate: e.target.value.trim()
+                            openPreferences: e.target.value.trim()
                           }))
                         }
-                        placeholder="例如: Alt+A 或 CommandOrControl+Shift+A"
+                        placeholder="CommandOrControl+,"
                         spellCheck={false}
                       />
-                      <div className="pref-quick-chips">
-                        {['Alt+A', 'CommandOrControl+Shift+A', 'Alt+Space'].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            className="pref-preset-chip"
-                            onClick={() =>
-                              setShortcuts((prev) => ({ ...prev, inputTranslate: preset }))
-                            }
-                          >
-                            {preset}
-                          </button>
-                        ))}
-                      </div>
                     </div>
-                  </div>
-
-                  {/* 偏好设置窗口 */}
-                  <div className="pref-field">
-                    <div className="pref-label-row">
-                      <label className="pref-label" htmlFor="sc-pref">
-                        打开偏好设置
-                      </label>
-                      <span className="pref-shortcut-tip">通用规范: CommandOrControl+,</span>
-                    </div>
-                    <input
-                      id="sc-pref"
-                      type="text"
-                      className="pref-input"
-                      value={shortcuts.openPreferences}
-                      onChange={(e) =>
-                        setShortcuts((prev) => ({
-                          ...prev,
-                          openPreferences: e.target.value.trim()
-                        }))
-                      }
-                      placeholder="CommandOrControl+,"
-                      spellCheck={false}
-                    />
                   </div>
                 </div>
-              </section>
+              </div>
             </div>
           )}
 
           {/* ===================== 分类 3: 翻译偏好 (Translation) ===================== */}
           {activeCategory === 'translation' && (
             <div className="pref-panel-fade">
-              <section className="pref-card">
-                <div className="pref-card-header">
-                  <div className="pref-card-title-group">
-                    <h2 className="pref-card-title">翻译与交互行为 (TRANSLATION BEHAVIOR)</h2>
-                    <span className="pref-card-subtitle">
-                      定制默认目标语言、自动剪贴板同步及大模型提示词微调
-                    </span>
+              <div className="pref-settings-bar">
+                <div className="pref-settings-bar-head">
+                  <span className="pref-settings-bar-title">翻译偏好</span>
+                  <div className="pref-settings-bar-tools">
+                    <span className="pref-settings-count">3 项</span>
                   </div>
                 </div>
 
-                <div className="pref-fields-grid" style={{ marginTop: '6px' }}>
-                  {/* 默认目标语言 */}
-                  <div className="pref-field">
-                    <label className="pref-label" htmlFor="pref-target-lang">
-                      默认翻译目标语言
-                    </label>
-                    <select
-                      id="pref-target-lang"
-                      className="pref-input pref-select"
-                      value={translation.defaultTargetLanguage}
-                      onChange={(e) =>
+                <div className="pref-settings-group">
+                  <div className="pref-settings-group-title">翻译行为 · 3</div>
+                  <div className="pref-settings-list">
+                    {/* 默认目标语言 */}
+                    <div className="pref-settings-row pref-settings-row-inline">
+                      <div className="pref-settings-copy">
+                        <label className="pref-settings-name" htmlFor="pref-target-lang">
+                          默认翻译目标语言
+                        </label>
+                        <span className="pref-settings-sub">
+                          未识别源语言时，译文默认输出到该语言
+                        </span>
+                      </div>
+                      <select
+                        id="pref-target-lang"
+                        className="pref-input pref-select pref-settings-select"
+                        value={translation.defaultTargetLanguage}
+                        onChange={(e) =>
+                          setTranslation((prev) => ({
+                            ...prev,
+                            defaultTargetLanguage: e.target.value
+                          }))
+                        }
+                      >
+                        {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => (
+                          <option key={lang.code} value={lang.code}>
+                            {lang.label} ({lang.code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 自动复制结果到剪贴板 */}
+                    <div
+                      className="pref-settings-row pref-settings-row-inline pref-settings-switch-row"
+                      onClick={() =>
                         setTranslation((prev) => ({
                           ...prev,
-                          defaultTargetLanguage: e.target.value
+                          autoCopyResult: !prev.autoCopyResult
                         }))
                       }
                     >
-                      {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => (
-                        <option key={lang.code} value={lang.code}>
-                          {lang.label} ({lang.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* 自动复制结果到剪贴板 */}
-                  <div
-                    className="pref-switch-row"
-                    onClick={() =>
-                      setTranslation((prev) => ({ ...prev, autoCopyResult: !prev.autoCopyResult }))
-                    }
-                  >
-                    <div className="pref-switch-desc">
-                      <span className="pref-switch-name">翻译成功后自动复制到剪贴板</span>
-                      <span className="pref-switch-sub">
-                        开启后，截屏翻译或文本翻译完成时自动将目标译文写入系统剪贴板，无需手动点击复制
-                      </span>
+                      <div className="pref-settings-copy">
+                        <span className="pref-settings-name">翻译成功后自动复制到剪贴板</span>
+                        <span className="pref-settings-sub">
+                          截屏翻译或文本翻译完成时自动写入系统剪贴板，无需手动点击复制
+                        </span>
+                      </div>
+                      <div
+                        className={`pref-switch ${translation.autoCopyResult ? 'pref-switch-on' : ''}`}
+                      >
+                        <div className="pref-switch-thumb" />
+                      </div>
                     </div>
-                    <div
-                      className={`pref-switch ${translation.autoCopyResult ? 'pref-switch-on' : ''}`}
-                    >
-                      <div className="pref-switch-thumb" />
-                    </div>
-                  </div>
 
-                  {/* 自定义翻译系统提示词 */}
-                  <div className="pref-field" style={{ marginTop: '4px' }}>
-                    <div className="pref-label-row">
-                      <label className="pref-label" htmlFor="pref-prompt">
-                        自定义系统提示词 (SYSTEM PROMPT)
-                      </label>
-                      {translation.customSystemPrompt ? (
-                        <div className="pref-field-actions">
-                          <button
-                            type="button"
-                            className="pref-field-btn"
-                            onClick={() =>
-                              setTranslation((prev) => ({ ...prev, customSystemPrompt: '' }))
-                            }
-                          >
-                            恢复内置提示词
-                          </button>
+                    {/* 自定义翻译系统提示词 */}
+                    <div className="pref-settings-row">
+                      <div className="pref-settings-row-head">
+                        <div className="pref-settings-copy">
+                          <label className="pref-settings-name" htmlFor="pref-prompt">
+                            自定义系统提示词
+                          </label>
+                          <span className="pref-settings-sub">
+                            留空时使用内置格式保留指令；仅影响翻译模型，不修改原始文本
+                          </span>
                         </div>
-                      ) : null}
+                        {translation.customSystemPrompt ? (
+                          <div className="pref-field-actions">
+                            <button
+                              type="button"
+                              className="pref-field-btn"
+                              onClick={() =>
+                                setTranslation((prev) => ({ ...prev, customSystemPrompt: '' }))
+                              }
+                            >
+                              恢复内置提示词
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                      <textarea
+                        id="pref-prompt"
+                        className="pref-textarea pref-settings-textarea"
+                        rows={4}
+                        value={translation.customSystemPrompt || ''}
+                        onChange={(e) =>
+                          setTranslation((prev) => ({
+                            ...prev,
+                            customSystemPrompt: e.target.value
+                          }))
+                        }
+                        placeholder="留空时默认采用系统精密格式保留与纯净翻译指令；您也可输入如：'你是一名专业学术翻译专家，请将文本翻译为学术级专业术语，仅输出译文。'"
+                        spellCheck={false}
+                      />
                     </div>
-                    <textarea
-                      id="pref-prompt"
-                      className="pref-textarea"
-                      rows={4}
-                      value={translation.customSystemPrompt || ''}
-                      onChange={(e) =>
-                        setTranslation((prev) => ({ ...prev, customSystemPrompt: e.target.value }))
-                      }
-                      placeholder="留空时默认采用系统精密格式保留与纯净翻译指令；您也可输入如：'你是一名专业学术翻译专家，请将文本翻译为学术级专业术语，仅输出译文。'"
-                      spellCheck={false}
-                    />
                   </div>
                 </div>
-              </section>
+              </div>
             </div>
           )}
 
           {/* ===================== 分类 4: 通用设置 (General) ===================== */}
           {activeCategory === 'general' && (
             <div className="pref-panel-fade">
-              <section className="pref-card">
-                <div className="pref-card-header">
-                  <div className="pref-card-title-group">
-                    <h2 className="pref-card-title">系统与窗口行为 (SYSTEM & WINDOW)</h2>
-                    <span className="pref-card-subtitle">
-                      管理开机自动启动、主窗口悬浮层级与托盘驻留策略
-                    </span>
+              <div className="pref-settings-bar">
+                <div className="pref-settings-bar-head">
+                  <span className="pref-settings-bar-title">通用设置</span>
+                  <div className="pref-settings-bar-tools">
+                    <span className="pref-settings-count">3 项</span>
                   </div>
                 </div>
 
-                <div className="pref-fields-grid" style={{ marginTop: '6px' }}>
-                  {/* 开机自动启动 */}
-                  <div
-                    className="pref-switch-row"
-                    onClick={() =>
-                      setGeneral((prev) => ({ ...prev, launchAtLogin: !prev.launchAtLogin }))
-                    }
-                  >
-                    <div className="pref-switch-desc">
-                      <span className="pref-switch-name">开机自动启动 (Launch at Startup)</span>
-                      <span className="pref-switch-sub">
-                        随系统登录自动启动并在后台托盘静默就绪，随时按下快捷键即可调用
-                      </span>
+                <div className="pref-settings-group">
+                  <div className="pref-settings-group-title">系统与窗口 · 3</div>
+                  <div className="pref-settings-list">
+                    {/* 开机自动启动 */}
+                    <div
+                      className="pref-settings-row pref-settings-row-inline pref-settings-switch-row"
+                      onClick={() =>
+                        setGeneral((prev) => ({ ...prev, launchAtLogin: !prev.launchAtLogin }))
+                      }
+                    >
+                      <div className="pref-settings-copy">
+                        <span className="pref-settings-name">开机自动启动</span>
+                        <span className="pref-settings-sub">
+                          随系统登录自动启动并在后台静默就绪，随时按下快捷键即可调用
+                        </span>
+                      </div>
+                      <div
+                        className={`pref-switch ${general.launchAtLogin ? 'pref-switch-on' : ''}`}
+                      >
+                        <div className="pref-switch-thumb" />
+                      </div>
                     </div>
-                    <div className={`pref-switch ${general.launchAtLogin ? 'pref-switch-on' : ''}`}>
-                      <div className="pref-switch-thumb" />
-                    </div>
-                  </div>
 
-                  {/* 主窗口默认置顶 */}
-                  <div
-                    className="pref-switch-row"
-                    onClick={() =>
-                      setGeneral((prev) => ({ ...prev, alwaysOnTop: !prev.alwaysOnTop }))
-                    }
-                  >
-                    <div className="pref-switch-desc">
-                      <span className="pref-switch-name">主翻译窗口始终保持置顶</span>
-                      <span className="pref-switch-sub">
-                        开启后主掌机窗口浮动在所有应用程序之上，也可随时点击主界面右上角图钉按钮临时切换
-                      </span>
+                    {/* 主窗口默认置顶 */}
+                    <div
+                      className="pref-settings-row pref-settings-row-inline pref-settings-switch-row"
+                      onClick={() =>
+                        setGeneral((prev) => ({ ...prev, alwaysOnTop: !prev.alwaysOnTop }))
+                      }
+                    >
+                      <div className="pref-settings-copy">
+                        <span className="pref-settings-name">主翻译窗口始终保持置顶</span>
+                        <span className="pref-settings-sub">
+                          浮动在所有应用程序之上，也可随时点击主界面右上角图钉按钮临时切换
+                        </span>
+                      </div>
+                      <div className={`pref-switch ${general.alwaysOnTop ? 'pref-switch-on' : ''}`}>
+                        <div className="pref-switch-thumb" />
+                      </div>
                     </div>
-                    <div className={`pref-switch ${general.alwaysOnTop ? 'pref-switch-on' : ''}`}>
-                      <div className="pref-switch-thumb" />
-                    </div>
-                  </div>
 
-                  {/* 关闭主窗口时的行为 */}
-                  <div className="pref-field" style={{ marginTop: '4px' }}>
-                    <label className="pref-label">点击主窗口右上角关闭按钮时：</label>
-                    <div className="pref-radio-group">
-                      <label className="pref-radio-item">
-                        <input
-                          type="radio"
-                          name="closeAction"
-                          checked={general.closeAction === 'tray'}
-                          onChange={() => setGeneral((prev) => ({ ...prev, closeAction: 'tray' }))}
-                        />
-                        <span>最小化隐藏到系统托盘（推荐，保持快捷键随时可用）</span>
-                      </label>
-                      <label className="pref-radio-item">
-                        <input
-                          type="radio"
-                          name="closeAction"
-                          checked={general.closeAction === 'quit'}
-                          onChange={() => setGeneral((prev) => ({ ...prev, closeAction: 'quit' }))}
-                        />
-                        <span>彻底退出应用程序</span>
-                      </label>
+                    {/* 关闭主窗口时的行为 */}
+                    <div className="pref-settings-row">
+                      <div className="pref-settings-copy">
+                        <span className="pref-settings-name">关闭主窗口时</span>
+                        <span className="pref-settings-sub">
+                          决定点击主窗口右上角关闭按钮后的应用状态
+                        </span>
+                      </div>
+                      <div className="pref-radio-group">
+                        <label className="pref-radio-item">
+                          <input
+                            type="radio"
+                            name="closeAction"
+                            checked={general.closeAction === 'tray'}
+                            onChange={() =>
+                              setGeneral((prev) => ({ ...prev, closeAction: 'tray' }))
+                            }
+                          />
+                          <span>最小化隐藏到系统托盘（推荐，保持快捷键随时可用）</span>
+                        </label>
+                        <label className="pref-radio-item">
+                          <input
+                            type="radio"
+                            name="closeAction"
+                            checked={general.closeAction === 'quit'}
+                            onChange={() =>
+                              setGeneral((prev) => ({ ...prev, closeAction: 'quit' }))
+                            }
+                          />
+                          <span>彻底退出应用程序</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </section>
+              </div>
             </div>
           )}
         </main>

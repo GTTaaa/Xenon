@@ -1288,15 +1288,17 @@ body {
 }
 
 /* 服务商管理区：标题行（选择引导语 + 数量统计 + 添加渠道）与下方分组列表 */
-.pref-provider-bar {
+.pref-provider-bar,
+.pref-settings-bar {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
 }
 
-/* 标题行：左侧选择引导语，右侧统计与添加入口 */
-.pref-provider-bar-head {
+/* 标题行：左侧区块标题，右侧统计与操作入口 */
+.pref-provider-bar-head,
+.pref-settings-bar-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1304,7 +1306,8 @@ body {
   min-height: 26px;
 }
 
-.pref-provider-bar-title {
+.pref-provider-bar-title,
+.pref-settings-bar-title {
   /* 区块引导语：档位对齐顶栏 tab（12px / 500 / 字距 0 / 二级灰），不再做加宽字距 */
   font-size: 12px;
   font-weight: 500;
@@ -1312,13 +1315,15 @@ body {
   white-space: nowrap;
 }
 
-.pref-provider-bar-tools {
+.pref-provider-bar-tools,
+.pref-settings-bar-tools {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.pref-provider-count {
+.pref-provider-count,
+.pref-settings-count {
   font-weight: 400;
   font-size: 12px;
   color: var(--pref-text-muted);
@@ -1369,10 +1374,93 @@ body {
 }
 
 /* 分组标题：与"选择服务商"引导语同档（12px / 400 / 三级灰），靠灰度分层而不是字号 */
-.pref-provider-group-title {
+.pref-provider-group-title,
+.pref-settings-group-title {
   font-weight: 400;
   font-size: 12px;
   color: var(--pref-text-muted);
+}
+
+/* 设置分组：与 AI 模型页保持同一套「分组标题 + 浅灰卡片行」层级 */
+.pref-settings-group,
+.pref-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pref-settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--pref-card-border);
+  border-radius: var(--pref-radius-card);
+  background: var(--pref-card-bg);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.pref-settings-row:hover {
+  border-color: var(--pref-border-strong);
+}
+
+.pref-settings-row-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.pref-settings-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pref-settings-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pref-settings-name {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--pref-text-primary);
+}
+
+.pref-settings-sub {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--pref-text-muted);
+}
+
+.pref-settings-switch-row {
+  cursor: pointer;
+}
+
+.pref-settings-switch-row:hover {
+  background: var(--pref-card-hover-bg);
+}
+
+.pref-settings-input,
+.pref-settings-textarea {
+  width: 100%;
+}
+
+.pref-settings-textarea {
+  min-height: 78px;
+}
+
+.pref-settings-select {
+  flex: 0 0 178px;
+  width: 178px;
 }
 
 /*
@@ -1474,7 +1562,8 @@ body {
   height: 30px;
 }
 
-.pref-btn-add-provider {
+.pref-btn-add-provider,
+.pref-settings-action {
   height: 30px;
   padding: 0 12px;
   font-family: inherit;
@@ -1498,6 +1587,7 @@ body {
 }
 
 .pref-btn-add-provider:hover,
+.pref-settings-action:hover,
 .pref-btn-add-active {
   background: var(--pref-field-btn-hover-bg);
   border-color: var(--pref-accent);
