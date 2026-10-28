@@ -1,7 +1,7 @@
 {
   "name": "xenon",
   "version": "1.0.0",
-  "description": "Xenon — 面向开发者与深度阅读者的桌面双语精读工作站",
+  "description": "Xenon — 本地 OCR、流式译文的桌面截图翻译器",
   "main": "./out/main/index.js",
   "author": "GTTaaa",
   "license": "MIT",
@@ -28,7 +28,6 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "dexie": "^4.4.6",
     "dotenv": "^17.3.1"
   },
   "devDependencies": {

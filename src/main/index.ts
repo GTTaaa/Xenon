@@ -17,22 +17,14 @@ import icon from '../../resources/icon.png?asset'
 import trayIconTemplate2x from '../../resources/trayTemplate@2x.png?asset'
 import trayIconColor2x from '../../resources/xenon.png?asset'
 import type { TranslateRequest, TranslateStreamDeltaEvent } from '../shared/translate'
-import type { AlignTextRequest } from '../shared/textAlignment'
-import type { WordLookupRequest } from '../shared/wordLookup'
-import type { SentenceSyntaxRequest } from '../shared/sentenceSyntax'
 import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
 import { DEFAULT_SHORTCUTS } from '../shared/config'
 import {
-  LEARNING_WINDOW_WIDTH,
-  MAIN_WINDOW_HEIGHT_MAX,
   MAIN_WINDOW_HEIGHT_MIN,
   MAIN_WINDOW_WIDTH,
-  type WindowLayoutMode
+  NORMAL_WINDOW_HEIGHT_MAX
 } from '../shared/windowLayout'
 import { translateText } from './services/translator'
-import { alignText } from './services/aligner'
-import { lookupWord } from './services/wordLookup'
-import { analyzeSentenceSyntax } from './services/sentenceSyntax'
 import {
   fetchProviderModels,
   getLLMConfig,
@@ -55,7 +47,6 @@ let trayMenu: Menu | null = null
 let mainWindow: BrowserWindow | null = null
 let configWindow: BrowserWindow | null = null
 const activeTranslationControllers = new Map<string, AbortController>()
-const activeAlignmentControllers = new Map<string, AbortController>()
 
 // 标记应用是否正在退出
 // app.quit() 同样会触发窗口的 close 事件，若 close 处理器继续拦截，
@@ -140,13 +131,13 @@ function createWindow(): void {
   const { workArea } = primaryDisplay
 
   const windowWidth = MAIN_WINDOW_WIDTH
-  // 主窗口高度按内容浮动，上限需容纳学习模式的双栏 15 行与底部工具行
+  // 主窗口高度按内容浮动，上限保持紧凑，超出内容在译文区内部滚动
   // 初始高度按空态算：1 行输入 + 译文区保底 4 行，渲染进程挂载后会再校准一次
   const windowHeight = MAIN_WINDOW_HEIGHT_MIN
-  // 小屏幕以系统可用工作区为硬上限，避免 15 行布局把底部工具行推到屏幕外
+  // 小屏幕以系统可用工作区为硬上限，避免窗口底部工具行被推出屏幕
   const maxWindowHeight = Math.max(
     MAIN_WINDOW_HEIGHT_MIN,
-    Math.min(MAIN_WINDOW_HEIGHT_MAX, workArea.height)
+    Math.min(NORMAL_WINDOW_HEIGHT_MAX, workArea.height)
   )
 
   // 计算屏幕右上角坐标（完全贴合在屏幕工作区右上角，无缝紧贴右侧与顶部）
@@ -401,31 +392,8 @@ app.whenReady().then(async () => {
     }
   )
 
-  ipcMain.handle('translate:align', async (_, requestId: string, request: AlignTextRequest) => {
-    const controller = new AbortController()
-    activeAlignmentControllers.get(requestId)?.abort()
-    activeAlignmentControllers.set(requestId, controller)
-
-    try {
-      return await alignText(request, { signal: controller.signal })
-    } finally {
-      if (activeAlignmentControllers.get(requestId) === controller) {
-        activeAlignmentControllers.delete(requestId)
-      }
-    }
-  })
-
   ipcMain.on('translate:cancel', (_, requestId: string) => {
     activeTranslationControllers.get(requestId)?.abort()
-    activeAlignmentControllers.get(requestId)?.abort()
-  })
-
-  ipcMain.handle('translate:lookup-word', async (_, request: WordLookupRequest) => {
-    return await lookupWord(request)
-  })
-
-  ipcMain.handle('translate:analyze-syntax', async (_, request: SentenceSyntaxRequest) => {
-    return await analyzeSentenceSyntax(request.sentence, request.targetTranslation, request.options)
   })
 
   ipcMain.handle('config:get', async () => {
@@ -471,48 +439,12 @@ app.whenReady().then(async () => {
     return mainWindow.isAlwaysOnTop()
   })
 
-  // 学习模式需要更宽的并排阅读空间；窗口只切换一次宽度，视觉过渡交给页面内的左栏
-  ipcMain.handle(
-    'window:set-layout',
-    async (_, layout: WindowLayoutMode, allowCompactHeight = false) => {
-      if (!mainWindow || mainWindow.isDestroyed()) return
-
-      const nextWidth = layout === 'learning' ? LEARNING_WINDOW_WIDTH : MAIN_WINDOW_WIDTH
-      // 复习内容按自然高度显示；切换宽度时也不能被常规最小高度重新撑高
-      const minimumHeight = allowCompactHeight ? 0 : MAIN_WINDOW_HEIGHT_MIN
-      const bounds = mainWindow.getBounds()
-      const { workArea } = screen.getDisplayMatching(bounds)
-      const rightEdge = bounds.x + bounds.width
-      const fixedY = Math.max(workArea.y, bounds.y)
-      const maxHeight = Math.max(
-        MAIN_WINDOW_HEIGHT_MIN,
-        Math.min(MAIN_WINDOW_HEIGHT_MAX, workArea.height)
-      )
-
-      // macOS 会合并连续 setBounds，逐帧缩放在视觉上必然呈现台阶。
-      // 这里先放宽宽度约束，一次提交目标宽度，再用页面合成的左栏动画吸收视觉跳变。
-      mainWindow.setMinimumSize(MAIN_WINDOW_WIDTH, minimumHeight)
-      mainWindow.setMaximumSize(Math.max(MAIN_WINDOW_WIDTH, LEARNING_WINDOW_WIDTH), maxHeight)
-      mainWindow.setBounds(
-        {
-          x: Math.max(workArea.x, rightEdge - nextWidth),
-          y: fixedY,
-          width: nextWidth,
-          height: bounds.height
-        },
-        false
-      )
-      mainWindow.setMinimumSize(nextWidth, minimumHeight)
-      mainWindow.setMaximumSize(nextWidth, maxHeight)
-    }
-  )
-
   // 窗口高度实时同步设置，上限跟随创建窗口时为当前屏幕计算出的可用高度
   ipcMain.handle('window:set-height', (_, targetHeight: number, allowCompactHeight = false) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     const [width, currentHeight] = mainWindow.getContentSize()
     const [, maxHeight] = mainWindow.getMaximumSize()
-    // 普通阅读保留原有最小高度；复习闪卡按实际内容高度收缩，消除底部空白
+    // 允许窗口在内容极短时略低于常规下限，避免出现无法消除的空白
     const minimumHeight = allowCompactHeight ? 0 : MAIN_WINDOW_HEIGHT_MIN
     const clampedTargetHeight = Math.max(
       minimumHeight,

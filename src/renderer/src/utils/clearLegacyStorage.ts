@@ -18,7 +18,8 @@ const LEGACY_STORAGE_KEYS = [
   'xenon_pref_theme',
   'xenon_pref_theme_v2',
   'targetChipStyle',
-  'enableThinking'
+  'enableThinking',
+  'learningMode'
 ] as const
 
 /**

@@ -5,12 +5,8 @@ import type {
   TranslateResponse,
   TranslateStreamDeltaEvent
 } from '../shared/translate'
-import type { AlignTextRequest, AlignTextResponse } from '../shared/textAlignment'
-import type { WordLookupRequest, WordLookupResponse } from '../shared/wordLookup'
-import type { SentenceSyntaxRequest, SentenceSyntaxResponse } from '../shared/sentenceSyntax'
 import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
-import type { WindowLayoutMode } from '../shared/windowLayout'
 
 // 暴露给渲染进程的应用 API
 const api = {
@@ -28,17 +24,8 @@ const api = {
       .invoke('translate:text-stream', requestId, request)
       .finally(() => ipcRenderer.removeListener('translate:stream-delta', listener))
   },
-  alignText: (requestId: string, request: AlignTextRequest): Promise<AlignTextResponse> => {
-    return ipcRenderer.invoke('translate:align', requestId, request)
-  },
   cancelTranslation: (requestId: string): void => {
     ipcRenderer.send('translate:cancel', requestId)
-  },
-  lookupWord: (request: WordLookupRequest): Promise<WordLookupResponse> => {
-    return ipcRenderer.invoke('translate:lookup-word', request)
-  },
-  analyzeSentenceSyntax: (request: SentenceSyntaxRequest): Promise<SentenceSyntaxResponse> => {
-    return ipcRenderer.invoke('translate:analyze-syntax', request)
   },
   onFocusInput: (callback: () => void): (() => void) => {
     const listener = (): void => {
@@ -93,9 +80,6 @@ const api = {
   },
   setWindowHeight: (height: number, allowCompactHeight?: boolean): Promise<void> => {
     return ipcRenderer.invoke('window:set-height', height, allowCompactHeight)
-  },
-  setWindowLayout: (layout: WindowLayoutMode, allowCompactHeight?: boolean): Promise<void> => {
-    return ipcRenderer.invoke('window:set-layout', layout, allowCompactHeight)
   },
   openConfigWindow: (): Promise<void> => {
     return ipcRenderer.invoke('app:open-config')
