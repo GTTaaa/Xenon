@@ -1,9 +1,10 @@
 {
   "name": "xenon",
   "version": "1.0.0",
-  "description": "Xenon — 截图 OCR 与文本翻译桌面工具",
+  "description": "Xenon — 面向开发者与深度阅读者的桌面双语精读工作站",
   "main": "./out/main/index.js",
   "author": "GTTaaa",
+  "license": "MIT",
   "homepage": "https://github.com/GTTaaa/Xenon",
   "scripts": {
     "format": "prettier --write .",
