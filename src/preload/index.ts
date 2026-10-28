@@ -5,7 +5,12 @@ import type {
   TranslateResponse,
   TranslateStreamDeltaEvent
 } from '../shared/translate'
-import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
+import type {
+  AppLanguage,
+  AppSettings,
+  FetchModelsResult,
+  TestConnectionResult
+} from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
 
 // 暴露给渲染进程的应用 API
@@ -47,7 +52,11 @@ const api = {
   testConfig: (config: AppSettings): Promise<TestConnectionResult> => {
     return ipcRenderer.invoke('config:test', config)
   },
-  fetchModels: (params: { baseUrl: string; apiKey: string }): Promise<FetchModelsResult> => {
+  fetchModels: (params: {
+    baseUrl: string
+    apiKey: string
+    language?: AppLanguage
+  }): Promise<FetchModelsResult> => {
     return ipcRenderer.invoke('config:fetch-models', params)
   },
   toggleAlwaysOnTop: (): Promise<boolean> => {

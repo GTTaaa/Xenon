@@ -2,6 +2,7 @@ import { app, net } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type {
+  AppLanguage,
   AppSettings,
   FetchModelsResult,
   GeneralSettings,
@@ -17,6 +18,7 @@ import {
   DEFAULT_SHORTCUTS,
   DEFAULT_TRANSLATION_SETTINGS
 } from '../../shared/config'
+import { normalizeAppLanguage, translate } from '../../shared/i18n'
 import {
   SPEED_TEST_PROMPT,
   calculateTokensPerSecond,
@@ -148,6 +150,7 @@ export const sanitizeTranslationSettings = (
  */
 export const sanitizeGeneralSettings = (raw?: Partial<GeneralSettings>): GeneralSettings => {
   return {
+    language: normalizeAppLanguage(raw?.language),
     launchAtLogin:
       typeof raw?.launchAtLogin === 'boolean'
         ? raw.launchAtLogin
@@ -372,7 +375,13 @@ export const saveLLMConfig = async (
     console.error('[main] 保存系统偏好配置失败', error)
     return {
       ok: false,
-      error: error instanceof Error ? error.message : '保存配置失败'
+      error:
+        error instanceof Error
+          ? error.message
+          : translate(
+              normalizeAppLanguage(newConfig.general?.language),
+              'config.feedback.configSaveFailed'
+            )
     }
   }
 }
@@ -389,6 +398,14 @@ export const testLLMConnection = async (
   target: LLMConfig | ProviderItem
 ): Promise<TestConnectionResult> => {
   const startTime = Date.now()
+  const configTarget = target as LLMConfig & { general?: GeneralSettings }
+  const language = normalizeAppLanguage(
+    configTarget.general?.language ?? getLLMConfig().general?.language
+  )
+  const t = (
+    key: Parameters<typeof translate>[1],
+    params?: Parameters<typeof translate>[2]
+  ): string => translate(language, key, params)
 
   // 提取待测试的 baseUrl, apiKey 与 model
   let baseUrl = ''
@@ -422,14 +439,14 @@ export const testLLMConnection = async (
   if (!baseUrl) {
     return {
       ok: false,
-      message: '缺少服务地址 (Base URL)'
+      message: t('test.missingBaseUrl')
     }
   }
 
   if (!apiKey) {
     return {
       ok: false,
-      message: '缺少访问密钥 (API Key)'
+      message: t('test.missingApiKey')
     }
   }
 
@@ -487,7 +504,7 @@ export const testLLMConnection = async (
         )
         return {
           ok: true,
-          message: '连接成功，服务响应正常（该服务不支持流式输出，未测速）',
+          message: t('test.successNoStream'),
           latencyMs
         }
       }
@@ -501,7 +518,7 @@ export const testLLMConnection = async (
         clearTimeout(timeoutId)
         return {
           ok: true,
-          message: '连接成功，服务响应正常',
+          message: t('test.success'),
           latencyMs: Date.now() - startTime
         }
       }
@@ -520,7 +537,7 @@ export const testLLMConnection = async (
 
       return {
         ok: true,
-        message: '连接成功，服务响应正常',
+        message: t('test.success'),
         latencyMs: stats.totalMs,
         firstTokenMs: stats.firstTokenMs || undefined,
         outputTokens: stats.outputTokens || undefined,
@@ -558,7 +575,7 @@ export const testLLMConnection = async (
     if (response.status === 401) {
       return {
         ok: false,
-        message: '鉴权失败 (401)：API Key 无效或未授权',
+        message: t('test.auth401'),
         errorDetail: rawResponseText
       }
     }
@@ -566,7 +583,7 @@ export const testLLMConnection = async (
     if (response.status === 404) {
       return {
         ok: false,
-        message: '端点不存在 (404)：请检查 Base URL 是否正确',
+        message: t('test.notFound404'),
         errorDetail: rawResponseText
       }
     }
@@ -574,14 +591,17 @@ export const testLLMConnection = async (
     if (response.status === 429) {
       return {
         ok: false,
-        message: '速率超限或配额用尽 (429)',
+        message: t('test.rateLimit429'),
         errorDetail: rawResponseText
       }
     }
 
     return {
       ok: false,
-      message: `请求失败 (${response.status})${errorDetail ? `: ${errorDetail}` : ''}`,
+      message: t('test.requestFailed', {
+        status: response.status,
+        detail: errorDetail ? t('test.requestFailedDetail', { detail: errorDetail }) : ''
+      }),
       errorDetail: rawResponseText
     }
   } catch (error) {
@@ -591,17 +611,25 @@ export const testLLMConnection = async (
     if (error instanceof Error && error.name === 'AbortError') {
       return {
         ok: false,
-        message: `连接超时（${CONNECTION_TEST_TIMEOUT_MS / 1000}秒内未完成输出，请检查网络或代理）`
+        message: t('test.timeout', { seconds: CONNECTION_TEST_TIMEOUT_MS / 1000 })
       }
     }
 
     const cause = (error as { cause?: unknown })?.cause
-    const causeText = cause ? ` [原因: ${String(cause)}]` : ''
 
     return {
       ok: false,
       message:
-        error instanceof Error ? `连接异常: ${error.message}${causeText}` : '无法连接到模型服务',
+        error instanceof Error
+          ? t('test.connectionError', {
+              message: error.message,
+              cause: cause
+                ? t('test.cause', {
+                    cause: String(cause)
+                  })
+                : ''
+            })
+          : t('test.networkError'),
       errorDetail: error instanceof Error ? String(error.stack || error.message) : undefined
     }
   }
@@ -612,14 +640,21 @@ export const testLLMConnection = async (
  */
 export const fetchProviderModels = async ({
   baseUrl,
-  apiKey
+  apiKey,
+  language: requestedLanguage
 }: {
   baseUrl: string
   apiKey: string
+  language?: AppLanguage
 }): Promise<FetchModelsResult> => {
+  const language = normalizeAppLanguage(requestedLanguage ?? getLLMConfig().general?.language)
+  const t = (
+    key: Parameters<typeof translate>[1],
+    params?: Parameters<typeof translate>[2]
+  ): string => translate(language, key, params)
   const cleanBase = normalizeBaseUrl(baseUrl)
   if (!cleanBase) {
-    return { ok: false, error: 'Base URL 不能为空' }
+    return { ok: false, error: t('fetch.baseUrlEmpty') }
   }
 
   const endpoint = `${cleanBase}/models`
@@ -642,7 +677,7 @@ export const fetchProviderModels = async ({
 
     const rawText = await response.text()
     if (!response.ok) {
-      let failMsg = `服务商返回状态码 ${response.status}`
+      let failMsg = t('fetch.status', { status: response.status })
       try {
         const errObj = JSON.parse(rawText) as {
           error?: { message?: string } | string
@@ -669,7 +704,7 @@ export const fetchProviderModels = async ({
     } catch {
       return {
         ok: false,
-        error: '服务商返回的数据不是合法的 JSON 格式',
+        error: t('fetch.invalidJson'),
         errorDetail: rawText.slice(0, 300)
       }
     }
@@ -708,7 +743,7 @@ export const fetchProviderModels = async ({
     if (uniqueIds.length === 0) {
       return {
         ok: false,
-        error: '未能从响应中解析到任何有效模型 ID（请核对接口结构）',
+        error: t('fetch.noModels'),
         errorDetail: rawText.slice(0, 500)
       }
     }
@@ -723,12 +758,12 @@ export const fetchProviderModels = async ({
     if (error instanceof Error && error.name === 'AbortError') {
       return {
         ok: false,
-        error: '拉取模型超时（12秒内未收到响应，请检查网络或代理）'
+        error: t('fetch.timeout')
       }
     }
     return {
       ok: false,
-      error: error instanceof Error ? error.message : '网络请求失败',
+      error: error instanceof Error ? error.message : t('fetch.networkFailed'),
       errorDetail: error instanceof Error ? String(error.stack || error.message) : undefined
     }
   }

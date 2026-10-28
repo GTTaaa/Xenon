@@ -6,6 +6,12 @@
 export type LLMProviderType = 'openai-compatible' | 'mock'
 
 /**
+ * 应用界面语言。
+ * 当前仅提供简体中文与英文，后续扩展时可直接追加语言代码。
+ */
+export type AppLanguage = 'zh-CN' | 'en'
+
+/**
  * 单个厂商下的模型项配置
  */
 export interface ProviderModelItem {
@@ -146,6 +152,8 @@ export interface TranslationSettings {
  * 通用系统偏好设置
  */
 export interface GeneralSettings {
+  /** 应用界面语言 */
+  language: AppLanguage
   /** 是否开机自动启动 */
   launchAtLogin: boolean
   /** 主窗口是否始终置顶浮动 */
@@ -188,6 +196,7 @@ export const DEFAULT_TRANSLATION_SETTINGS: TranslationSettings = {
  * 默认通用系统设置
  */
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
+  language: 'zh-CN',
   launchAtLogin: false,
   alwaysOnTop: false,
   closeAction: 'tray'

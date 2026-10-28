@@ -13,6 +13,14 @@ import {
   MAIN_WINDOW_HEIGHT_MIN,
   NORMAL_WINDOW_HEIGHT_MAX
 } from '../../shared/windowLayout'
+import {
+  getLanguageLabel,
+  getLanguageShortLabel,
+  getProviderDisplayName,
+  normalizeAppLanguage,
+  type Translate
+} from '../../shared/i18n'
+import { useI18n } from './i18n/useI18n'
 
 type TranslateStatus = 'idle' | 'translating' | 'error'
 
@@ -24,26 +32,26 @@ const MAX_INPUT_LINES = 5
 const RESULT_MIN_HEIGHT = 18 * 1.68 * 3
 
 /** 把模型服务错误转换成面向用户的简短提示 */
-const getUserFriendlyErrorMessage = (code: string): string => {
+const getUserFriendlyErrorMessage = (code: string, t: Translate): string => {
   switch (code) {
     case 'CONFIG_MISSING_API_KEY':
-      return '请先在偏好设置中配置模型密钥'
+      return t('app.error.configApiKey')
     case 'CONFIG_MISSING_BASE_URL':
-      return '请先在偏好设置中配置模型服务地址'
+      return t('app.error.configBaseUrl')
     case 'HTTP_401':
-      return '模型服务鉴权失败，请检查密钥'
+      return t('app.error.auth')
     case 'HTTP_403':
-      return '当前模型服务拒绝访问'
+      return t('app.error.forbidden')
     case 'HTTP_429':
-      return '请求过于频繁，请稍后再试'
+      return t('app.error.rateLimit')
     case 'NETWORK_ERROR':
-      return '无法连接到模型服务'
+      return t('app.error.network')
     case 'EMPTY_RESPONSE':
-      return '模型没有返回可用结果'
+      return t('app.error.emptyResponse')
     case 'STREAM_ERROR':
-      return '模型流式响应异常，请重试'
+      return t('app.error.stream')
     default:
-      return '翻译失败，请重试'
+      return t('app.error.default')
   }
 }
 
@@ -66,13 +74,8 @@ const pickActiveProvider = (
   return enabled[0]
 }
 
-/** 语言名的极短中文显示，例如「英语 (English)」→「英语」 */
-function getShortLanguageLabel(code: SupportedLanguage): string {
-  if (code === 'auto') return '自动'
-  return getLanguageInfo(code).label.split(' (')[0]
-}
-
 function App(): React.JSX.Element {
+  const { language, setLanguage, t } = useI18n()
   const [sourceText, setSourceText] = useState('')
   const [targetText, setTargetText] = useState('')
   const [status, setStatus] = useState<TranslateStatus>('idle')
@@ -181,13 +184,15 @@ function App(): React.JSX.Element {
   }, [manualTargetLang, detectedInfo.detected, sourceLanguage])
 
   const sourceLanguageName = useMemo(() => {
-    if (sourceLanguage !== 'auto') return getShortLanguageLabel(sourceLanguage)
-    return sourceText.trim() ? getShortLanguageLabel(detectedInfo.detected) : '自动'
-  }, [sourceLanguage, sourceText, detectedInfo.detected])
+    if (sourceLanguage !== 'auto') return getLanguageShortLabel(language, sourceLanguage)
+    return sourceText.trim()
+      ? getLanguageShortLabel(language, detectedInfo.detected)
+      : t('common.auto')
+  }, [language, sourceLanguage, sourceText, detectedInfo.detected, t])
 
   const targetLanguageName = useMemo(
-    () => getShortLanguageLabel(effectiveTargetLang),
-    [effectiveTargetLang]
+    () => getLanguageShortLabel(language, effectiveTargetLang),
+    [language, effectiveTargetLang]
   )
 
   const hasSourceText = sourceText.trim().length > 0
@@ -270,6 +275,7 @@ function App(): React.JSX.Element {
 
         autoCopyRef.current = Boolean(config.translation?.autoCopyResult)
         setScreenshotShortcut(config.shortcuts?.screenshot || 'Alt+S')
+        setLanguage(normalizeAppLanguage(config.general?.language))
         if (typeof config.general?.alwaysOnTop === 'boolean') {
           setIsPinned(config.general.alwaysOnTop)
         }
@@ -277,7 +283,7 @@ function App(): React.JSX.Element {
       .catch((error) => {
         console.error('[renderer] 初始化加载配置失败', error)
       })
-  }, [clearActiveProviderSelection])
+  }, [clearActiveProviderSelection, setLanguage])
 
   // 偏好设置保存后，同步主窗口的服务商、模型与快捷键显示。
   useEffect(() => {
@@ -301,11 +307,12 @@ function App(): React.JSX.Element {
 
       autoCopyRef.current = Boolean(config.translation?.autoCopyResult)
       setScreenshotShortcut(config.shortcuts?.screenshot || 'Alt+S')
+      setLanguage(normalizeAppLanguage(config.general?.language))
       if (typeof config.general?.alwaysOnTop === 'boolean') {
         setIsPinned(config.general.alwaysOnTop)
       }
     })
-  }, [clearActiveProviderSelection])
+  }, [clearActiveProviderSelection, setLanguage])
 
   // OCR 阶段提供明确反馈，避免首次初始化 Vision 模型时被误认为应用卡死。
   useEffect(() => {
@@ -344,7 +351,7 @@ function App(): React.JSX.Element {
 
       if (!trimmed) {
         setTargetText('')
-        setErrorMessage('截图未识别到文字内容')
+        setErrorMessage(t('app.error.ocrEmpty'))
         setStatus('idle')
         return
       }
@@ -354,7 +361,7 @@ function App(): React.JSX.Element {
       setSourceText(recognizedText)
       markTranslationPending()
     })
-  }, [abortActiveTranslationRequests, markTranslationPending])
+  }, [abortActiveTranslationRequests, markTranslationPending, t])
 
   // 输入翻译快捷键直接聚焦并选中当前输入。
   useEffect(() => {
@@ -467,7 +474,7 @@ function App(): React.JSX.Element {
 
       if (!selectedProviderId || !selectedModel) {
         setTargetText('')
-        setErrorMessage('还没有启用任何服务商，请先在偏好设置里启用一个')
+        setErrorMessage(t('app.error.noProvider'))
         setStatus('error')
         return
       }
@@ -526,7 +533,7 @@ function App(): React.JSX.Element {
         if (response.error.code === 'ABORTED') return
 
         setTargetText('')
-        setErrorMessage(getUserFriendlyErrorMessage(response.error.code))
+        setErrorMessage(getUserFriendlyErrorMessage(response.error.code, t))
         console.error('[renderer] translate error', response.error.code, response.error.message)
         setStatus('error')
       } catch (error) {
@@ -538,7 +545,7 @@ function App(): React.JSX.Element {
 
         console.error('[renderer] 翻译请求异常', error)
         setTargetText('')
-        setErrorMessage('翻译失败，请重试')
+        setErrorMessage(t('app.error.default'))
         setStatus('error')
       } finally {
         requestSettled = true
@@ -565,7 +572,8 @@ function App(): React.JSX.Element {
     selectedProviderId,
     sourceLanguage,
     sourceText,
-    translateTriggerToken
+    translateTriggerToken,
+    t
   ])
 
   // 根据输入与译文内容动态校准窗口高度，避免短文本留下大面积空白。
@@ -699,7 +707,7 @@ function App(): React.JSX.Element {
                   className="lang-trigger"
                   aria-haspopup="listbox"
                   aria-expanded={isSourceLangMenuOpen}
-                  title="切换源语言"
+                  title={t('app.language.switchSource')}
                   onClick={() => {
                     setIsSourceLangMenuOpen((open) => !open)
                     setIsTargetLangMenuOpen(false)
@@ -708,29 +716,33 @@ function App(): React.JSX.Element {
                 >
                   <span className="lang-name">{sourceLanguageName}</span>
                   {sourceLanguage === 'auto' && hasSourceText ? (
-                    <span className="lang-sub">自动</span>
+                    <span className="lang-sub">{t('common.auto')}</span>
                   ) : null}
                 </button>
 
                 {isSourceLangMenuOpen ? (
-                  <div className="lang-menu" role="listbox" aria-label="源语言选择">
-                    {SUPPORTED_LANGUAGES.map((language) => {
-                      const isSelected = language.code === sourceLanguage
+                  <div
+                    className="lang-menu"
+                    role="listbox"
+                    aria-label={t('app.language.sourceList')}
+                  >
+                    {SUPPORTED_LANGUAGES.map((languageOption) => {
+                      const isSelected = languageOption.code === sourceLanguage
                       return (
                         <button
-                          key={language.code}
+                          key={languageOption.code}
                           type="button"
                           role="option"
                           aria-selected={isSelected}
                           className={`lang-option${isSelected ? ' lang-option-on' : ''}`}
                           onClick={() => {
                             setIsSourceLangMenuOpen(false)
-                            if (sourceLanguage === language.code) return
-                            setSourceLanguage(language.code)
+                            if (sourceLanguage === languageOption.code) return
+                            setSourceLanguage(languageOption.code)
                             if (sourceText.trim()) markTranslationPending()
                           }}
                         >
-                          {language.label}
+                          {getLanguageLabel(language, languageOption.code)}
                         </button>
                       )
                     })}
@@ -760,7 +772,7 @@ function App(): React.JSX.Element {
                   className="lang-trigger"
                   aria-haspopup="listbox"
                   aria-expanded={isTargetLangMenuOpen}
-                  title="切换目标语言"
+                  title={t('app.language.switchTarget')}
                   onClick={() => {
                     setIsTargetLangMenuOpen((open) => !open)
                     setIsSourceLangMenuOpen(false)
@@ -771,13 +783,17 @@ function App(): React.JSX.Element {
                 </button>
 
                 {isTargetLangMenuOpen ? (
-                  <div className="lang-menu" role="listbox" aria-label="目标语言选择">
+                  <div
+                    className="lang-menu"
+                    role="listbox"
+                    aria-label={t('app.language.targetList')}
+                  >
                     <button
                       type="button"
                       role="option"
                       aria-selected={manualTargetLang === null}
                       className={`lang-option${manualTargetLang === null ? ' lang-option-on' : ''}`}
-                      title="跟随源语言自动匹配"
+                      title={t('app.language.autoMatchHint')}
                       onClick={() => {
                         setIsTargetLangMenuOpen(false)
                         if (manualTargetLang === null) return
@@ -785,31 +801,31 @@ function App(): React.JSX.Element {
                         if (sourceText.trim()) markTranslationPending()
                       }}
                     >
-                      自动匹配
+                      {t('app.language.autoMatch')}
                     </button>
 
-                    {SUPPORTED_LANGUAGES.filter((language) => language.code !== 'auto').map(
-                      (language) => {
-                        const isSelected = manualTargetLang === language.code
-                        return (
-                          <button
-                            key={language.code}
-                            type="button"
-                            role="option"
-                            aria-selected={isSelected}
-                            className={`lang-option${isSelected ? ' lang-option-on' : ''}`}
-                            onClick={() => {
-                              setIsTargetLangMenuOpen(false)
-                              if (manualTargetLang === language.code) return
-                              setManualTargetLang(language.code)
-                              if (sourceText.trim()) markTranslationPending()
-                            }}
-                          >
-                            {language.label}
-                          </button>
-                        )
-                      }
-                    )}
+                    {SUPPORTED_LANGUAGES.filter(
+                      (languageOption) => languageOption.code !== 'auto'
+                    ).map((languageOption) => {
+                      const isSelected = manualTargetLang === languageOption.code
+                      return (
+                        <button
+                          key={languageOption.code}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          className={`lang-option${isSelected ? ' lang-option-on' : ''}`}
+                          onClick={() => {
+                            setIsTargetLangMenuOpen(false)
+                            if (manualTargetLang === languageOption.code) return
+                            setManualTargetLang(languageOption.code)
+                            if (sourceText.trim()) markTranslationPending()
+                          }}
+                        >
+                          {getLanguageLabel(language, languageOption.code)}
+                        </button>
+                      )
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -819,8 +835,8 @@ function App(): React.JSX.Element {
               <button
                 className="icon-btn settings-btn"
                 type="button"
-                aria-label="打开偏好设置"
-                title="偏好设置（Cmd+,）"
+                aria-label={t('app.settings.open')}
+                title={t('app.settings.title')}
                 onClick={() => {
                   setIsSourceLangMenuOpen(false)
                   setIsTargetLangMenuOpen(false)
@@ -846,8 +862,8 @@ function App(): React.JSX.Element {
               <button
                 className={`icon-btn pin-btn${isPinned ? ' pin-btn-on' : ''}`}
                 type="button"
-                aria-label={isPinned ? '取消固定窗口' : '固定窗口置顶'}
-                title={isPinned ? '当前已置顶（点击取消）' : '点击置顶窗口'}
+                aria-label={isPinned ? t('app.pin.disableAria') : t('app.pin.enableAria')}
+                title={isPinned ? t('app.pin.disableTitle') : t('app.pin.enableTitle')}
                 onClick={() => void handleTogglePin()}
               >
                 <svg
@@ -878,10 +894,10 @@ function App(): React.JSX.Element {
                     className="compose-input"
                     value={sourceText}
                     onChange={handleSourceTextChange}
-                    placeholder={`截图 ${screenshotShortcut}，或直接输入 / 粘贴文字`}
+                    placeholder={t('app.input.placeholder', { shortcut: screenshotShortcut })}
                     rows={1}
                     spellCheck={false}
-                    aria-label="源文本输入框"
+                    aria-label={t('app.input.aria')}
                   />
                 </div>
               </div>
@@ -894,15 +910,17 @@ function App(): React.JSX.Element {
                     </p>
                   ) : isRecognizing ? (
                     <div className="result-pending" role="status" aria-live="polite">
-                      <p>正在本地识别截图文字…</p>
+                      <p>{t('app.ocr.pending')}</p>
                       {ocrSlowHint ? (
-                        <p className="result-pending-hint">
-                          首次使用需要初始化识别模型，可能需要半分钟，请稍候
-                        </p>
+                        <p className="result-pending-hint">{t('app.ocr.slowHint')}</p>
                       ) : null}
                     </div>
                   ) : status === 'translating' && !targetText.trim() ? (
-                    <div className="result-loader" aria-live="polite" aria-label="正在翻译">
+                    <div
+                      className="result-loader"
+                      aria-live="polite"
+                      aria-label={t('app.translating')}
+                    >
                       <span />
                       <span />
                       <span />
@@ -925,8 +943,8 @@ function App(): React.JSX.Element {
                       type="button"
                       onClick={handleClearSource}
                       disabled={!hasSourceText}
-                      aria-label="清空输入"
-                      title="清空输入"
+                      aria-label={t('app.clearInput')}
+                      title={t('app.clearInput')}
                     >
                       <svg
                         width="13"
@@ -950,13 +968,20 @@ function App(): React.JSX.Element {
                       aria-expanded={isModelMenuOpen}
                       aria-label={
                         activeProvider
-                          ? `当前服务商: ${activeProvider.name}，模型: ${selectedModel}，点击打开模型面板`
-                          : '当前没有启用任何服务商，点击打开模型面板查看'
+                          ? t('app.provider.currentAria', {
+                              provider: getProviderDisplayName(language, activeProvider),
+                              model: selectedModel
+                            })
+                          : t('app.provider.noneAria')
                       }
                       title={
                         activeProvider
-                          ? `服务商: ${activeProvider.name}\n模型: ${selectedModel}\n地址: ${activeProvider.baseUrl}`
-                          : '当前没有启用任何服务商，请在偏好设置里启用一个'
+                          ? t('app.provider.tooltip', {
+                              provider: getProviderDisplayName(language, activeProvider),
+                              model: selectedModel,
+                              baseUrl: activeProvider.baseUrl
+                            })
+                          : t('app.provider.noneHint')
                       }
                       onClick={() => {
                         setIsSourceLangMenuOpen(false)
@@ -968,7 +993,7 @@ function App(): React.JSX.Element {
                         }
                       }}
                     >
-                      {selectedModel || '未配置模型'}
+                      {selectedModel || t('app.provider.unconfiguredModel')}
                     </button>
                   </div>
 
@@ -979,8 +1004,8 @@ function App(): React.JSX.Element {
                     type="button"
                     onClick={() => void handleCopyTarget()}
                     disabled={!hasTargetText || status === 'translating'}
-                    aria-label={copyState === 'done' ? '复制完成' : '复制输出'}
-                    title={copyState === 'done' ? '复制完成' : '复制输出'}
+                    aria-label={copyState === 'done' ? t('app.copy.done') : t('app.copy.output')}
+                    title={copyState === 'done' ? t('app.copy.done') : t('app.copy.output')}
                   >
                     {copyState === 'done' ? (
                       <svg
@@ -1023,10 +1048,10 @@ function App(): React.JSX.Element {
             className={`terminal-engine-deck ${isDeckClosing ? 'terminal-engine-deck-closing' : ''}`}
             ref={engineDeckRef}
             role="dialog"
-            aria-label="翻译引擎选择面板"
+            aria-label={t('app.deck.dialogAria')}
           >
             <div className="terminal-engine-deck-header">
-              <div className="terminal-engine-deck-title">模型</div>
+              <div className="terminal-engine-deck-title">{t('app.deck.title')}</div>
               <div className="terminal-engine-deck-actions">
                 <button
                   type="button"
@@ -1035,17 +1060,17 @@ function App(): React.JSX.Element {
                     closeModelMenu()
                     void window.api.openConfigWindow()
                   }}
-                  aria-label="打开偏好设置"
-                  title="配置服务商（Cmd+,）"
+                  aria-label={t('app.deck.settingsAria')}
+                  title={t('app.deck.settingsTitle')}
                 >
-                  设置
+                  {t('app.deck.settings')}
                 </button>
                 <button
                   type="button"
                   className="terminal-engine-deck-close"
                   onClick={closeModelMenu}
-                  aria-label="关闭模型面板"
-                  title="关闭面板"
+                  aria-label={t('app.deck.closeAria')}
+                  title={t('app.deck.closeTitle')}
                 >
                   ✕
                 </button>
@@ -1053,7 +1078,11 @@ function App(): React.JSX.Element {
             </div>
 
             {enabledProviders.length > 0 ? (
-              <div className="terminal-engine-models-list" role="listbox" aria-label="模型列表">
+              <div
+                className="terminal-engine-models-list"
+                role="listbox"
+                aria-label={t('app.deck.listAria')}
+              >
                 {enabledProviders.flatMap((provider, providerIndex) => {
                   const rows = provider.models.map((model) => {
                     const isSelected =
@@ -1068,10 +1097,12 @@ function App(): React.JSX.Element {
                           isSelected ? 'terminal-engine-option-selected' : ''
                         }`}
                         onClick={() => handleModelSelect(provider.id, model.id)}
-                        title={`${model.id} · ${provider.name}`}
+                        title={`${model.id} · ${getProviderDisplayName(language, provider)}`}
                       >
                         <span className="terminal-engine-name">{model.id}</span>
-                        <span className="terminal-engine-provider">{provider.name}</span>
+                        <span className="terminal-engine-provider">
+                          {getProviderDisplayName(language, provider)}
+                        </span>
                       </button>
                     )
                   })
@@ -1088,9 +1119,7 @@ function App(): React.JSX.Element {
                 })}
               </div>
             ) : (
-              <div className="terminal-engine-empty-hint">
-                还没有启用任何服务商，点右上角「设置」去启用
-              </div>
+              <div className="terminal-engine-empty-hint">{t('app.deck.empty')}</div>
             )}
           </div>
         ) : null}

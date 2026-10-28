@@ -1,0 +1,752 @@
+import type { AppLanguage } from './config'
+import type { SupportedLanguage } from './languageDetector'
+
+/**
+ * 当前支持的界面语言选项。
+ * 语言名称始终以自身语言展示，避免用户在英文界面里找不到熟悉的母语名称。
+ */
+export const APP_LANGUAGES: ReadonlyArray<{ code: AppLanguage; label: string }> = [
+  { code: 'zh-CN', label: '简体中文' },
+  { code: 'en', label: 'English' }
+]
+
+/** 默认界面语言保持为简体中文，与现有用户习惯一致 */
+export const DEFAULT_APP_LANGUAGE: AppLanguage = 'zh-CN'
+
+/** 将配置文件或本地存储中的任意值收敛为有效语言代码 */
+export const normalizeAppLanguage = (value: unknown): AppLanguage => {
+  return value === 'en' ? 'en' : DEFAULT_APP_LANGUAGE
+}
+
+/**
+ * 简体中文词条是所有翻译键的类型来源。
+ * 新增键后，英文词条缺失会直接触发 TypeScript 类型错误。
+ */
+const zhCN = {
+  'common.auto': '自动',
+  'common.cancel': '取消',
+  'common.clear': '清空',
+  'common.close': '关闭',
+  'common.collapse': '收起',
+  'common.copy': '复制',
+  'common.done': '完成',
+  'common.hide': '隐藏',
+  'common.save': '保存',
+  'common.saving': '正在保存...',
+  'common.show': '显示',
+
+  'language.auto': '自动检测',
+  'language.zh': '中文 (简体)',
+  'language.en': '英语 (English)',
+  'language.ja': '日语 (日本語)',
+  'language.ko': '韩语 (한국어)',
+  'language.fr': '法语 (Français)',
+  'language.de': '德语 (Deutsch)',
+  'language.es': '西班牙语 (Español)',
+  'language.ru': '俄语 (Русский)',
+  'language.it': '意大利语 (Italiano)',
+  'language.pt': '葡萄牙语 (Português)',
+  'language.short.auto': '自动',
+  'language.short.zh': '中文',
+  'language.short.en': '英语',
+  'language.short.ja': '日语',
+  'language.short.ko': '韩语',
+  'language.short.fr': '法语',
+  'language.short.de': '德语',
+  'language.short.es': '西班牙语',
+  'language.short.ru': '俄语',
+  'language.short.it': '意大利语',
+  'language.short.pt': '葡萄牙语',
+
+  'app.error.configApiKey': '请先在偏好设置中配置模型密钥',
+  'app.error.configBaseUrl': '请先在偏好设置中配置模型服务地址',
+  'app.error.auth': '模型服务鉴权失败，请检查密钥',
+  'app.error.forbidden': '当前模型服务拒绝访问',
+  'app.error.rateLimit': '请求过于频繁，请稍后再试',
+  'app.error.network': '无法连接到模型服务',
+  'app.error.emptyResponse': '模型没有返回可用结果',
+  'app.error.stream': '模型流式响应异常，请重试',
+  'app.error.default': '翻译失败，请重试',
+  'app.error.ocrEmpty': '截图未识别到文字内容',
+  'app.error.noProvider': '还没有启用任何服务商，请先在偏好设置里启用一个',
+  'app.input.placeholder': '截图 {shortcut}，或直接输入 / 粘贴文字',
+  'app.input.aria': '源文本输入框',
+  'app.ocr.pending': '正在本地识别截图文字…',
+  'app.ocr.slowHint': '首次使用需要初始化识别模型，可能需要半分钟，请稍候',
+  'app.translating': '正在翻译',
+  'app.clearInput': '清空输入',
+  'app.copy.done': '复制完成',
+  'app.copy.output': '复制输出',
+  'app.provider.currentAria': '当前服务商: {provider}，模型: {model}，点击打开模型面板',
+  'app.provider.noneAria': '当前没有启用任何服务商，点击打开模型面板查看',
+  'app.provider.tooltip': '服务商: {provider}\n模型: {model}\n地址: {baseUrl}',
+  'app.provider.noneHint': '当前没有启用任何服务商，请在偏好设置里启用一个',
+  'app.provider.unconfiguredModel': '未配置模型',
+  'app.language.switchSource': '切换源语言',
+  'app.language.sourceList': '源语言选择',
+  'app.language.switchTarget': '切换目标语言',
+  'app.language.targetList': '目标语言选择',
+  'app.language.autoMatch': '自动匹配',
+  'app.language.autoMatchHint': '跟随源语言自动匹配',
+  'app.settings.open': '打开偏好设置',
+  'app.settings.title': '偏好设置（Cmd+,）',
+  'app.pin.enableAria': '固定窗口置顶',
+  'app.pin.disableAria': '取消固定窗口',
+  'app.pin.enableTitle': '点击置顶窗口',
+  'app.pin.disableTitle': '当前已置顶（点击取消）',
+  'app.deck.dialogAria': '翻译引擎选择面板',
+  'app.deck.title': '模型',
+  'app.deck.settingsAria': '打开偏好设置',
+  'app.deck.settingsTitle': '配置服务商（Cmd+,）',
+  'app.deck.settings': '设置',
+  'app.deck.closeAria': '关闭模型面板',
+  'app.deck.closeTitle': '关闭面板',
+  'app.deck.listAria': '模型列表',
+  'app.deck.empty': '还没有启用任何服务商，点右上角「设置」去启用',
+
+  'tray.inputTranslate': '输入翻译',
+  'tray.screenshotTranslate': '截图翻译',
+  'tray.modelConfig': '模型配置',
+  'tray.showWindow': '显示窗口',
+  'tray.hideWindow': '隐藏窗口',
+  'tray.quit': '退出',
+
+  'capture.permissionTitle': '需要「屏幕录制」权限',
+  'capture.permissionMessage': '无法截取屏幕图像（macOS 拒绝访问屏幕画面）',
+  'capture.permissionDetail':
+    'macOS 安全机制要求截图功能必须被授予「屏幕录制」权限。\n\n请点击下方按钮打开「系统设置」，为您当前运行的终端（Terminal / iTerm / VS Code）或 Electron 应用开启屏幕录制开关，然后重新运行即可。',
+  'capture.permissionAction': '前往系统设置开启',
+  'capture.busy': '截屏进行中',
+  'capture.cancelled': '用户取消截图',
+  'capture.noMainWindow': '主窗口未初始化',
+  'capture.permissionError': '截屏失败：缺少系统「屏幕录制」权限，请在系统设置中开启',
+  'capture.exception': '[截屏异常]: {message}',
+
+  'test.missingBaseUrl': '缺少服务地址 (Base URL)',
+  'test.missingApiKey': '缺少访问密钥 (API Key)',
+  'test.successNoStream': '连接成功，服务响应正常（该服务不支持流式输出，未测速）',
+  'test.success': '连接成功，服务响应正常',
+  'test.auth401': '鉴权失败 (401)：API Key 无效或未授权',
+  'test.notFound404': '端点不存在 (404)：请检查 Base URL 是否正确',
+  'test.rateLimit429': '速率超限或配额用尽 (429)',
+  'test.requestFailed': '请求失败 ({status}){detail}',
+  'test.requestFailedDetail': ': {detail}',
+  'test.timeout': '连接超时（{seconds}秒内未完成输出，请检查网络或代理）',
+  'test.connectionError': '连接异常: {message}{cause}',
+  'test.cause': ' [原因: {cause}]',
+  'test.networkError': '无法连接到模型服务',
+  'fetch.baseUrlEmpty': 'Base URL 不能为空',
+  'fetch.status': '服务商返回状态码 {status}',
+  'fetch.invalidJson': '服务商返回的数据不是合法的 JSON 格式',
+  'fetch.noModels': '未能从响应中解析到任何有效模型 ID（请核对接口结构）',
+  'fetch.timeout': '拉取模型超时（12秒内未收到响应，请检查网络或代理）',
+  'fetch.networkFailed': '网络请求失败',
+
+  'config.nav.aria': '偏好设置分类',
+  'config.nav.providers': 'AI 模型',
+  'config.nav.shortcuts': '快捷键',
+  'config.nav.translation': '翻译偏好',
+  'config.nav.general': '通用设置',
+  'config.close.aria': '关闭设置窗口',
+  'config.close.title': '关闭设置 (ESC)',
+
+  'config.provider.title': '选择服务商',
+  'config.provider.count': '{total} 个 · 已启用 {enabled} 个',
+  'config.provider.add': '+ 添加渠道',
+  'config.provider.addTitle': '添加服务商（自定义或从官方预置快速导入）',
+  'config.provider.custom': '自定义空白服务商',
+  'config.provider.importPresets': '从官方预置快速导入：',
+  'config.provider.groupOn': '已启用',
+  'config.provider.groupOff': '未启用',
+  'config.provider.currentDefault': '当前全局生效的默认服务商',
+  'config.provider.edit': '编辑 {name}',
+  'config.provider.notConnected': '未接入',
+  'config.provider.modelCount': '· {count} 个模型',
+  'config.provider.defaultBadge': '默认',
+  'config.provider.setDefault': '设为默认',
+  'config.provider.setDefaultTitle': '将 {name} 设为主界面默认渠道',
+  'config.provider.disable': '停用该服务商',
+  'config.provider.enable': '启用该服务商',
+  'config.provider.disableAria': '停用 {name}',
+  'config.provider.enableAria': '启用 {name}',
+  'config.provider.customName': '自定义服务商 {index}',
+  'config.provider.defaultModel': '默认模型',
+
+  'config.shortcuts.title': '全局呼出快捷键',
+  'config.shortcuts.count': '3 项',
+  'config.shortcuts.reset': '恢复默认',
+  'config.shortcuts.group': '快捷键映射 · 3',
+  'config.shortcuts.screenshot': '截屏识别翻译',
+  'config.shortcuts.screenshotDesc': '框选屏幕区域，本地识别后直接生成译文',
+  'config.shortcuts.screenshotTip': '推荐: Alt+S 或 Option+S',
+  'config.shortcuts.screenshotPlaceholder': '例如: Alt+S 或 CommandOrControl+Shift+S',
+  'config.shortcuts.input': '呼出输入翻译窗口',
+  'config.shortcuts.inputDesc': '快速呼出输入框，粘贴或键入文本后立即翻译',
+  'config.shortcuts.inputTip': '推荐: Alt+A 或 Option+A',
+  'config.shortcuts.inputPlaceholder': '例如: Alt+A 或 CommandOrControl+Shift+A',
+  'config.shortcuts.preferences': '打开偏好设置',
+  'config.shortcuts.preferencesDesc': '打开当前窗口，调整模型、快捷键与翻译行为',
+  'config.shortcuts.preferencesTip': '通用规范: CommandOrControl+,',
+
+  'config.translation.title': '翻译偏好',
+  'config.translation.count': '3 项',
+  'config.translation.group': '翻译行为 · 3',
+  'config.translation.defaultTarget': '默认翻译目标语言',
+  'config.translation.defaultTargetDesc': '未识别源语言时，译文默认输出到该语言',
+  'config.translation.autoCopy': '翻译成功后自动复制到剪贴板',
+  'config.translation.autoCopyDesc': '截屏翻译或文本翻译完成时自动写入系统剪贴板，无需手动点击复制',
+  'config.translation.prompt': '自定义系统提示词',
+  'config.translation.promptDesc': '留空时使用内置格式保留指令；仅影响翻译模型，不修改原始文本',
+  'config.translation.restorePrompt': '恢复内置提示词',
+  'config.translation.promptPlaceholder':
+    "留空时默认采用系统精密格式保留与纯净翻译指令；您也可输入如：'你是一名专业学术翻译专家，请将文本翻译为学术级专业术语，仅输出译文。'",
+
+  'config.general.title': '通用设置',
+  'config.general.count': '4 项',
+  'config.general.group': '系统与窗口 · 4',
+  'config.general.language': '界面语言',
+  'config.general.languageDesc': '切换后立即预览，保存设置后同步应用到主窗口与托盘菜单',
+  'config.general.launchAtLogin': '开机自动启动',
+  'config.general.launchAtLoginDesc': '随系统登录自动启动并在后台静默就绪，随时按下快捷键即可调用',
+  'config.general.alwaysOnTop': '主翻译窗口始终保持置顶',
+  'config.general.alwaysOnTopDesc':
+    '浮动在所有应用程序之上，也可随时点击主界面右上角图钉按钮临时切换',
+  'config.general.closeAction': '关闭主窗口时',
+  'config.general.closeActionDesc': '决定点击主窗口右上角关闭按钮后的应用状态',
+  'config.general.closeToTray': '最小化隐藏到系统托盘（推荐，保持快捷键随时可用）',
+  'config.general.quitApp': '彻底退出应用程序',
+
+  'config.footer.unsaved': '有未保存的改动',
+  'config.footer.unsavedTitle': '本次修改还没有写入配置，点击右侧保存才会生效',
+
+  'config.feedback.shortcutsReset': '快捷键已重置为默认值',
+  'config.feedback.providerPrimary': '已将【{name}】设为默认服务商',
+  'config.feedback.providerLocated': '已定位至【{name}】',
+  'config.feedback.providerAdded': '已添加【{name}】，请配置 API Key',
+  'config.feedback.providerCreated': '已创建服务商，请填写名称与 API Key',
+  'config.feedback.keepOneProvider': '至少需要保留一个服务商',
+  'config.feedback.providerDeletedPrimary': '已删除【{name}】，主界面默认渠道已切到【{nextName}】',
+  'config.feedback.providerDeleted': '已删除【{name}】',
+  'config.feedback.modelExists': '模型 {model} 已在列表中',
+  'config.feedback.modelAdded': '已为【{provider}】添加模型 {model}',
+  'config.feedback.keepOneModel': '每个服务商至少保留一个可用模型',
+  'config.feedback.baseUrlRequired': '请先输入有效的服务地址 (Base URL)',
+  'config.feedback.fetchingModels': '正在从服务商接口拉取模型列表...',
+  'config.feedback.modelsFetched': '成功获取到 {count} 个模型',
+  'config.feedback.fetchFailed': '拉取模型失败: {error}',
+  'config.feedback.fetchNoModels': '未返回有效模型',
+  'config.feedback.fetchRequestError': '请求异常',
+  'config.feedback.fetchException': '拉取异常: {error}',
+  'config.feedback.networkError': '网络错误',
+  'config.feedback.modelsAlreadyExist': '所选模型已全部存在于列表中',
+  'config.feedback.modelsAdded': '已成功为【{provider}】添加 {count} 个模型',
+  'config.feedback.apiKeyEmpty': '当前 API Key 为空，无需复制',
+  'config.feedback.apiKeyCopied': 'API Key 已复制到剪贴板',
+  'config.feedback.copyFailed': '复制失败，请手动选取复制',
+  'config.feedback.testException': '连接测试执行异常',
+  'config.feedback.saved': '系统偏好设置已保存并生效',
+  'config.feedback.saveFailed': '保存失败: {error}',
+  'config.feedback.saveException': '保存异常: {error}',
+  'config.feedback.unknownError': '未知错误',
+  'config.feedback.configSaveFailed': '保存配置失败',
+
+  'config.test.tooltipClickRetry': '点击重新测试',
+  'config.test.tooltipDetails': '{message}（点击“诊断报告”查看详情）',
+  'config.test.firstToken': '首 token 延迟 {value}ms',
+  'config.test.outputTokens': '本次输出 {estimated}{count} 个 token',
+  'config.test.totalLatency': '总耗时 {value}ms',
+  'config.test.failureTimeout': '(超时)',
+  'config.test.failureAuth': '(鉴权失败)',
+  'config.test.success': '连接成功',
+  'config.test.failure': '连接失败',
+  'config.test.estimatedPrefix': '约 ',
+  'config.test.diagnostics': '诊断报告',
+  'config.test.diagnosticsTitle': '查看详细错误信息与原始响应',
+  'config.test.testing': '正在检测...',
+  'config.test.current': '测试当前连接',
+  'config.test.currentTitle': '测试【{name}】的连通性 ({baseUrl})',
+
+  'config.providerDialog.default': '默认服务商',
+  'config.providerDialog.setDefault': '设为默认服务商',
+  'config.providerDialog.setDefaultTitle': '点击设为主界面默认使用的大模型渠道',
+  'config.providerDialog.enabled': '已启用',
+  'config.providerDialog.disabled': '已停用',
+  'config.providerDialog.toggleTitle': '开启后该厂商的模型才会出现在主界面下拉框中',
+  'config.providerDialog.closeTitle': '关闭 (ESC)',
+  'config.providerDialog.displayName': '服务商显示名称',
+  'config.providerDialog.deleteProvider': '删除该服务商',
+  'config.providerDialog.namePlaceholder': '如：DeepSeek 官方',
+  'config.providerDialog.baseUrl': '服务地址 (Base URL)',
+  'config.providerDialog.apiKey': '访问密钥 (API Key)',
+  'config.providerDialog.copyKeyTitle': '复制 API Key 到剪贴板',
+  'config.providerDialog.clearKeyTitle': '清空当前输入的密钥',
+  'config.providerDialog.showKeyTitle': '点击查看明文密钥',
+  'config.providerDialog.hideKeyTitle': '点击以掩码形式隐藏密钥',
+  'config.providerDialog.keyPlaceholder': '填入该服务商的 API Key...',
+  'config.providerDialog.models': '可用模型列表 (MODELS FOR {name})',
+  'config.providerDialog.fetchTitle': '从接口端点自动获取该服务商支持的全部模型',
+  'config.providerDialog.fetching': '正在拉取...',
+  'config.providerDialog.fetch': '自动获取模型列表',
+  'config.providerDialog.defaultModelTitle': '当前渠道的默认模型: {model}',
+  'config.providerDialog.setDefaultModelTitle': '点击将【{model}】设为默认模型',
+  'config.providerDialog.defaultBadgeTitle': '默认模型',
+  'config.providerDialog.removeModelTitle': '从列表中移除 {model}',
+  'config.providerDialog.removeModelAria': '移除 {model}',
+  'config.providerDialog.manualTitle': '手动录入单个自定义模型 ID',
+  'config.providerDialog.cancelManual': '取消录入',
+  'config.providerDialog.manual': '+ 手动录入',
+  'config.providerDialog.modelPlaceholder': '输入模型 ID（如 gpt-4o、claude-3-5-sonnet...）',
+  'config.providerDialog.saveModel': '+ 保存模型',
+
+  'config.fetch.title': '从【{name}】获取模型',
+  'config.fetch.badge': '{count} 个可用模型',
+  'config.fetch.closeTitle': '关闭窗口',
+  'config.fetch.search': '搜索模型名称实时过滤...',
+  'config.fetch.selectAllTitle': '全选当前过滤列表中尚未添加的模型',
+  'config.fetch.selectAll': '全选未添加',
+  'config.fetch.unselectAllTitle': '清空所有勾选项',
+  'config.fetch.unselectAll': '取消全选',
+  'config.fetch.empty': '无匹配的模型',
+  'config.fetch.added': '已在列表',
+  'config.fetch.pending': '待导入',
+  'config.fetch.selected': '已选中 {count} 个新模型',
+  'config.fetch.confirm': '确认导入勾选模型',
+
+  'config.error.title': '连通性诊断报告',
+  'config.error.closeTitle': '关闭诊断报告',
+  'config.error.provider': '测试服务商',
+  'config.error.endpoint': '接口端点',
+  'config.error.summary': '状态概要',
+  'config.error.raw': '服务端原始响应体 / 异常堆栈：',
+  'config.error.copied': '已复制到剪贴板',
+  'config.error.copy': '复制诊断日志',
+
+  'config.delete.title': '删除服务商',
+  'config.delete.message':
+    '确定删除【{name}】吗？该服务商下的 {count} 个模型配置会一并移除，此操作不可撤销。',
+  'config.delete.primaryWarning': '它当前是主界面默认渠道，删除后默认渠道会自动切到【{name}】。',
+  'config.delete.confirm': '删除服务商',
+
+  'config.unsaved.title': '有未保存的改动',
+  'config.unsaved.message':
+    '本次对服务商、快捷键或翻译偏好的修改还没有写入配置，现在关闭设置窗口会丢失这些改动。',
+  'config.unsaved.discard': '放弃改动并关闭',
+  'config.unsaved.continue': '继续编辑'
+} as const
+
+export type TranslationKey = keyof typeof zhCN
+export type TranslationParams = Record<string, string | number>
+export type Translate = (key: TranslationKey, params?: TranslationParams) => string
+
+const en: Record<TranslationKey, string> = {
+  'common.auto': 'Auto',
+  'common.cancel': 'Cancel',
+  'common.clear': 'Clear',
+  'common.close': 'Close',
+  'common.collapse': 'Collapse',
+  'common.copy': 'Copy',
+  'common.done': 'Done',
+  'common.hide': 'Hide',
+  'common.save': 'Save',
+  'common.saving': 'Saving...',
+  'common.show': 'Show',
+
+  'language.auto': 'Auto detect',
+  'language.zh': 'Chinese (Simplified)',
+  'language.en': 'English',
+  'language.ja': 'Japanese (日本語)',
+  'language.ko': 'Korean (한국어)',
+  'language.fr': 'French (Français)',
+  'language.de': 'German (Deutsch)',
+  'language.es': 'Spanish (Español)',
+  'language.ru': 'Russian (Русский)',
+  'language.it': 'Italian (Italiano)',
+  'language.pt': 'Portuguese (Português)',
+  'language.short.auto': 'Auto',
+  'language.short.zh': 'Chinese',
+  'language.short.en': 'English',
+  'language.short.ja': 'Japanese',
+  'language.short.ko': 'Korean',
+  'language.short.fr': 'French',
+  'language.short.de': 'German',
+  'language.short.es': 'Spanish',
+  'language.short.ru': 'Russian',
+  'language.short.it': 'Italian',
+  'language.short.pt': 'Portuguese',
+
+  'app.error.configApiKey': 'Configure your model API key in Preferences first',
+  'app.error.configBaseUrl': 'Configure your model service URL in Preferences first',
+  'app.error.auth': 'Model service authentication failed. Check your API key',
+  'app.error.forbidden': 'The model service denied access',
+  'app.error.rateLimit': 'Too many requests. Please try again later',
+  'app.error.network': 'Unable to connect to the model service',
+  'app.error.emptyResponse': 'The model returned no usable result',
+  'app.error.stream': 'The model stream failed. Please try again',
+  'app.error.default': 'Translation failed. Please try again',
+  'app.error.ocrEmpty': 'No text was recognized in the screenshot',
+  'app.error.noProvider': 'No provider is enabled. Enable one in Preferences first',
+  'app.input.placeholder': 'Press {shortcut} to capture, or type / paste text',
+  'app.input.aria': 'Source text input',
+  'app.ocr.pending': 'Recognizing screenshot text locally…',
+  'app.ocr.slowHint':
+    'The recognition model is initializing on first use. This may take about 30 seconds',
+  'app.translating': 'Translating',
+  'app.clearInput': 'Clear input',
+  'app.copy.done': 'Copied',
+  'app.copy.output': 'Copy output',
+  'app.provider.currentAria': 'Current provider: {provider}, model: {model}. Open model panel',
+  'app.provider.noneAria': 'No provider is enabled. Open the model panel for details',
+  'app.provider.tooltip': 'Provider: {provider}\nModel: {model}\nEndpoint: {baseUrl}',
+  'app.provider.noneHint': 'No provider is enabled. Enable one in Preferences',
+  'app.provider.unconfiguredModel': 'No model configured',
+  'app.language.switchSource': 'Change source language',
+  'app.language.sourceList': 'Source language selection',
+  'app.language.switchTarget': 'Change target language',
+  'app.language.targetList': 'Target language selection',
+  'app.language.autoMatch': 'Auto match',
+  'app.language.autoMatchHint': 'Match automatically based on the source language',
+  'app.settings.open': 'Open Preferences',
+  'app.settings.title': 'Preferences (Cmd+,)',
+  'app.pin.enableAria': 'Keep window on top',
+  'app.pin.disableAria': 'Stop keeping window on top',
+  'app.pin.enableTitle': 'Keep this window on top',
+  'app.pin.disableTitle': 'Always on top (click to disable)',
+  'app.deck.dialogAria': 'Translation engine selection',
+  'app.deck.title': 'Models',
+  'app.deck.settingsAria': 'Open Preferences',
+  'app.deck.settingsTitle': 'Configure providers (Cmd+,)',
+  'app.deck.settings': 'Settings',
+  'app.deck.closeAria': 'Close model panel',
+  'app.deck.closeTitle': 'Close panel',
+  'app.deck.listAria': 'Model list',
+  'app.deck.empty': 'No provider is enabled. Open Settings in the top-right corner',
+
+  'tray.inputTranslate': 'Translate Input',
+  'tray.screenshotTranslate': 'Translate Screenshot',
+  'tray.modelConfig': 'Model Settings',
+  'tray.showWindow': 'Show Window',
+  'tray.hideWindow': 'Hide Window',
+  'tray.quit': 'Quit',
+
+  'capture.permissionTitle': 'Screen Recording Permission Required',
+  'capture.permissionMessage': 'Unable to capture the screen (macOS denied screen access)',
+  'capture.permissionDetail':
+    'macOS requires Screen Recording permission for screenshots.\n\nOpen System Settings from the button below and enable Screen Recording for your terminal (Terminal / iTerm / VS Code) or the Electron app, then try again.',
+  'capture.permissionAction': 'Open System Settings',
+  'capture.busy': 'A screenshot is already in progress',
+  'capture.cancelled': 'Screenshot cancelled',
+  'capture.noMainWindow': 'The main window is not ready',
+  'capture.permissionError':
+    'Screenshot failed: Screen Recording permission is missing. Enable it in System Settings',
+  'capture.exception': '[Screenshot error]: {message}',
+
+  'test.missingBaseUrl': 'Base URL is required',
+  'test.missingApiKey': 'API key is required',
+  'test.successNoStream': 'Connected successfully (streaming is unsupported, speed not measured)',
+  'test.success': 'Connected successfully',
+  'test.auth401': 'Authentication failed (401): the API key is invalid or unauthorized',
+  'test.notFound404': 'Endpoint not found (404): check the Base URL',
+  'test.rateLimit429': 'Rate limit exceeded or quota exhausted (429)',
+  'test.requestFailed': 'Request failed ({status}){detail}',
+  'test.requestFailedDetail': ': {detail}',
+  'test.timeout': 'Connection timed out after {seconds}s. Check your network or proxy',
+  'test.connectionError': 'Connection error: {message}{cause}',
+  'test.cause': ' [cause: {cause}]',
+  'test.networkError': 'Unable to connect to the model service',
+  'fetch.baseUrlEmpty': 'Base URL is required',
+  'fetch.status': 'Provider returned status code {status}',
+  'fetch.invalidJson': 'The provider response is not valid JSON',
+  'fetch.noModels': 'No valid model IDs could be parsed from the response',
+  'fetch.timeout': 'Fetching models timed out after 12s. Check your network or proxy',
+  'fetch.networkFailed': 'Network request failed',
+
+  'config.nav.aria': 'Preferences sections',
+  'config.nav.providers': 'AI Models',
+  'config.nav.shortcuts': 'Shortcuts',
+  'config.nav.translation': 'Translation',
+  'config.nav.general': 'General',
+  'config.close.aria': 'Close Preferences',
+  'config.close.title': 'Close Preferences (ESC)',
+
+  'config.provider.title': 'Choose a provider',
+  'config.provider.count': '{total} total · {enabled} enabled',
+  'config.provider.add': '+ Add provider',
+  'config.provider.addTitle': 'Add a provider or import a built-in preset',
+  'config.provider.custom': 'Custom provider',
+  'config.provider.importPresets': 'Import a built-in preset:',
+  'config.provider.groupOn': 'Enabled',
+  'config.provider.groupOff': 'Disabled',
+  'config.provider.currentDefault': 'Currently used as the global default provider',
+  'config.provider.edit': 'Edit {name}',
+  'config.provider.notConnected': 'Not configured',
+  'config.provider.modelCount': '· {count} models',
+  'config.provider.defaultBadge': 'Default',
+  'config.provider.setDefault': 'Set default',
+  'config.provider.setDefaultTitle': 'Use {name} as the default provider',
+  'config.provider.disable': 'Disable this provider',
+  'config.provider.enable': 'Enable this provider',
+  'config.provider.disableAria': 'Disable {name}',
+  'config.provider.enableAria': 'Enable {name}',
+  'config.provider.customName': 'Custom Provider {index}',
+  'config.provider.defaultModel': 'Default model',
+
+  'config.shortcuts.title': 'Global Shortcuts',
+  'config.shortcuts.count': '3 items',
+  'config.shortcuts.reset': 'Restore defaults',
+  'config.shortcuts.group': 'Shortcut mappings · 3',
+  'config.shortcuts.screenshot': 'Screenshot translation',
+  'config.shortcuts.screenshotDesc':
+    'Select a screen region and translate the locally recognized text',
+  'config.shortcuts.screenshotTip': 'Recommended: Alt+S or Option+S',
+  'config.shortcuts.screenshotPlaceholder': 'Example: Alt+S or CommandOrControl+Shift+S',
+  'config.shortcuts.input': 'Open input translation',
+  'config.shortcuts.inputDesc': 'Open the input instantly, then paste or type text to translate',
+  'config.shortcuts.inputTip': 'Recommended: Alt+A or Option+A',
+  'config.shortcuts.inputPlaceholder': 'Example: Alt+A or CommandOrControl+Shift+A',
+  'config.shortcuts.preferences': 'Open Preferences',
+  'config.shortcuts.preferencesDesc':
+    'Open this window to manage models, shortcuts, and translation',
+  'config.shortcuts.preferencesTip': 'Standard: CommandOrControl+,',
+
+  'config.translation.title': 'Translation',
+  'config.translation.count': '3 items',
+  'config.translation.group': 'Translation behavior · 3',
+  'config.translation.defaultTarget': 'Default target language',
+  'config.translation.defaultTargetDesc': 'Used when the source language cannot be detected',
+  'config.translation.autoCopy': 'Copy results automatically',
+  'config.translation.autoCopyDesc':
+    'Write completed screenshot or text translations to the clipboard automatically',
+  'config.translation.prompt': 'Custom system prompt',
+  'config.translation.promptDesc':
+    'Leave empty to use the built-in structure-preserving instruction',
+  'config.translation.restorePrompt': 'Restore built-in prompt',
+  'config.translation.promptPlaceholder':
+    "Leave empty to use the built-in formatting and clean translation instructions. Example: 'You are a professional academic translator. Translate using precise academic terminology and output only the translation.'",
+
+  'config.general.title': 'General',
+  'config.general.count': '4 items',
+  'config.general.group': 'System & window · 4',
+  'config.general.language': 'Interface language',
+  'config.general.languageDesc':
+    'Preview changes immediately; save to apply the language to the main window and tray menu',
+  'config.general.launchAtLogin': 'Launch at login',
+  'config.general.launchAtLoginDesc':
+    'Start silently in the background after login so shortcuts are always available',
+  'config.general.alwaysOnTop': 'Keep the main window on top',
+  'config.general.alwaysOnTopDesc':
+    'Float above other apps. You can still toggle this temporarily with the pin button',
+  'config.general.closeAction': 'When closing the main window',
+  'config.general.closeActionDesc': 'Choose what happens when the close button is clicked',
+  'config.general.closeToTray': 'Hide to the system tray (recommended, keeps shortcuts active)',
+  'config.general.quitApp': 'Quit the application completely',
+
+  'config.footer.unsaved': 'Unsaved changes',
+  'config.footer.unsavedTitle': 'Your changes have not been saved. Choose Save to apply them',
+
+  'config.feedback.shortcutsReset': 'Shortcuts restored to defaults',
+  'config.feedback.providerPrimary': '{name} is now the default provider',
+  'config.feedback.providerLocated': 'Opened {name}',
+  'config.feedback.providerAdded': 'Added {name}. Configure its API key',
+  'config.feedback.providerCreated': 'Provider created. Enter a name and API key',
+  'config.feedback.keepOneProvider': 'At least one provider is required',
+  'config.feedback.providerDeletedPrimary':
+    'Deleted {name}. The default provider is now {nextName}',
+  'config.feedback.providerDeleted': 'Deleted {name}',
+  'config.feedback.modelExists': 'Model {model} is already in the list',
+  'config.feedback.modelAdded': 'Added model {model} to {provider}',
+  'config.feedback.keepOneModel': 'Each provider must keep at least one model',
+  'config.feedback.baseUrlRequired': 'Enter a valid Base URL first',
+  'config.feedback.fetchingModels': 'Fetching models from the provider...',
+  'config.feedback.modelsFetched': 'Fetched {count} models',
+  'config.feedback.fetchFailed': 'Failed to fetch models: {error}',
+  'config.feedback.fetchNoModels': 'No valid models returned',
+  'config.feedback.fetchRequestError': 'Request error',
+  'config.feedback.fetchException': 'Fetch error: {error}',
+  'config.feedback.networkError': 'Network error',
+  'config.feedback.modelsAlreadyExist': 'All selected models are already in the list',
+  'config.feedback.modelsAdded': 'Added {count} models to {provider}',
+  'config.feedback.apiKeyEmpty': 'The API key is empty',
+  'config.feedback.apiKeyCopied': 'API key copied to clipboard',
+  'config.feedback.copyFailed': 'Copy failed. Select and copy manually',
+  'config.feedback.testException': 'Connection test failed to run',
+  'config.feedback.saved': 'Preferences saved and applied',
+  'config.feedback.saveFailed': 'Save failed: {error}',
+  'config.feedback.saveException': 'Save error: {error}',
+  'config.feedback.unknownError': 'Unknown error',
+  'config.feedback.configSaveFailed': 'Failed to save settings',
+
+  'config.test.tooltipClickRetry': 'Click to test again',
+  'config.test.tooltipDetails': '{message} (click Diagnostics for details)',
+  'config.test.firstToken': 'First token latency {value}ms',
+  'config.test.outputTokens': 'Output {estimated}{count} tokens',
+  'config.test.totalLatency': 'Total time {value}ms',
+  'config.test.failureTimeout': '(timeout)',
+  'config.test.failureAuth': '(auth failed)',
+  'config.test.success': 'Connected',
+  'config.test.failure': 'Connection failed',
+  'config.test.estimatedPrefix': 'about ',
+  'config.test.diagnostics': 'Diagnostics',
+  'config.test.diagnosticsTitle': 'View detailed error information and raw response',
+  'config.test.testing': 'Testing...',
+  'config.test.current': 'Test connection',
+  'config.test.currentTitle': 'Test connectivity for {name} ({baseUrl})',
+
+  'config.providerDialog.default': 'Default provider',
+  'config.providerDialog.setDefault': 'Set as default provider',
+  'config.providerDialog.setDefaultTitle': 'Use this provider as the main window default',
+  'config.providerDialog.enabled': 'Enabled',
+  'config.providerDialog.disabled': 'Disabled',
+  'config.providerDialog.toggleTitle':
+    'Only enabled providers appear in the main window model panel',
+  'config.providerDialog.closeTitle': 'Close (ESC)',
+  'config.providerDialog.displayName': 'Provider display name',
+  'config.providerDialog.deleteProvider': 'Delete provider',
+  'config.providerDialog.namePlaceholder': 'e.g. DeepSeek Official',
+  'config.providerDialog.baseUrl': 'Service URL (Base URL)',
+  'config.providerDialog.apiKey': 'API Key',
+  'config.providerDialog.copyKeyTitle': 'Copy API key to clipboard',
+  'config.providerDialog.clearKeyTitle': 'Clear the current API key',
+  'config.providerDialog.showKeyTitle': 'Show the API key',
+  'config.providerDialog.hideKeyTitle': 'Hide the API key',
+  'config.providerDialog.keyPlaceholder': 'Enter this provider API key...',
+  'config.providerDialog.models': 'Available models (MODELS FOR {name})',
+  'config.providerDialog.fetchTitle': 'Fetch all models supported by this provider endpoint',
+  'config.providerDialog.fetching': 'Fetching...',
+  'config.providerDialog.fetch': 'Fetch models automatically',
+  'config.providerDialog.defaultModelTitle': 'Default model for this provider: {model}',
+  'config.providerDialog.setDefaultModelTitle': 'Set {model} as the default model',
+  'config.providerDialog.defaultBadgeTitle': 'Default model',
+  'config.providerDialog.removeModelTitle': 'Remove {model} from the list',
+  'config.providerDialog.removeModelAria': 'Remove {model}',
+  'config.providerDialog.manualTitle': 'Manually enter a custom model ID',
+  'config.providerDialog.cancelManual': 'Cancel',
+  'config.providerDialog.manual': '+ Add manually',
+  'config.providerDialog.modelPlaceholder': 'Enter a model ID (e.g. gpt-4o, claude-3-5-sonnet...)',
+  'config.providerDialog.saveModel': '+ Save model',
+
+  'config.fetch.title': 'Models from {name}',
+  'config.fetch.badge': '{count} models available',
+  'config.fetch.closeTitle': 'Close window',
+  'config.fetch.search': 'Search models...',
+  'config.fetch.selectAllTitle': 'Select all filtered models not yet added',
+  'config.fetch.selectAll': 'Select all',
+  'config.fetch.unselectAllTitle': 'Clear all selections',
+  'config.fetch.unselectAll': 'Unselect all',
+  'config.fetch.empty': 'No matching models',
+  'config.fetch.added': 'Added',
+  'config.fetch.pending': 'Pending',
+  'config.fetch.selected': '{count} new models selected',
+  'config.fetch.confirm': 'Import selected models',
+
+  'config.error.title': 'Connectivity Diagnostics',
+  'config.error.closeTitle': 'Close diagnostics',
+  'config.error.provider': 'Tested provider',
+  'config.error.endpoint': 'Endpoint',
+  'config.error.summary': 'Summary',
+  'config.error.raw': 'Raw server response / stack trace:',
+  'config.error.copied': 'Copied to clipboard',
+  'config.error.copy': 'Copy diagnostic log',
+
+  'config.delete.title': 'Delete Provider',
+  'config.delete.message':
+    'Delete {name}? Its {count} model configurations will also be removed. This cannot be undone.',
+  'config.delete.primaryWarning':
+    'It is currently the default provider. The default will switch to {name}.',
+  'config.delete.confirm': 'Delete provider',
+
+  'config.unsaved.title': 'Unsaved Changes',
+  'config.unsaved.message':
+    'Your changes to providers, shortcuts, or translation preferences have not been saved. Closing Preferences now will discard them.',
+  'config.unsaved.discard': 'Discard and close',
+  'config.unsaved.continue': 'Continue editing'
+}
+
+const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
+  'zh-CN': zhCN,
+  en
+}
+
+/** 替换词条中的花括号变量，未提供的变量保持原样便于排查 */
+const interpolate = (template: string, params?: TranslationParams): string => {
+  if (!params) return template
+  return template.replace(/\{(\w+)\}/g, (match, key: string) => {
+    const value = params[key]
+    return value === undefined ? match : String(value)
+  })
+}
+
+/** 根据界面语言获取翻译函数 */
+export const createTranslator = (language: AppLanguage): Translate => {
+  return (key, params) => interpolate(messages[language][key], params)
+}
+
+/** 无需 React 上下文时直接翻译单个词条 */
+export const translate = (
+  language: AppLanguage,
+  key: TranslationKey,
+  params?: TranslationParams
+): string => {
+  return interpolate(messages[language][key], params)
+}
+
+const LANGUAGE_LABEL_KEYS: Record<SupportedLanguage, TranslationKey> = {
+  auto: 'language.auto',
+  zh: 'language.zh',
+  en: 'language.en',
+  ja: 'language.ja',
+  ko: 'language.ko',
+  fr: 'language.fr',
+  de: 'language.de',
+  es: 'language.es',
+  ru: 'language.ru',
+  it: 'language.it',
+  pt: 'language.pt'
+}
+
+const LANGUAGE_SHORT_LABEL_KEYS: Record<SupportedLanguage, TranslationKey> = {
+  auto: 'language.short.auto',
+  zh: 'language.short.zh',
+  en: 'language.short.en',
+  ja: 'language.short.ja',
+  ko: 'language.short.ko',
+  fr: 'language.short.fr',
+  de: 'language.short.de',
+  es: 'language.short.es',
+  ru: 'language.short.ru',
+  it: 'language.short.it',
+  pt: 'language.short.pt'
+}
+
+/** 获取语言选择器中展示的完整语言名称 */
+export const getLanguageLabel = (language: AppLanguage, code: SupportedLanguage): string => {
+  return translate(language, LANGUAGE_LABEL_KEYS[code])
+}
+
+/** 获取主窗口顶部使用的紧凑语言名称 */
+export const getLanguageShortLabel = (language: AppLanguage, code: SupportedLanguage): string => {
+  return translate(language, LANGUAGE_SHORT_LABEL_KEYS[code])
+}
+
+const BUILT_IN_PROVIDER_NAMES: Record<string, Record<AppLanguage, string>> = {
+  deepseek: { 'zh-CN': 'DeepSeek 官方', en: 'DeepSeek Official' },
+  cline: { 'zh-CN': 'ClinePass', en: 'ClinePass' },
+  qwen: { 'zh-CN': '通义千问', en: 'Qwen' },
+  openai: { 'zh-CN': 'OpenAI 官方', en: 'OpenAI Official' },
+  ollama: { 'zh-CN': 'Ollama 本地', en: 'Ollama Local' },
+  stepfun: { 'zh-CN': '阶跃星辰', en: 'StepFun' }
+}
+
+/**
+ * 获取服务商的界面显示名称。
+ * 只有在名称仍等于任一内置默认值时才会跟随界面语言切换；
+ * 用户手动改过的名称始终原样显示，避免覆盖用户数据。
+ */
+export const getProviderDisplayName = (
+  language: AppLanguage,
+  provider: { id: string; name: string }
+): string => {
+  const preset = BUILT_IN_PROVIDER_NAMES[provider.id]
+  if (!preset) return provider.name
+  const isUntouchedDefault = provider.name === preset['zh-CN'] || provider.name === preset.en
+  return isUntouchedDefault ? preset[language] : provider.name
+}

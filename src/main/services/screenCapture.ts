@@ -3,6 +3,17 @@ import { execFile } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { unlink } from 'fs/promises'
 import { recognizeImageText } from './ocrEngine'
+import { normalizeAppLanguage, translate } from '../../shared/i18n'
+import { getLLMConfig } from './configManager'
+
+/** 获取当前持久化的界面语言，用于系统弹窗与截图错误提示 */
+const getMessageLanguage = (): ReturnType<typeof normalizeAppLanguage> =>
+  normalizeAppLanguage(getLLMConfig().general?.language)
+
+const t = (
+  key: Parameters<typeof translate>[1],
+  params?: Parameters<typeof translate>[2]
+): string => translate(getMessageLanguage(), key, params)
 
 // 防止并发触发多次截屏（快捷键连按时窗口状态与截图选区会相互干扰）
 let isCapturing = false
@@ -107,11 +118,10 @@ export const openScreenRecordingSettings = async (): Promise<void> => {
 export const promptScreenRecordingPermission = async (): Promise<void> => {
   const result = await dialog.showMessageBox({
     type: 'warning',
-    title: '需要「屏幕录制」权限',
-    message: '无法截取屏幕图像（macOS 拒绝访问屏幕画面）',
-    detail:
-      'macOS 安全机制要求截图功能必须被授予「屏幕录制」权限。\n\n请点击下方按钮打开「系统设置」，为您当前运行的终端（Terminal / iTerm / VS Code）或 Electron 应用开启屏幕录制开关，然后重新运行即可。',
-    buttons: ['前往系统设置开启', '取消'],
+    title: t('capture.permissionTitle'),
+    message: t('capture.permissionMessage'),
+    detail: t('capture.permissionDetail'),
+    buttons: [t('capture.permissionAction'), t('common.cancel')],
     defaultId: 0,
     cancelId: 1
   })
@@ -171,7 +181,7 @@ export const triggerScreenshotTranslation = async (
   // 防止连按快捷键并发触发多次截屏
   if (isCapturing) {
     debugCapture('[main] 已有截屏流程进行中，忽略本次触发')
-    return { ok: false, message: '截屏进行中' }
+    return { ok: false, message: t('capture.busy') }
   }
   isCapturing = true
 
@@ -228,12 +238,12 @@ export const triggerScreenshotTranslation = async (
         }
       }
       debugCapture('[main][截图诊断] 用户取消截图，已恢复窗口:', describeWindowStates())
-      return { ok: false, message: '用户取消截图' }
+      return { ok: false, message: t('capture.cancelled') }
     }
 
     if (!mainWindow || mainWindow.isDestroyed()) {
       await unlink(tempImagePath).catch(() => {})
-      return { ok: false, message: '主窗口未初始化' }
+      return { ok: false, message: t('capture.noMainWindow') }
     }
 
     // 恢复截图前可见的附属窗口（如配置窗口）
@@ -291,8 +301,8 @@ export const triggerScreenshotTranslation = async (
       mainWindow.show()
       mainWindow.focus()
       const userMessage = isPermissionError
-        ? '截屏失败：缺少系统「屏幕录制」权限，请在系统设置中开启'
-        : `[截屏异常]: ${rawErrorMsg}`
+        ? t('capture.permissionError')
+        : t('capture.exception', { message: rawErrorMsg })
 
       // 失败信息走 ocr-status 而不是 apply-source-text：
       // 后者会把错误文案塞进源输入框并触发一次翻译，等于「把报错当内容去翻」

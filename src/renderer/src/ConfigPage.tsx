@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import type {
+  AppLanguage,
   AppSettings,
   GeneralSettings,
   ProviderItem,
@@ -14,6 +15,15 @@ import {
   DEFAULT_TRANSLATION_SETTINGS
 } from '../../shared/config'
 import { SUPPORTED_LANGUAGES } from '../../shared/languageDetector'
+import {
+  APP_LANGUAGES,
+  getLanguageLabel,
+  getProviderDisplayName,
+  normalizeAppLanguage,
+  type Translate,
+  type TranslationKey
+} from '../../shared/i18n'
+import { useI18n } from './i18n/useI18n'
 import deepseekLogo from './assets/brands/deepseek.svg'
 import clineLogo from './assets/brands/cline.svg'
 
@@ -24,14 +34,14 @@ type PrefNavCategory = 'providers' | 'shortcuts' | 'translation' | 'general'
 
 interface NavItem {
   id: PrefNavCategory
-  title: string
+  titleKey: TranslationKey
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'providers', title: 'AI 模型' },
-  { id: 'shortcuts', title: '快捷键' },
-  { id: 'translation', title: '翻译偏好' },
-  { id: 'general', title: '通用设置' }
+  { id: 'providers', titleKey: 'config.nav.providers' },
+  { id: 'shortcuts', titleKey: 'config.nav.shortcuts' },
+  { id: 'translation', titleKey: 'config.nav.translation' },
+  { id: 'general', titleKey: 'config.nav.general' }
 ]
 
 /**
@@ -93,8 +103,8 @@ const PROVIDER_BRANDS: Record<string, ProviderBrand> = {
  * 服务商变多时，分组比单一顺序更容易一眼找到停用的那个。
  */
 const PROVIDER_GROUPS = [
-  { key: 'on', title: '已启用' },
-  { key: 'off', title: '未启用' }
+  { key: 'on', titleKey: 'config.provider.groupOn' },
+  { key: 'off', titleKey: 'config.provider.groupOff' }
 ] as const
 
 /**
@@ -114,63 +124,69 @@ const ProviderBrandLogo = ({ providerId }: { providerId: string }): React.JSX.El
   )
 }
 
-const PRESET_TEMPLATES: ProviderTemplate[] = [
-  {
-    id: 'deepseek',
-    name: 'DeepSeek 官方',
-    baseUrl: 'https://api.deepseek.com/v1',
-    defaultModel: 'deepseek-chat',
-    models: [
-      { id: 'deepseek-chat', label: 'DeepSeek-V3 对话' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek-R1 深度推理' }
-    ]
-  },
-  {
-    id: 'cline',
-    name: 'ClinePass',
-    baseUrl: 'https://api.cline.bot/api/v1',
-    defaultModel: 'cline-pass/deepseek-v4.1-flash',
-    models: [
-      { id: 'cline-pass/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' },
-      { id: 'cline-pass/qwen3.7-max', label: 'Qwen 3.7 Max' },
-      { id: 'cline-pass/muse-spark-1.3-contributor', label: 'Muse Spark 1.3' }
-    ]
-  },
-  {
-    id: 'qwen',
-    name: '通义千问',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    defaultModel: 'qwen-plus',
-    models: [
-      { id: 'qwen-plus', label: 'Qwen Plus 平衡版' },
-      { id: 'qwen-max', label: 'Qwen Max 旗舰版' }
-    ]
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI 官方',
-    baseUrl: 'https://api.openai.com/v1',
-    defaultModel: 'gpt-4o-mini',
-    models: [
-      { id: 'gpt-4o-mini', label: 'GPT-4o Mini 极速' },
-      { id: 'gpt-4o', label: 'GPT-4o 旗舰' }
-    ]
-  },
-  {
-    id: 'ollama',
-    name: 'Ollama 本地',
-    baseUrl: 'http://localhost:11434/v1',
-    defaultModel: 'llama3:latest',
-    models: [{ id: 'llama3:latest', label: 'Llama 3' }]
-  },
-  {
-    id: 'stepfun',
-    name: '阶跃星辰',
-    baseUrl: 'https://api.stepfun.com/v1',
-    defaultModel: 'step-1-8k',
-    models: [{ id: 'step-1-8k', label: 'Step 1 8k' }]
-  }
-]
+const getPresetTemplates = (language: AppLanguage): ProviderTemplate[] => {
+  const isEnglish = language === 'en'
+  return [
+    {
+      id: 'deepseek',
+      name: isEnglish ? 'DeepSeek Official' : 'DeepSeek 官方',
+      baseUrl: 'https://api.deepseek.com/v1',
+      defaultModel: 'deepseek-chat',
+      models: [
+        { id: 'deepseek-chat', label: isEnglish ? 'DeepSeek-V3 Chat' : 'DeepSeek-V3 对话' },
+        {
+          id: 'deepseek-reasoner',
+          label: isEnglish ? 'DeepSeek-R1 Reasoning' : 'DeepSeek-R1 深度推理'
+        }
+      ]
+    },
+    {
+      id: 'cline',
+      name: 'ClinePass',
+      baseUrl: 'https://api.cline.bot/api/v1',
+      defaultModel: 'cline-pass/deepseek-v4.1-flash',
+      models: [
+        { id: 'cline-pass/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' },
+        { id: 'cline-pass/qwen3.7-max', label: 'Qwen 3.7 Max' },
+        { id: 'cline-pass/muse-spark-1.3-contributor', label: 'Muse Spark 1.3' }
+      ]
+    },
+    {
+      id: 'qwen',
+      name: isEnglish ? 'Qwen' : '通义千问',
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      defaultModel: 'qwen-plus',
+      models: [
+        { id: 'qwen-plus', label: isEnglish ? 'Qwen Plus Balanced' : 'Qwen Plus 平衡版' },
+        { id: 'qwen-max', label: isEnglish ? 'Qwen Max Flagship' : 'Qwen Max 旗舰版' }
+      ]
+    },
+    {
+      id: 'openai',
+      name: isEnglish ? 'OpenAI Official' : 'OpenAI 官方',
+      baseUrl: 'https://api.openai.com/v1',
+      defaultModel: 'gpt-4o-mini',
+      models: [
+        { id: 'gpt-4o-mini', label: isEnglish ? 'GPT-4o Mini Fast' : 'GPT-4o Mini 极速' },
+        { id: 'gpt-4o', label: isEnglish ? 'GPT-4o Flagship' : 'GPT-4o 旗舰' }
+      ]
+    },
+    {
+      id: 'ollama',
+      name: isEnglish ? 'Ollama Local' : 'Ollama 本地',
+      baseUrl: 'http://localhost:11434/v1',
+      defaultModel: 'llama3:latest',
+      models: [{ id: 'llama3:latest', label: 'Llama 3' }]
+    },
+    {
+      id: 'stepfun',
+      name: isEnglish ? 'StepFun' : '阶跃星辰',
+      baseUrl: 'https://api.stepfun.com/v1',
+      defaultModel: 'step-1-8k',
+      models: [{ id: 'step-1-8k', label: 'Step 1 8k' }]
+    }
+  ]
+}
 
 /**
  * 挑选接手默认渠道的服务商：优先仍然启用的，全都被停用时才退回首项。
@@ -182,18 +198,26 @@ const pickNextPrimaryProvider = (list: ProviderItem[]): ProviderItem | undefined
 /**
  * 组装连通性测试结果的悬浮提示，把测速细节（首 token 延迟、输出 token 数、总耗时）一并展示
  */
-const buildTestResultTooltip = (result: TestConnectionResult): string => {
+const buildTestResultTooltip = (result: TestConnectionResult, t: Translate): string => {
   if (!result.ok) {
-    return result.errorDetail ? `${result.message}（点击“诊断报告”查看详情）` : result.message
+    return result.errorDetail
+      ? t('config.test.tooltipDetails', { message: result.message })
+      : result.message
   }
 
   const details: string[] = []
   if (typeof result.firstTokenMs === 'number')
-    details.push(`首 token 延迟 ${result.firstTokenMs}ms`)
+    details.push(t('config.test.firstToken', { value: result.firstTokenMs }))
   if (typeof result.outputTokens === 'number') {
-    details.push(`本次输出 ${result.speedEstimated ? '约 ' : ''}${result.outputTokens} 个 token`)
+    details.push(
+      t('config.test.outputTokens', {
+        estimated: result.speedEstimated ? t('config.test.estimatedPrefix') : '',
+        count: result.outputTokens
+      })
+    )
   }
-  if (typeof result.latencyMs === 'number') details.push(`总耗时 ${result.latencyMs}ms`)
+  if (typeof result.latencyMs === 'number')
+    details.push(t('config.test.totalLatency', { value: result.latencyMs }))
 
   if (details.length === 0) return result.message
   return `${result.message}\n${details.join(' · ')}`
@@ -204,15 +228,21 @@ const buildTestResultTooltip = (result: TestConnectionResult): string => {
  *
  * 优先取括号里的三位状态码；没有状态码时退化为按关键词判断超时与鉴权问题。
  */
-const extractFailureHint = (message: string): string => {
+const extractFailureHint = (message: string, t: Translate): string => {
   const statusMatch = message.match(/[(（](\d{3})[)）]/)
   if (statusMatch) return `(${statusMatch[1]})`
-  if (message.includes('超时')) return '(超时)'
-  if (message.includes('鉴权')) return '(鉴权失败)'
+  if (message.includes('超时') || message.toLowerCase().includes('timed out')) {
+    return t('config.test.failureTimeout')
+  }
+  if (message.includes('鉴权') || message.toLowerCase().includes('authentication')) {
+    return t('config.test.failureAuth')
+  }
   return ''
 }
 
 export const ConfigPage = (): React.JSX.Element => {
+  const { language, setLanguage, t } = useI18n()
+
   // 当前处于的左侧分类
   const [activeCategory, setActiveCategory] = useState<PrefNavCategory>('providers')
 
@@ -277,6 +307,9 @@ export const ConfigPage = (): React.JSX.Element => {
   // 手动录入单模型展开状态（默认收起以释放纵向空间）
   const [showManualAdd, setShowManualAdd] = useState(false)
 
+  // 服务商预设名称跟随当前界面语言，避免英文界面中创建出中文默认名称。
+  const presetTemplates = useMemo(() => getPresetTemplates(language), [language])
+
   /**
    * 写入页脚反馈消息。
    * 默认按"成功"处理；错误与警告必须显式传 tone，避免失败信息被当成绿色成功态。
@@ -328,6 +361,7 @@ export const ConfigPage = (): React.JSX.Element => {
         }
         if (cfg.general) {
           setGeneral({ ...cfg.general })
+          setLanguage(normalizeAppLanguage(cfg.general.language))
         }
       })
       .catch((error) => {
@@ -337,7 +371,7 @@ export const ConfigPage = (): React.JSX.Element => {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [setLanguage])
 
   /**
    * 关闭设置窗口。
@@ -467,7 +501,11 @@ export const ConfigPage = (): React.JSX.Element => {
       prev.map((item) => (item.id === providerId ? { ...item, enabled: true } : item))
     )
     setActiveProviderId(providerId)
-    showFeedback(`已将【${target.name}】设为默认服务商`)
+    showFeedback(
+      t('config.feedback.providerPrimary', {
+        name: getProviderDisplayName(language, target)
+      })
+    )
   }
 
   /**
@@ -490,7 +528,7 @@ export const ConfigPage = (): React.JSX.Element => {
     const exists = providers.some((p) => p.id === template.id)
     if (exists) {
       setSelectedTabId(template.id)
-      showFeedback(`已定位至【${template.name}】`)
+      showFeedback(t('config.feedback.providerLocated', { name: template.name }))
       return
     }
 
@@ -507,7 +545,7 @@ export const ConfigPage = (): React.JSX.Element => {
 
     setProviders((prev) => [...prev, newProvider])
     setSelectedTabId(newProvider.id)
-    showFeedback(`已添加【${template.name}】，请配置 API Key`)
+    showFeedback(t('config.feedback.providerAdded', { name: template.name }))
   }
 
   /**
@@ -517,18 +555,18 @@ export const ConfigPage = (): React.JSX.Element => {
     const customId = `custom_${Date.now()}`
     const newProvider: ProviderItem = {
       id: customId,
-      name: `自定义服务商 ${providers.length + 1}`,
+      name: t('config.provider.customName', { index: providers.length + 1 }),
       providerType: 'openai-compatible',
       baseUrl: 'https://',
       apiKey: '',
       enabled: true,
-      models: [{ id: 'custom-model', label: '默认模型' }],
+      models: [{ id: 'custom-model', label: t('config.provider.defaultModel') }],
       defaultModel: 'custom-model'
     }
 
     setProviders((prev) => [...prev, newProvider])
     setSelectedTabId(customId)
-    showFeedback('已创建服务商，请填写名称与 API Key')
+    showFeedback(t('config.feedback.providerCreated'))
   }
 
   /**
@@ -536,11 +574,14 @@ export const ConfigPage = (): React.JSX.Element => {
    */
   const handleDeleteProvider = (providerIdToDelete: string): void => {
     if (providers.length <= 1) {
-      showFeedback('至少需要保留一个服务商', 'error')
+      showFeedback(t('config.feedback.keepOneProvider'), 'error')
       return
     }
 
-    const removedName = providers.find((p) => p.id === providerIdToDelete)?.name ?? '该服务商'
+    const removedProvider = providers.find((p) => p.id === providerIdToDelete)
+    const removedName = removedProvider
+      ? getProviderDisplayName(language, removedProvider)
+      : t('config.provider.notConnected')
     const nextList = providers.filter((p) => p.id !== providerIdToDelete)
     const wasPrimary = activeProviderId === providerIdToDelete
     setProviders(nextList)
@@ -561,8 +602,11 @@ export const ConfigPage = (): React.JSX.Element => {
     setIsProviderDialogOpen(false)
     showFeedback(
       wasPrimary && nextPrimary
-        ? `已删除【${removedName}】，主界面默认渠道已切到【${nextPrimary.name}】`
-        : `已删除【${removedName}】`
+        ? t('config.feedback.providerDeletedPrimary', {
+            name: removedName,
+            nextName: getProviderDisplayName(language, nextPrimary)
+          })
+        : t('config.feedback.providerDeleted', { name: removedName })
     )
   }
 
@@ -586,7 +630,7 @@ export const ConfigPage = (): React.JSX.Element => {
     if (!trimmed) return
 
     if (activeProvider.models.some((m) => m.id === trimmed)) {
-      showFeedback(`模型 ${trimmed} 已在列表中`, 'neutral')
+      showFeedback(t('config.feedback.modelExists', { model: trimmed }), 'neutral')
       setNewModelId('')
       return
     }
@@ -597,7 +641,12 @@ export const ConfigPage = (): React.JSX.Element => {
       defaultModel: activeProvider.defaultModel || trimmed
     })
     setNewModelId('')
-    showFeedback(`已为【${activeProvider.name}】添加模型 ${trimmed}`)
+    showFeedback(
+      t('config.feedback.modelAdded', {
+        provider: getProviderDisplayName(language, activeProvider),
+        model: trimmed
+      })
+    )
   }
 
   /**
@@ -620,7 +669,7 @@ export const ConfigPage = (): React.JSX.Element => {
   const handleRemoveModelFromActive = (modelIdToRemove: string): void => {
     if (!activeProvider) return
     if (activeProvider.models.length <= 1) {
-      showFeedback('每个服务商至少保留一个可用模型', 'error')
+      showFeedback(t('config.feedback.keepOneModel'), 'error')
       return
     }
 
@@ -643,17 +692,18 @@ export const ConfigPage = (): React.JSX.Element => {
     if (!activeProvider) return
     const targetUrl = cleanBaseUrl(activeProvider.baseUrl)
     if (!targetUrl) {
-      showFeedback('请先输入有效的服务地址 (Base URL)', 'error')
+      showFeedback(t('config.feedback.baseUrlRequired'), 'error')
       return
     }
 
     setIsFetchingModels(true)
-    showFeedback('正在从服务商接口拉取模型列表...', 'neutral')
+    showFeedback(t('config.feedback.fetchingModels'), 'neutral')
 
     try {
       const result = await window.api.fetchModels({
         baseUrl: targetUrl,
-        apiKey: activeProvider.apiKey.trim()
+        apiKey: activeProvider.apiKey.trim(),
+        language
       })
 
       if (result.ok && Array.isArray(result.models) && result.models.length > 0) {
@@ -668,19 +718,31 @@ export const ConfigPage = (): React.JSX.Element => {
         setSelectedModelsToAdd(initialSelection)
         setModelSearchQuery('')
         setShowFetchModal(true)
-        showFeedback(`成功获取到 ${result.models.length} 个模型`)
+        showFeedback(t('config.feedback.modelsFetched', { count: result.models.length }))
       } else {
-        showFeedback(`拉取模型失败: ${result.error || '未返回有效模型'}`, 'error')
+        showFeedback(
+          t('config.feedback.fetchFailed', {
+            error: result.error || t('config.feedback.fetchNoModels')
+          }),
+          'error'
+        )
         if (result.errorDetail) {
           setTestResult({
             ok: false,
-            message: `拉取模型失败: ${result.error || '请求异常'}`,
+            message: t('config.feedback.fetchFailed', {
+              error: result.error || t('config.feedback.fetchRequestError')
+            }),
             errorDetail: result.errorDetail
           })
         }
       }
     } catch (err) {
-      showFeedback(`拉取异常: ${err instanceof Error ? err.message : '网络错误'}`, 'error')
+      showFeedback(
+        t('config.feedback.fetchException', {
+          error: err instanceof Error ? err.message : t('config.feedback.networkError')
+        }),
+        'error'
+      )
     } finally {
       setIsFetchingModels(false)
     }
@@ -704,7 +766,7 @@ export const ConfigPage = (): React.JSX.Element => {
 
     if (newItems.length === 0) {
       setShowFetchModal(false)
-      showFeedback('所选模型已全部存在于列表中', 'neutral')
+      showFeedback(t('config.feedback.modelsAlreadyExist'), 'neutral')
       return
     }
 
@@ -714,7 +776,12 @@ export const ConfigPage = (): React.JSX.Element => {
       defaultModel: activeProvider.defaultModel || newItems[0].id
     })
     setShowFetchModal(false)
-    showFeedback(`已成功为【${activeProvider.name}】添加 ${newItems.length} 个模型`)
+    showFeedback(
+      t('config.feedback.modelsAdded', {
+        provider: getProviderDisplayName(language, activeProvider),
+        count: newItems.length
+      })
+    )
   }
 
   /**
@@ -722,14 +789,14 @@ export const ConfigPage = (): React.JSX.Element => {
    */
   const handleCopyApiKey = async (): Promise<void> => {
     if (!activeProvider?.apiKey) {
-      showFeedback('当前 API Key 为空，无需复制', 'neutral')
+      showFeedback(t('config.feedback.apiKeyEmpty'), 'neutral')
       return
     }
     try {
       await navigator.clipboard.writeText(activeProvider.apiKey)
-      showFeedback('API Key 已复制到剪贴板')
+      showFeedback(t('config.feedback.apiKeyCopied'))
     } catch {
-      showFeedback('复制失败，请手动选取复制', 'error')
+      showFeedback(t('config.feedback.copyFailed'), 'error')
     }
   }
 
@@ -755,7 +822,7 @@ export const ConfigPage = (): React.JSX.Element => {
     } catch (error) {
       setTestResult({
         ok: false,
-        message: error instanceof Error ? error.message : '连接测试执行异常'
+        message: error instanceof Error ? error.message : t('config.feedback.testException')
       })
     } finally {
       setIsTesting(false)
@@ -801,15 +868,25 @@ export const ConfigPage = (): React.JSX.Element => {
         setIsDirty(false)
         // state 收敛为落盘时清洗过的数据，避免"基线是清洗值、state 是原始值"导致脏标记反复
         setProviders(sanitizedProviders)
-        showFeedback('系统偏好设置已保存并生效')
+        showFeedback(t('config.feedback.saved'))
         setTimeout(() => {
           void window.api.closeConfigWindow()
         }, 400)
       } else {
-        showFeedback(`保存失败: ${result.error || '未知错误'}`, 'error')
+        showFeedback(
+          t('config.feedback.saveFailed', {
+            error: result.error || t('config.feedback.unknownError')
+          }),
+          'error'
+        )
       }
     } catch (error) {
-      showFeedback(`保存异常: ${error instanceof Error ? error.message : '未知错误'}`, 'error')
+      showFeedback(
+        t('config.feedback.saveException', {
+          error: error instanceof Error ? error.message : t('config.feedback.unknownError')
+        }),
+        'error'
+      )
     } finally {
       setIsSaving(false)
     }
@@ -817,8 +894,8 @@ export const ConfigPage = (): React.JSX.Element => {
 
   // 尚未添加的预置模板
   const unaddedTemplates = useMemo(() => {
-    return PRESET_TEMPLATES.filter((tmpl) => !providers.some((p) => p.id === tmpl.id))
-  }, [providers])
+    return presetTemplates.filter((tmpl) => !providers.some((p) => p.id === tmpl.id))
+  }, [presetTemplates, providers])
 
   // 过滤拉取到的模型列表
   const filteredFetchedModels = useMemo(() => {
@@ -831,13 +908,13 @@ export const ConfigPage = (): React.JSX.Element => {
   const enabledProviderCount = useMemo(() => providers.filter((p) => p.enabled).length, [providers])
 
   // 失败时用于紧凑结果胶囊的简短提示，例如「(404)」
-  const failureHint = testResult ? extractFailureHint(testResult.message) : ''
+  const failureHint = testResult ? extractFailureHint(testResult.message, t) : ''
 
   return (
     <div className="pref-root" data-pref-theme={PREF_THEME}>
       {/* 顶部栏：一级分类导航（药丸式切换）+ 关闭 */}
       <header className="pref-header">
-        <nav className="pref-topnav" aria-label="偏好设置分类">
+        <nav className="pref-topnav" aria-label={t('config.nav.aria')}>
           {NAV_ITEMS.map((item) => {
             const isActive = item.id === activeCategory
             return (
@@ -847,7 +924,7 @@ export const ConfigPage = (): React.JSX.Element => {
                 className={`pref-topnav-tab ${isActive ? 'pref-topnav-tab-active' : ''}`}
                 onClick={() => setActiveCategory(item.id)}
               >
-                {item.title}
+                {t(item.titleKey)}
               </button>
             )
           })}
@@ -858,8 +935,8 @@ export const ConfigPage = (): React.JSX.Element => {
           <button
             type="button"
             className="pref-close-btn"
-            aria-label="关闭设置窗口"
-            title="关闭设置 (ESC)"
+            aria-label={t('config.close.aria')}
+            title={t('config.close.title')}
             onClick={requestCloseConfigWindow}
           >
             ×
@@ -878,19 +955,22 @@ export const ConfigPage = (): React.JSX.Element => {
               <div className="pref-provider-bar">
                 {/* 标题行：数量统计、翻页箭头与添加渠道入口 */}
                 <div className="pref-provider-bar-head">
-                  <span className="pref-provider-bar-title">选择服务商</span>
+                  <span className="pref-provider-bar-title">{t('config.provider.title')}</span>
                   <div className="pref-provider-bar-tools">
                     <span className="pref-provider-count">
-                      {providers.length} 个 · 已启用 {enabledProviderCount} 个
+                      {t('config.provider.count', {
+                        total: providers.length,
+                        enabled: enabledProviderCount
+                      })}
                     </span>
                     <div className="pref-add-dropdown-container" ref={addMenuRef}>
                       <button
                         type="button"
                         className={`pref-btn-add-provider ${showAddMenu ? 'pref-btn-add-active' : ''}`}
                         onClick={() => setShowAddMenu((prev) => !prev)}
-                        title="添加服务商（自定义或从官方预置快速导入）"
+                        title={t('config.provider.addTitle')}
                       >
-                        <span>+ 添加渠道</span>
+                        <span>{t('config.provider.add')}</span>
                         <span className="pref-dropdown-arrow">{showAddMenu ? '▴' : '▾'}</span>
                       </button>
 
@@ -905,13 +985,15 @@ export const ConfigPage = (): React.JSX.Element => {
                             }}
                           >
                             <span className="pref-menu-item-icon">+</span>
-                            <span>自定义空白服务商</span>
+                            <span>{t('config.provider.custom')}</span>
                           </button>
 
                           {unaddedTemplates.length > 0 ? (
                             <>
                               <div className="pref-add-menu-divider" />
-                              <div className="pref-add-menu-label">从官方预置快速导入：</div>
+                              <div className="pref-add-menu-label">
+                                {t('config.provider.importPresets')}
+                              </div>
                               {unaddedTemplates.map((tmpl) => (
                                 <button
                                   key={tmpl.id}
@@ -949,7 +1031,7 @@ export const ConfigPage = (): React.JSX.Element => {
                     return (
                       <div key={group.key} className="pref-provider-group">
                         <div className="pref-provider-group-title">
-                          {group.title} · {items.length}
+                          {t(group.titleKey)} · {items.length}
                         </div>
                         {items.map((p) => {
                           const isPrimary = p.id === activeProviderId
@@ -968,20 +1050,30 @@ export const ConfigPage = (): React.JSX.Element => {
                                   openProviderDialog(p.id)
                                 }
                               }}
-                              title={isPrimary ? '当前全局生效的默认服务商' : `编辑 ${p.name}`}
+                              title={
+                                isPrimary
+                                  ? t('config.provider.currentDefault')
+                                  : t('config.provider.edit', {
+                                      name: getProviderDisplayName(language, p)
+                                    })
+                              }
                             >
                               <ProviderBrandLogo providerId={p.id} />
                               <span className="pref-provider-row-name">
-                                {p.name}
+                                {getProviderDisplayName(language, p)}
                                 {isPrimary ? (
-                                  <span className="pref-primary-indicator">默认</span>
+                                  <span className="pref-primary-indicator">
+                                    {t('config.provider.defaultBadge')}
+                                  </span>
                                 ) : null}
                               </span>
                               <span className="pref-provider-row-model">
-                                {modelText || '未接入'}
+                                {modelText || t('config.provider.notConnected')}
                               </span>
                               <span className="pref-provider-row-count">
-                                {p.models.length > 0 ? `· ${p.models.length} 个模型` : ''}
+                                {p.models.length > 0
+                                  ? t('config.provider.modelCount', { count: p.models.length })
+                                  : ''}
                               </span>
                               {isPrimary ? null : (
                                 <button
@@ -991,9 +1083,11 @@ export const ConfigPage = (): React.JSX.Element => {
                                     e.stopPropagation()
                                     handleSetProviderPrimary(p.id)
                                   }}
-                                  title={`将 ${p.name} 设为主界面默认渠道`}
+                                  title={t('config.provider.setDefaultTitle', {
+                                    name: getProviderDisplayName(language, p)
+                                  })}
                                 >
-                                  设为默认
+                                  {t('config.provider.setDefault')}
                                 </button>
                               )}
                               <button
@@ -1003,8 +1097,20 @@ export const ConfigPage = (): React.JSX.Element => {
                                   e.stopPropagation()
                                   handleToggleProviderEnabled(p.id)
                                 }}
-                                title={p.enabled ? '停用该服务商' : '启用该服务商'}
-                                aria-label={p.enabled ? `停用 ${p.name}` : `启用 ${p.name}`}
+                                title={
+                                  p.enabled
+                                    ? t('config.provider.disable')
+                                    : t('config.provider.enable')
+                                }
+                                aria-label={
+                                  p.enabled
+                                    ? t('config.provider.disableAria', {
+                                        name: getProviderDisplayName(language, p)
+                                      })
+                                    : t('config.provider.enableAria', {
+                                        name: getProviderDisplayName(language, p)
+                                      })
+                                }
                               >
                                 <span className="pref-switch-thumb" />
                               </button>
@@ -1024,37 +1130,39 @@ export const ConfigPage = (): React.JSX.Element => {
             <div className="pref-panel-fade">
               <div className="pref-settings-bar">
                 <div className="pref-settings-bar-head">
-                  <span className="pref-settings-bar-title">全局呼出快捷键</span>
+                  <span className="pref-settings-bar-title">{t('config.shortcuts.title')}</span>
                   <div className="pref-settings-bar-tools">
-                    <span className="pref-settings-count">3 项</span>
+                    <span className="pref-settings-count">{t('config.shortcuts.count')}</span>
                     <button
                       type="button"
                       className="pref-settings-action"
                       onClick={() => {
                         setShortcuts({ ...DEFAULT_SHORTCUTS })
-                        showFeedback('快捷键已重置为默认值')
+                        showFeedback(t('config.feedback.shortcutsReset'))
                       }}
                     >
-                      恢复默认
+                      {t('config.shortcuts.reset')}
                     </button>
                   </div>
                 </div>
 
                 <div className="pref-settings-group">
-                  <div className="pref-settings-group-title">快捷键映射 · 3</div>
+                  <div className="pref-settings-group-title">{t('config.shortcuts.group')}</div>
                   <div className="pref-settings-list">
                     {/* 截屏翻译 */}
                     <div className="pref-settings-row">
                       <div className="pref-settings-row-head">
                         <div className="pref-settings-copy">
                           <label className="pref-settings-name" htmlFor="sc-screenshot">
-                            截屏识别翻译
+                            {t('config.shortcuts.screenshot')}
                           </label>
                           <span className="pref-settings-sub">
-                            框选屏幕区域，本地识别后直接生成译文
+                            {t('config.shortcuts.screenshotDesc')}
                           </span>
                         </div>
-                        <span className="pref-shortcut-tip">推荐: Alt+S 或 Option+S</span>
+                        <span className="pref-shortcut-tip">
+                          {t('config.shortcuts.screenshotTip')}
+                        </span>
                       </div>
                       <div className="pref-shortcut-input-group">
                         <input
@@ -1068,7 +1176,7 @@ export const ConfigPage = (): React.JSX.Element => {
                               screenshot: e.target.value.trim()
                             }))
                           }
-                          placeholder="例如: Alt+S 或 CommandOrControl+Shift+S"
+                          placeholder={t('config.shortcuts.screenshotPlaceholder')}
                           spellCheck={false}
                         />
                         <div className="pref-quick-chips">
@@ -1093,13 +1201,13 @@ export const ConfigPage = (): React.JSX.Element => {
                       <div className="pref-settings-row-head">
                         <div className="pref-settings-copy">
                           <label className="pref-settings-name" htmlFor="sc-input">
-                            呼出输入翻译窗口
+                            {t('config.shortcuts.input')}
                           </label>
                           <span className="pref-settings-sub">
-                            快速呼出输入框，粘贴或键入文本后立即翻译
+                            {t('config.shortcuts.inputDesc')}
                           </span>
                         </div>
-                        <span className="pref-shortcut-tip">推荐: Alt+A 或 Option+A</span>
+                        <span className="pref-shortcut-tip">{t('config.shortcuts.inputTip')}</span>
                       </div>
                       <div className="pref-shortcut-input-group">
                         <input
@@ -1113,7 +1221,7 @@ export const ConfigPage = (): React.JSX.Element => {
                               inputTranslate: e.target.value.trim()
                             }))
                           }
-                          placeholder="例如: Alt+A 或 CommandOrControl+Shift+A"
+                          placeholder={t('config.shortcuts.inputPlaceholder')}
                           spellCheck={false}
                         />
                         <div className="pref-quick-chips">
@@ -1138,13 +1246,15 @@ export const ConfigPage = (): React.JSX.Element => {
                       <div className="pref-settings-row-head">
                         <div className="pref-settings-copy">
                           <label className="pref-settings-name" htmlFor="sc-pref">
-                            打开偏好设置
+                            {t('config.shortcuts.preferences')}
                           </label>
                           <span className="pref-settings-sub">
-                            打开当前窗口，调整模型、快捷键与翻译行为
+                            {t('config.shortcuts.preferencesDesc')}
                           </span>
                         </div>
-                        <span className="pref-shortcut-tip">通用规范: CommandOrControl+,</span>
+                        <span className="pref-shortcut-tip">
+                          {t('config.shortcuts.preferencesTip')}
+                        </span>
                       </div>
                       <input
                         id="sc-pref"
@@ -1172,23 +1282,23 @@ export const ConfigPage = (): React.JSX.Element => {
             <div className="pref-panel-fade">
               <div className="pref-settings-bar">
                 <div className="pref-settings-bar-head">
-                  <span className="pref-settings-bar-title">翻译偏好</span>
+                  <span className="pref-settings-bar-title">{t('config.translation.title')}</span>
                   <div className="pref-settings-bar-tools">
-                    <span className="pref-settings-count">3 项</span>
+                    <span className="pref-settings-count">{t('config.translation.count')}</span>
                   </div>
                 </div>
 
                 <div className="pref-settings-group">
-                  <div className="pref-settings-group-title">翻译行为 · 3</div>
+                  <div className="pref-settings-group-title">{t('config.translation.group')}</div>
                   <div className="pref-settings-list">
                     {/* 默认目标语言 */}
                     <div className="pref-settings-row pref-settings-row-inline">
                       <div className="pref-settings-copy">
                         <label className="pref-settings-name" htmlFor="pref-target-lang">
-                          默认翻译目标语言
+                          {t('config.translation.defaultTarget')}
                         </label>
                         <span className="pref-settings-sub">
-                          未识别源语言时，译文默认输出到该语言
+                          {t('config.translation.defaultTargetDesc')}
                         </span>
                       </div>
                       <select
@@ -1204,7 +1314,7 @@ export const ConfigPage = (): React.JSX.Element => {
                       >
                         {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'auto').map((lang) => (
                           <option key={lang.code} value={lang.code}>
-                            {lang.label} ({lang.code})
+                            {getLanguageLabel(language, lang.code)} ({lang.code})
                           </option>
                         ))}
                       </select>
@@ -1221,9 +1331,11 @@ export const ConfigPage = (): React.JSX.Element => {
                       }
                     >
                       <div className="pref-settings-copy">
-                        <span className="pref-settings-name">翻译成功后自动复制到剪贴板</span>
+                        <span className="pref-settings-name">
+                          {t('config.translation.autoCopy')}
+                        </span>
                         <span className="pref-settings-sub">
-                          截屏翻译或文本翻译完成时自动写入系统剪贴板，无需手动点击复制
+                          {t('config.translation.autoCopyDesc')}
                         </span>
                       </div>
                       <div
@@ -1238,10 +1350,10 @@ export const ConfigPage = (): React.JSX.Element => {
                       <div className="pref-settings-row-head">
                         <div className="pref-settings-copy">
                           <label className="pref-settings-name" htmlFor="pref-prompt">
-                            自定义系统提示词
+                            {t('config.translation.prompt')}
                           </label>
                           <span className="pref-settings-sub">
-                            留空时使用内置格式保留指令；仅影响翻译模型，不修改原始文本
+                            {t('config.translation.promptDesc')}
                           </span>
                         </div>
                         {translation.customSystemPrompt ? (
@@ -1253,7 +1365,7 @@ export const ConfigPage = (): React.JSX.Element => {
                                 setTranslation((prev) => ({ ...prev, customSystemPrompt: '' }))
                               }
                             >
-                              恢复内置提示词
+                              {t('config.translation.restorePrompt')}
                             </button>
                           </div>
                         ) : null}
@@ -1269,7 +1381,7 @@ export const ConfigPage = (): React.JSX.Element => {
                             customSystemPrompt: e.target.value
                           }))
                         }
-                        placeholder="留空时默认采用系统精密格式保留与纯净翻译指令；您也可输入如：'你是一名专业学术翻译专家，请将文本翻译为学术级专业术语，仅输出译文。'"
+                        placeholder={t('config.translation.promptPlaceholder')}
                         spellCheck={false}
                       />
                     </div>
@@ -1284,15 +1396,43 @@ export const ConfigPage = (): React.JSX.Element => {
             <div className="pref-panel-fade">
               <div className="pref-settings-bar">
                 <div className="pref-settings-bar-head">
-                  <span className="pref-settings-bar-title">通用设置</span>
+                  <span className="pref-settings-bar-title">{t('config.general.title')}</span>
                   <div className="pref-settings-bar-tools">
-                    <span className="pref-settings-count">3 项</span>
+                    <span className="pref-settings-count">{t('config.general.count')}</span>
                   </div>
                 </div>
 
                 <div className="pref-settings-group">
-                  <div className="pref-settings-group-title">系统与窗口 · 3</div>
+                  <div className="pref-settings-group-title">{t('config.general.group')}</div>
                   <div className="pref-settings-list">
+                    {/* 界面语言 */}
+                    <div className="pref-settings-row pref-settings-row-inline">
+                      <div className="pref-settings-copy">
+                        <label className="pref-settings-name" htmlFor="pref-language">
+                          {t('config.general.language')}
+                        </label>
+                        <span className="pref-settings-sub">
+                          {t('config.general.languageDesc')}
+                        </span>
+                      </div>
+                      <select
+                        id="pref-language"
+                        className="pref-input pref-select pref-settings-select"
+                        value={general.language}
+                        onChange={(event) => {
+                          const nextLanguage = normalizeAppLanguage(event.target.value)
+                          setGeneral((prev) => ({ ...prev, language: nextLanguage }))
+                          setLanguage(nextLanguage)
+                        }}
+                      >
+                        {APP_LANGUAGES.map((languageOption) => (
+                          <option key={languageOption.code} value={languageOption.code}>
+                            {languageOption.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     {/* 开机自动启动 */}
                     <div
                       className="pref-settings-row pref-settings-row-inline pref-settings-switch-row"
@@ -1301,9 +1441,11 @@ export const ConfigPage = (): React.JSX.Element => {
                       }
                     >
                       <div className="pref-settings-copy">
-                        <span className="pref-settings-name">开机自动启动</span>
+                        <span className="pref-settings-name">
+                          {t('config.general.launchAtLogin')}
+                        </span>
                         <span className="pref-settings-sub">
-                          随系统登录自动启动并在后台静默就绪，随时按下快捷键即可调用
+                          {t('config.general.launchAtLoginDesc')}
                         </span>
                       </div>
                       <div
@@ -1321,9 +1463,11 @@ export const ConfigPage = (): React.JSX.Element => {
                       }
                     >
                       <div className="pref-settings-copy">
-                        <span className="pref-settings-name">主翻译窗口始终保持置顶</span>
+                        <span className="pref-settings-name">
+                          {t('config.general.alwaysOnTop')}
+                        </span>
                         <span className="pref-settings-sub">
-                          浮动在所有应用程序之上，也可随时点击主界面右上角图钉按钮临时切换
+                          {t('config.general.alwaysOnTopDesc')}
                         </span>
                       </div>
                       <div className={`pref-switch ${general.alwaysOnTop ? 'pref-switch-on' : ''}`}>
@@ -1334,9 +1478,11 @@ export const ConfigPage = (): React.JSX.Element => {
                     {/* 关闭主窗口时的行为 */}
                     <div className="pref-settings-row">
                       <div className="pref-settings-copy">
-                        <span className="pref-settings-name">关闭主窗口时</span>
+                        <span className="pref-settings-name">
+                          {t('config.general.closeAction')}
+                        </span>
                         <span className="pref-settings-sub">
-                          决定点击主窗口右上角关闭按钮后的应用状态
+                          {t('config.general.closeActionDesc')}
                         </span>
                       </div>
                       <div className="pref-radio-group">
@@ -1349,7 +1495,7 @@ export const ConfigPage = (): React.JSX.Element => {
                               setGeneral((prev) => ({ ...prev, closeAction: 'tray' }))
                             }
                           />
-                          <span>最小化隐藏到系统托盘（推荐，保持快捷键随时可用）</span>
+                          <span>{t('config.general.closeToTray')}</span>
                         </label>
                         <label className="pref-radio-item">
                           <input
@@ -1360,7 +1506,7 @@ export const ConfigPage = (): React.JSX.Element => {
                               setGeneral((prev) => ({ ...prev, closeAction: 'quit' }))
                             }
                           />
-                          <span>彻底退出应用程序</span>
+                          <span>{t('config.general.quitApp')}</span>
                         </label>
                       </div>
                     </div>
@@ -1387,9 +1533,9 @@ export const ConfigPage = (): React.JSX.Element => {
 
         <div className="pref-footer-right">
           {isDirty ? (
-            <span className="pref-dirty-hint" title="本次修改还没有写入配置，点击右侧保存才会生效">
+            <span className="pref-dirty-hint" title={t('config.footer.unsavedTitle')}>
               <span className="pref-dirty-dot" />
-              有未保存的改动
+              {t('config.footer.unsaved')}
             </span>
           ) : null}
           <button
@@ -1397,7 +1543,7 @@ export const ConfigPage = (): React.JSX.Element => {
             className="pref-btn pref-btn-cancel"
             onClick={requestCloseConfigWindow}
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -1405,7 +1551,7 @@ export const ConfigPage = (): React.JSX.Element => {
             onClick={handleSaveAll}
             disabled={isSaving}
           >
-            {isSaving ? '正在保存...' : '保存'}
+            {isSaving ? t('common.saving') : t('common.save')}
           </button>
         </div>
       </footer>
@@ -1420,17 +1566,19 @@ export const ConfigPage = (): React.JSX.Element => {
             <div className="pref-modal-header">
               <div className="pref-modal-title">
                 <ProviderBrandLogo providerId={activeProvider.id} />
-                <span className="pref-provider-dialog-name">{activeProvider.name}</span>
+                <span className="pref-provider-dialog-name">
+                  {getProviderDisplayName(language, activeProvider)}
+                </span>
                 {activeProvider.id === activeProviderId ? (
-                  <span className="pref-modal-badge">默认服务商</span>
+                  <span className="pref-modal-badge">{t('config.providerDialog.default')}</span>
                 ) : (
                   <button
                     type="button"
                     className="pref-field-btn pref-field-btn-primary"
                     onClick={() => handleSetProviderPrimary(activeProvider.id)}
-                    title="点击设为主界面默认使用的大模型渠道"
+                    title={t('config.providerDialog.setDefaultTitle')}
                   >
-                    设为默认服务商
+                    {t('config.providerDialog.setDefault')}
                   </button>
                 )}
               </div>
@@ -1438,10 +1586,12 @@ export const ConfigPage = (): React.JSX.Element => {
                 <div
                   className="pref-switch-inline"
                   onClick={() => updateActiveProvider({ enabled: !activeProvider.enabled })}
-                  title="开启后该厂商的模型才会出现在主界面下拉框中"
+                  title={t('config.providerDialog.toggleTitle')}
                 >
                   <span className="pref-switch-label">
-                    {activeProvider.enabled ? '已启用' : '已停用'}
+                    {activeProvider.enabled
+                      ? t('config.providerDialog.enabled')
+                      : t('config.providerDialog.disabled')}
                   </span>
                   <div className={`pref-switch ${activeProvider.enabled ? 'pref-switch-on' : ''}`}>
                     <div className="pref-switch-thumb" />
@@ -1451,8 +1601,8 @@ export const ConfigPage = (): React.JSX.Element => {
                   type="button"
                   className="pref-modal-close"
                   onClick={() => setIsProviderDialogOpen(false)}
-                  title="关闭 (ESC)"
-                  aria-label="关闭"
+                  title={t('config.providerDialog.closeTitle')}
+                  aria-label={t('common.close')}
                 >
                   <svg
                     width="10"
@@ -1478,7 +1628,7 @@ export const ConfigPage = (): React.JSX.Element => {
                 <div className="pref-field">
                   <div className="pref-label-row">
                     <label className="pref-label" htmlFor="prov-name">
-                      服务商显示名称
+                      {t('config.providerDialog.displayName')}
                     </label>
                     {providers.length > 1 ? (
                       <div className="pref-field-actions">
@@ -1487,7 +1637,7 @@ export const ConfigPage = (): React.JSX.Element => {
                           className="pref-field-btn pref-field-btn-danger"
                           onClick={() => setPendingDeleteProviderId(activeProvider.id)}
                         >
-                          删除该服务商
+                          {t('config.providerDialog.deleteProvider')}
                         </button>
                       </div>
                     ) : null}
@@ -1498,7 +1648,7 @@ export const ConfigPage = (): React.JSX.Element => {
                     className="pref-input"
                     value={activeProvider.name}
                     onChange={(e) => updateActiveProvider({ name: e.target.value })}
-                    placeholder="如：DeepSeek 官方"
+                    placeholder={t('config.providerDialog.namePlaceholder')}
                     spellCheck={false}
                   />
                 </div>
@@ -1506,7 +1656,7 @@ export const ConfigPage = (): React.JSX.Element => {
                 {/* 服务地址 (Base URL) */}
                 <div className="pref-field">
                   <label className="pref-label" htmlFor="prov-base-url">
-                    服务地址 (Base URL)
+                    {t('config.providerDialog.baseUrl')}
                   </label>
                   <input
                     id="prov-base-url"
@@ -1530,7 +1680,7 @@ export const ConfigPage = (): React.JSX.Element => {
                 <div className="pref-field">
                   <div className="pref-label-row">
                     <label className="pref-label" htmlFor="prov-api-key">
-                      访问密钥 (API Key)
+                      {t('config.providerDialog.apiKey')}
                     </label>
                     <div className="pref-field-actions">
                       {activeProvider.apiKey ? (
@@ -1539,17 +1689,17 @@ export const ConfigPage = (): React.JSX.Element => {
                             type="button"
                             className="pref-field-btn"
                             onClick={() => void handleCopyApiKey()}
-                            title="复制 API Key 到剪贴板"
+                            title={t('config.providerDialog.copyKeyTitle')}
                           >
-                            复制
+                            {t('common.copy')}
                           </button>
                           <button
                             type="button"
                             className="pref-field-btn"
                             onClick={() => updateActiveProvider({ apiKey: '' })}
-                            title="清空当前输入的密钥"
+                            title={t('config.providerDialog.clearKeyTitle')}
                           >
-                            清空
+                            {t('common.clear')}
                           </button>
                         </>
                       ) : null}
@@ -1557,9 +1707,13 @@ export const ConfigPage = (): React.JSX.Element => {
                         type="button"
                         className={`pref-field-btn ${showApiKey ? 'pref-field-btn-active' : ''}`}
                         onClick={() => setShowApiKey((prev) => !prev)}
-                        title={showApiKey ? '点击以掩码形式隐藏密钥' : '点击查看明文密钥'}
+                        title={
+                          showApiKey
+                            ? t('config.providerDialog.hideKeyTitle')
+                            : t('config.providerDialog.showKeyTitle')
+                        }
                       >
-                        {showApiKey ? '隐藏' : '显示'}
+                        {showApiKey ? t('common.hide') : t('common.show')}
                       </button>
                     </div>
                   </div>
@@ -1575,7 +1729,7 @@ export const ConfigPage = (): React.JSX.Element => {
                         updateActiveProvider({ apiKey: trimmed })
                       }
                     }}
-                    placeholder="填入该服务商的 API Key..."
+                    placeholder={t('config.providerDialog.keyPlaceholder')}
                     spellCheck={false}
                     autoComplete="off"
                   />
@@ -1585,7 +1739,9 @@ export const ConfigPage = (): React.JSX.Element => {
                 <div className="pref-field">
                   <div className="pref-label-row">
                     <label className="pref-label">
-                      可用模型列表 (MODELS FOR {activeProvider.name.toUpperCase()})
+                      {t('config.providerDialog.models', {
+                        name: getProviderDisplayName(language, activeProvider).toUpperCase()
+                      })}
                     </label>
                     <div className="pref-field-actions">
                       <button
@@ -1593,9 +1749,11 @@ export const ConfigPage = (): React.JSX.Element => {
                         className="pref-field-btn pref-field-btn-primary"
                         onClick={() => void handleFetchModels()}
                         disabled={isFetchingModels || !activeProvider.baseUrl}
-                        title="从接口端点自动获取该服务商支持的全部模型"
+                        title={t('config.providerDialog.fetchTitle')}
                       >
-                        {isFetchingModels ? '正在拉取...' : '自动获取模型列表'}
+                        {isFetchingModels
+                          ? t('config.providerDialog.fetching')
+                          : t('config.providerDialog.fetch')}
                       </button>
                     </div>
                   </div>
@@ -1611,13 +1769,16 @@ export const ConfigPage = (): React.JSX.Element => {
                           className={`pref-pill ${isDefault ? 'pref-pill-active' : ''}`}
                           title={
                             isDefault
-                              ? `当前渠道的默认模型: ${m.id}`
-                              : `点击将【${m.id}】设为默认模型`
+                              ? t('config.providerDialog.defaultModelTitle', { model: m.id })
+                              : t('config.providerDialog.setDefaultModelTitle', { model: m.id })
                           }
                           onClick={() => updateActiveProvider({ defaultModel: m.id })}
                         >
                           {isDefault ? (
-                            <span className="pref-pill-default-badge" title="默认模型">
+                            <span
+                              className="pref-pill-default-badge"
+                              title={t('config.providerDialog.defaultBadgeTitle')}
+                            >
                               DEF
                             </span>
                           ) : null}
@@ -1637,8 +1798,10 @@ export const ConfigPage = (): React.JSX.Element => {
                                 e.stopPropagation()
                                 handleRemoveModelFromActive(m.id)
                               }}
-                              title={`从列表中移除 ${m.id}`}
-                              aria-label={`移除 ${m.id}`}
+                              title={t('config.providerDialog.removeModelTitle', { model: m.id })}
+                              aria-label={t('config.providerDialog.removeModelAria', {
+                                model: m.id
+                              })}
                             >
                               <svg
                                 width="8"
@@ -1666,9 +1829,11 @@ export const ConfigPage = (): React.JSX.Element => {
                       type="button"
                       className="pref-pill-btn-add"
                       onClick={() => setShowManualAdd((prev) => !prev)}
-                      title="手动录入单个自定义模型 ID"
+                      title={t('config.providerDialog.manualTitle')}
                     >
-                      {showManualAdd ? '取消录入' : '+ 手动录入'}
+                      {showManualAdd
+                        ? t('config.providerDialog.cancelManual')
+                        : t('config.providerDialog.manual')}
                     </button>
                   </div>
 
@@ -1686,7 +1851,7 @@ export const ConfigPage = (): React.JSX.Element => {
                             handleAddModelToActive()
                           }
                         }}
-                        placeholder="输入模型 ID（如 gpt-4o、claude-3-5-sonnet...）"
+                        placeholder={t('config.providerDialog.modelPlaceholder')}
                         spellCheck={false}
                         autoFocus
                       />
@@ -1696,7 +1861,7 @@ export const ConfigPage = (): React.JSX.Element => {
                         onClick={handleAddModelToActive}
                         disabled={!newModelId.trim()}
                       >
-                        + 保存模型
+                        {t('config.providerDialog.saveModel')}
                       </button>
                       <button
                         type="button"
@@ -1706,7 +1871,7 @@ export const ConfigPage = (): React.JSX.Element => {
                           setShowManualAdd(false)
                         }}
                       >
-                        收起
+                        {t('common.collapse')}
                       </button>
                     </div>
                   ) : null}
@@ -1721,7 +1886,7 @@ export const ConfigPage = (): React.JSX.Element => {
                   <button type="button" className="pref-btn pref-btn-test" disabled>
                     <span className="pref-btn-testing-wrap">
                       <span className="pref-loading-pulse" />
-                      <span>正在检测...</span>
+                      <span>{t('config.test.testing')}</span>
                     </span>
                   </button>
                 ) : testResult ? (
@@ -1734,11 +1899,11 @@ export const ConfigPage = (): React.JSX.Element => {
                       }`}
                       onClick={handleTestCurrentProvider}
                       disabled={!activeProvider.baseUrl}
-                      title={`${buildTestResultTooltip(testResult)}\n点击重新测试`}
+                      title={`${buildTestResultTooltip(testResult, t)}\n${t('config.test.tooltipClickRetry')}`}
                     >
                       <span className="pref-status-dot" />
                       <span>
-                        {testResult.ok ? '连接成功' : '连接失败'}
+                        {testResult.ok ? t('config.test.success') : t('config.test.failure')}
                         {!testResult.ok && failureHint ? ` ${failureHint}` : ''}
                       </span>
 
@@ -1755,7 +1920,7 @@ export const ConfigPage = (): React.JSX.Element => {
                         <>
                           <span className="pref-test-result-sep">·</span>
                           <span>
-                            {testResult.speedEstimated ? '约 ' : ''}
+                            {testResult.speedEstimated ? t('config.test.estimatedPrefix') : ''}
                             {testResult.tokensPerSecond.toFixed(1)} token/s
                           </span>
                         </>
@@ -1771,9 +1936,9 @@ export const ConfigPage = (): React.JSX.Element => {
                           setCopiedErrorLog(false)
                           setShowErrorModal(true)
                         }}
-                        title="查看详细错误信息与原始响应"
+                        title={t('config.test.diagnosticsTitle')}
                       >
-                        诊断报告
+                        {t('config.test.diagnostics')}
                       </button>
                     ) : null}
                   </>
@@ -1783,9 +1948,12 @@ export const ConfigPage = (): React.JSX.Element => {
                     className="pref-btn pref-btn-test"
                     onClick={handleTestCurrentProvider}
                     disabled={!activeProvider.baseUrl}
-                    title={`测试【${activeProvider.name}】的连通性 (${activeProvider.baseUrl})`}
+                    title={t('config.test.currentTitle', {
+                      name: getProviderDisplayName(language, activeProvider),
+                      baseUrl: activeProvider.baseUrl
+                    })}
                   >
-                    测试当前连接
+                    {t('config.test.current')}
                   </button>
                 )}
               </div>
@@ -1796,7 +1964,7 @@ export const ConfigPage = (): React.JSX.Element => {
                   className="pref-btn pref-btn-save"
                   onClick={() => setIsProviderDialogOpen(false)}
                 >
-                  完成
+                  {t('common.done')}
                 </button>
               </div>
             </div>
@@ -1811,15 +1979,21 @@ export const ConfigPage = (): React.JSX.Element => {
             <div className="pref-modal-header">
               <div className="pref-modal-title">
                 <span className="pref-modal-status-dot" />
-                <span>从【{activeProvider?.name}】获取模型</span>
-                <span className="pref-modal-badge">{fetchedModels.length} 个可用模型</span>
+                <span>
+                  {t('config.fetch.title', {
+                    name: activeProvider ? getProviderDisplayName(language, activeProvider) : ''
+                  })}
+                </span>
+                <span className="pref-modal-badge">
+                  {t('config.fetch.badge', { count: fetchedModels.length })}
+                </span>
               </div>
               <button
                 type="button"
                 className="pref-modal-close"
                 onClick={() => setShowFetchModal(false)}
-                title="关闭窗口"
-                aria-label="关闭"
+                title={t('config.fetch.closeTitle')}
+                aria-label={t('common.close')}
               >
                 <svg
                   width="10"
@@ -1842,7 +2016,7 @@ export const ConfigPage = (): React.JSX.Element => {
               <input
                 type="text"
                 className="pref-input pref-modal-search"
-                placeholder="搜索模型名称实时过滤..."
+                placeholder={t('config.fetch.search')}
                 value={modelSearchQuery}
                 onChange={(e) => setModelSearchQuery(e.target.value)}
                 autoFocus
@@ -1859,24 +2033,24 @@ export const ConfigPage = (): React.JSX.Element => {
                     })
                     setSelectedModelsToAdd(next)
                   }}
-                  title="全选当前过滤列表中尚未添加的模型"
+                  title={t('config.fetch.selectAllTitle')}
                 >
-                  全选未添加
+                  {t('config.fetch.selectAll')}
                 </button>
                 <button
                   type="button"
                   className="pref-field-btn"
                   onClick={() => setSelectedModelsToAdd({})}
-                  title="清空所有勾选项"
+                  title={t('config.fetch.unselectAllTitle')}
                 >
-                  取消全选
+                  {t('config.fetch.unselectAll')}
                 </button>
               </div>
             </div>
 
             <div className="pref-modal-model-list">
               {filteredFetchedModels.length === 0 ? (
-                <div className="pref-modal-empty">无匹配的模型</div>
+                <div className="pref-modal-empty">{t('config.fetch.empty')}</div>
               ) : (
                 filteredFetchedModels.map((mId) => {
                   const alreadyInList = activeProvider?.models.some((m) => m.id === mId)
@@ -1902,9 +2076,13 @@ export const ConfigPage = (): React.JSX.Element => {
                       />
                       <span className="pref-modal-model-id">{mId}</span>
                       {alreadyInList ? (
-                        <span className="pref-modal-item-tag tag-added">已在列表</span>
+                        <span className="pref-modal-item-tag tag-added">
+                          {t('config.fetch.added')}
+                        </span>
                       ) : isChecked ? (
-                        <span className="pref-modal-item-tag tag-new">待导入</span>
+                        <span className="pref-modal-item-tag tag-new">
+                          {t('config.fetch.pending')}
+                        </span>
                       ) : null}
                     </label>
                   )
@@ -1924,7 +2102,7 @@ export const ConfigPage = (): React.JSX.Element => {
                         count > 0 ? 'selected-badge-active' : ''
                       }`}
                     >
-                      已选中 {count} 个新模型
+                      {t('config.fetch.selected', { count })}
                     </span>
                   )
                 })()}
@@ -1935,7 +2113,7 @@ export const ConfigPage = (): React.JSX.Element => {
                   className="pref-btn pref-btn-cancel"
                   onClick={() => setShowFetchModal(false)}
                 >
-                  取消
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
@@ -1946,7 +2124,7 @@ export const ConfigPage = (): React.JSX.Element => {
                       .length === 0
                   }
                 >
-                  确认导入勾选模型
+                  {t('config.fetch.confirm')}
                 </button>
               </div>
             </div>
@@ -1964,14 +2142,14 @@ export const ConfigPage = (): React.JSX.Element => {
             <div className="pref-modal-header">
               <div className="pref-modal-title pref-modal-title-error">
                 <span className="pref-diagnostic-indicator" />
-                <span>连通性诊断报告</span>
+                <span>{t('config.error.title')}</span>
               </div>
               <button
                 type="button"
                 className="pref-modal-close"
                 onClick={() => setShowErrorModal(false)}
-                title="关闭诊断报告"
-                aria-label="关闭"
+                title={t('config.error.closeTitle')}
+                aria-label={t('common.close')}
               >
                 <svg
                   width="10"
@@ -1993,22 +2171,24 @@ export const ConfigPage = (): React.JSX.Element => {
             <div className="pref-modal-error-content">
               <div className="pref-error-meta-card">
                 <div className="pref-error-meta-row">
-                  <span className="pref-error-meta-label">测试服务商</span>
-                  <span className="pref-error-meta-val">{activeProvider?.name}</span>
+                  <span className="pref-error-meta-label">{t('config.error.provider')}</span>
+                  <span className="pref-error-meta-val">
+                    {activeProvider ? getProviderDisplayName(language, activeProvider) : ''}
+                  </span>
                 </div>
                 <div className="pref-error-meta-row">
-                  <span className="pref-error-meta-label">接口端点</span>
+                  <span className="pref-error-meta-label">{t('config.error.endpoint')}</span>
                   <span className="pref-error-meta-val">{activeProvider?.baseUrl}</span>
                 </div>
                 <div className="pref-error-meta-row">
-                  <span className="pref-error-meta-label">状态概要</span>
+                  <span className="pref-error-meta-label">{t('config.error.summary')}</span>
                   <span className="pref-error-meta-val pref-error-highlight">
                     {testResult.message}
                   </span>
                 </div>
               </div>
 
-              <div className="pref-error-body-title">服务端原始响应体 / 异常堆栈：</div>
+              <div className="pref-error-body-title">{t('config.error.raw')}</div>
               <pre className="pref-error-body-pre">{testResult.errorDetail}</pre>
             </div>
 
@@ -2022,14 +2202,14 @@ export const ConfigPage = (): React.JSX.Element => {
                   setTimeout(() => setCopiedErrorLog(false), 2000)
                 }}
               >
-                {copiedErrorLog ? '已复制到剪贴板' : '复制诊断日志'}
+                {copiedErrorLog ? t('config.error.copied') : t('config.error.copy')}
               </button>
               <button
                 type="button"
                 className="pref-btn pref-btn-cancel"
                 onClick={() => setShowErrorModal(false)}
               >
-                关闭
+                {t('common.close')}
               </button>
             </div>
           </div>
@@ -2042,17 +2222,22 @@ export const ConfigPage = (): React.JSX.Element => {
           <div className="pref-modal-card pref-confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="pref-modal-header">
               <div className="pref-modal-title">
-                <span>删除服务商</span>
+                <span>{t('config.delete.title')}</span>
               </div>
             </div>
 
             <div className="pref-modal-body pref-confirm-body">
               <p className="pref-confirm-text">
-                {`确定删除【${pendingDeleteProvider.name}】吗？该服务商下的 ${pendingDeleteProvider.models.length} 个模型配置会一并移除，此操作不可撤销。`}
+                {t('config.delete.message', {
+                  name: getProviderDisplayName(language, pendingDeleteProvider),
+                  count: pendingDeleteProvider.models.length
+                })}
               </p>
               {nextPrimaryProvider && pendingDeleteProviderId === activeProviderId ? (
                 <p className="pref-confirm-text pref-confirm-warn">
-                  {`它当前是主界面默认渠道，删除后默认渠道会自动切到【${nextPrimaryProvider.name}】。`}
+                  {t('config.delete.primaryWarning', {
+                    name: getProviderDisplayName(language, nextPrimaryProvider)
+                  })}
                 </p>
               ) : null}
             </div>
@@ -2065,14 +2250,14 @@ export const ConfigPage = (): React.JSX.Element => {
                   className="pref-btn pref-btn-cancel"
                   onClick={() => setPendingDeleteProviderId(null)}
                 >
-                  取消
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
                   className="pref-btn pref-btn-danger"
                   onClick={confirmPendingDelete}
                 >
-                  删除服务商
+                  {t('config.delete.confirm')}
                 </button>
               </div>
             </div>
@@ -2086,14 +2271,12 @@ export const ConfigPage = (): React.JSX.Element => {
           <div className="pref-modal-card pref-confirm-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="pref-modal-header">
               <div className="pref-modal-title">
-                <span>有未保存的改动</span>
+                <span>{t('config.unsaved.title')}</span>
               </div>
             </div>
 
             <div className="pref-modal-body pref-confirm-body">
-              <p className="pref-confirm-text">
-                本次对服务商、快捷键或翻译偏好的修改还没有写入配置，现在关闭设置窗口会丢失这些改动。
-              </p>
+              <p className="pref-confirm-text">{t('config.unsaved.message')}</p>
             </div>
 
             <div className="pref-modal-footer">
@@ -2104,14 +2287,14 @@ export const ConfigPage = (): React.JSX.Element => {
                   className="pref-btn pref-btn-cancel"
                   onClick={() => void window.api.closeConfigWindow()}
                 >
-                  放弃改动并关闭
+                  {t('config.unsaved.discard')}
                 </button>
                 <button
                   type="button"
                   className="pref-btn pref-btn-save"
                   onClick={() => setShowCloseConfirm(false)}
                 >
-                  继续编辑
+                  {t('config.unsaved.continue')}
                 </button>
               </div>
             </div>

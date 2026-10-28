@@ -17,8 +17,9 @@ import icon from '../../resources/icon.png?asset'
 import trayIconTemplate2x from '../../resources/trayTemplate@2x.png?asset'
 import trayIconColor2x from '../../resources/xenon.png?asset'
 import type { TranslateRequest, TranslateStreamDeltaEvent } from '../shared/translate'
-import type { AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
+import type { AppLanguage, AppSettings, GeneralSettings, ShortcutSettings } from '../shared/config'
 import { DEFAULT_SHORTCUTS } from '../shared/config'
+import { normalizeAppLanguage, translate } from '../shared/i18n'
 import {
   MAIN_WINDOW_HEIGHT_EMPTY,
   MAIN_WINDOW_HEIGHT_MIN,
@@ -225,12 +226,15 @@ function showInputTranslateWindow(): void {
  * 用户修改全局快捷键后需重新构建，避免托盘加速键长期停留在硬编码旧值
  */
 function buildTrayMenu(): Menu {
-  const shortcuts = getLLMConfig().shortcuts || DEFAULT_SHORTCUTS
+  const config = getLLMConfig()
+  const shortcuts = config.shortcuts || DEFAULT_SHORTCUTS
+  const language = normalizeAppLanguage(config.general?.language)
+  const t = (key: Parameters<typeof translate>[1]): string => translate(language, key)
   const canCapture = canCaptureOnThisPlatform()
 
   return Menu.buildFromTemplate([
     {
-      label: '输入翻译',
+      label: t('tray.inputTranslate'),
       accelerator: shortcuts.inputTranslate,
       click: () => {
         showInputTranslateWindow()
@@ -239,7 +243,7 @@ function buildTrayMenu(): Menu {
     ...(canCapture
       ? [
           {
-            label: '截图翻译',
+            label: t('tray.screenshotTranslate'),
             accelerator: shortcuts.screenshot,
             click: () => {
               void triggerScreenshotTranslation(() => mainWindow)
@@ -248,7 +252,7 @@ function buildTrayMenu(): Menu {
         ]
       : []),
     {
-      label: '模型配置',
+      label: t('tray.modelConfig'),
       accelerator: shortcuts.openPreferences,
       click: () => {
         openConfigWindow()
@@ -256,7 +260,7 @@ function buildTrayMenu(): Menu {
     },
     { type: 'separator' },
     {
-      label: '显示窗口',
+      label: t('tray.showWindow'),
       click: () => {
         if (!mainWindow) {
           createWindow()
@@ -268,14 +272,14 @@ function buildTrayMenu(): Menu {
       }
     },
     {
-      label: '隐藏窗口',
+      label: t('tray.hideWindow'),
       click: () => {
         mainWindow?.hide()
       }
     },
     { type: 'separator' },
     {
-      label: '退出',
+      label: t('tray.quit'),
       click: () => {
         app.quit()
       }
@@ -424,9 +428,12 @@ app.whenReady().then(async () => {
     return await testLLMConnection(config)
   })
 
-  ipcMain.handle('config:fetch-models', async (_, params: { baseUrl: string; apiKey: string }) => {
-    return await fetchProviderModels(params)
-  })
+  ipcMain.handle(
+    'config:fetch-models',
+    async (_, params: { baseUrl: string; apiKey: string; language?: AppLanguage }) => {
+      return await fetchProviderModels(params)
+    }
+  )
 
   ipcMain.handle('window:toggle-always-on-top', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return false
@@ -543,6 +550,9 @@ app.whenReady().then(async () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.setAlwaysOnTop(Boolean(general.alwaysOnTop), 'floating')
     }
+
+    // 界面语言属于通用设置，保存后立即重建托盘菜单，无需等待重启。
+    refreshTrayMenu()
   }
 
   // 初始化应用快捷键与通用系统设置

@@ -1,6 +1,11 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { TranslateRequest, TranslateResponse } from '../shared/translate'
-import type { AppSettings, FetchModelsResult, TestConnectionResult } from '../shared/config'
+import type {
+  AppLanguage,
+  AppSettings,
+  FetchModelsResult,
+  TestConnectionResult
+} from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
 
 interface AppAPI {
@@ -14,7 +19,11 @@ interface AppAPI {
   getConfig: () => Promise<AppSettings>
   saveConfig: (config: AppSettings) => Promise<{ ok: boolean; error?: string }>
   testConfig: (config: AppSettings) => Promise<TestConnectionResult>
-  fetchModels: (params: { baseUrl: string; apiKey: string }) => Promise<FetchModelsResult>
+  fetchModels: (params: {
+    baseUrl: string
+    apiKey: string
+    language?: AppLanguage
+  }) => Promise<FetchModelsResult>
   onApplySourceText: (callback: (text: string) => void) => () => void
   onOcrStatus: (callback: (status: OcrStatus) => void) => () => void
   setWindowHeight: (height: number, allowCompactHeight?: boolean) => Promise<void>
