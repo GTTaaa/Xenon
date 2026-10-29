@@ -18,6 +18,49 @@
   <img src="assets/demo.gif" alt="Xenon 操作演示：截图选区、本地 OCR 与流式译文" width="760" />
 </p>
 
+## Mac App Store 预览
+
+商店图目前维护英文版，覆盖“能译、隐私、阅读体验、不打扰、保留结构、模型可控”六个核心卖点。点击图片可查看 `2880×1800` 原图。
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="export/mac/en/2880x1800/01-any-app.png">
+        <img src="assets/app-store/en/01-any-app.png" alt="Xenon 英文商店截图：框选屏幕，立即读懂">
+      </a>
+    </td>
+    <td width="50%" valign="top">
+      <a href="export/mac/en/2880x1800/02-on-device.png">
+        <img src="assets/app-store/en/02-on-device.png" alt="Xenon 英文商店截图：截图识别只在本机">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="export/mac/en/2880x1800/03-streaming.png">
+        <img src="assets/app-store/en/03-streaming.png" alt="Xenon 英文商店截图：译文边生成边阅读">
+      </a>
+    </td>
+    <td width="50%" valign="top">
+      <a href="export/mac/en/2880x1800/04-quiet-window.png">
+        <img src="assets/app-store/en/04-quiet-window.png" alt="Xenon 英文商店截图：358 px 窄窗不遮挡工作">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="export/mac/en/2880x1800/05-structure.png">
+        <img src="assets/app-store/en/05-structure.png" alt="Xenon 英文商店截图：保留原文排版结构">
+      </a>
+    </td>
+    <td width="50%" valign="top">
+      <a href="export/mac/en/2880x1800/06-models.png">
+        <img src="assets/app-store/en/06-models.png" alt="Xenon 英文商店截图：自由选择模型与服务商">
+      </a>
+    </td>
+  </tr>
+</table>
+
 ## 为什么是 Xenon
 
 浏览器插件只覆盖网页，传统翻译器通常要求你把文字复制出来。Xenon 面向真正发生在桌面上的阅读：PDF、IDE、终端、设计稿、视频画面，以及那些无法被浏览器插件触及的文字。
