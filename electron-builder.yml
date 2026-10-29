@@ -3,14 +3,12 @@ productName: Xenon
 directories:
   buildResources: build
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # 仅打包运行所需的构建产物与原生资源，避免演示素材进入安装包
+  - 'out/**/*'
+  - 'resources/**/*'
 asarUnpack:
-  - resources/**
+  # 仅 OCR 可执行文件需要脱离 asar，图片资源可直接从归档读取
+  - resources/bin/**
 win:
   executableName: Xenon
 nsis:
@@ -22,6 +20,13 @@ mac:
   # 指向 Icon Composer 制作的 .icon 文件（需要 macOS 26 + Xcode 26 打包）
   icon: build/AppIcon.icon
   entitlementsInherit: build/entitlements.mac.plist
+  # 仅保留界面实际支持的语言，减少 Chromium 语言资源占用
+  electronLanguages:
+    - en
+    - zh_CN
+    - zh_TW
+  # 本地构建不依赖苹果时间戳服务；正式分发时需恢复时间戳并启用公证
+  timestamp: none
   extendInfo:
     # 截图 OCR 需要屏幕录制权限；本应用不使用摄像头/麦克风，也不访问文档/下载目录
     - NSScreenCaptureUsageDescription: Xenon 需要「屏幕录制」权限以截取屏幕内容并进行文字识别。
