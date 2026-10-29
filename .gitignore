@@ -10,3 +10,9 @@ out
 .env.development.local
 .env.production.local
 !.env.example
+
+# 商店截图制作工作区与本地素材不进入公开仓库
+/store-screenshots/
+/screenshots/
+/app-icon.png
+/export/mac/zh-CN/
