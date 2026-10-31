@@ -7,12 +7,16 @@ import type {
   ProviderModelItem,
   ShortcutSettings,
   TestConnectionResult,
-  TranslationSettings
+  TranslationSettings,
+  UpdateCheckIntervalMinutes,
+  UpdateSettings
 } from '../../shared/config'
 import {
   DEFAULT_GENERAL_SETTINGS,
   DEFAULT_SHORTCUTS,
-  DEFAULT_TRANSLATION_SETTINGS
+  DEFAULT_TRANSLATION_SETTINGS,
+  DEFAULT_UPDATE_SETTINGS,
+  UPDATE_CHECK_INTERVAL_OPTIONS
 } from '../../shared/config'
 import { SUPPORTED_LANGUAGES } from '../../shared/languageDetector'
 import {
@@ -242,21 +246,38 @@ const extractFailureHint = (message: string, t: Translate): string => {
 }
 
 /** 将主进程的更新状态转换为设置页中的一行可读说明。 */
-const getUpdateStatusText = (updateState: AppUpdateState, t: Translate): string => {
+const getUpdateStatusText = (
+  updateState: AppUpdateState,
+  updateSettings: UpdateSettings,
+  t: Translate
+): string => {
   const version = updateState.availableVersion || updateState.currentVersion
 
   switch (updateState.status) {
     case 'checking':
       return t('config.update.statusChecking')
     case 'available':
-      return t('config.update.statusAvailable', { version })
+      return t(
+        updateSettings.autoDownload
+          ? 'config.update.statusAvailableAuto'
+          : 'config.update.statusAvailable',
+        { version }
+      )
     case 'downloading':
       return t('config.update.statusDownloading', {
         version,
         percent: Math.round(updateState.percent ?? 0)
       })
     case 'downloaded':
-      return t('config.update.statusDownloaded', { version })
+      if (updateState.restartDeferred) {
+        return t('config.update.statusRestartDeferred', { version })
+      }
+      return t(
+        updateSettings.autoRestart
+          ? 'config.update.statusDownloadedAuto'
+          : 'config.update.statusDownloaded',
+        { version }
+      )
     case 'not-available':
       return t('config.update.statusNotAvailable')
     case 'error': {
@@ -300,6 +321,11 @@ export const ConfigPage = (): React.JSX.Element => {
 
   // 通用系统设置
   const [general, setGeneral] = useState<GeneralSettings>({ ...DEFAULT_GENERAL_SETTINGS })
+
+  // 应用更新策略
+  const [updateSettings, setUpdateSettings] = useState<UpdateSettings>({
+    ...DEFAULT_UPDATE_SETTINGS
+  })
 
   // 应用更新状态与安装动作
   const [updateState, setUpdateState] = useState<AppUpdateState>({
@@ -427,6 +453,9 @@ export const ConfigPage = (): React.JSX.Element => {
           setGeneral({ ...cfg.general })
           setLanguage(normalizeAppLanguage(cfg.general.language))
         }
+        if (cfg.update) {
+          setUpdateSettings({ ...cfg.update })
+        }
       })
       .catch((error) => {
         console.error('[renderer] 读取服务商配置失败', error)
@@ -457,7 +486,8 @@ export const ConfigPage = (): React.JSX.Element => {
       activeProviderId,
       shortcuts,
       translation,
-      general
+      general,
+      update: updateSettings
     })
     if (dirtyBaselineRef.current === null) {
       // 首次加载完成前没有可比对的基线，等拿到服务商数据再建立
@@ -466,7 +496,7 @@ export const ConfigPage = (): React.JSX.Element => {
       return
     }
     setIsDirty(snapshot !== dirtyBaselineRef.current)
-  }, [providers, activeProviderId, shortcuts, translation, general])
+  }, [providers, activeProviderId, shortcuts, translation, general, updateSettings])
 
   // 监听 ESC 键关闭窗口或弹窗
   useEffect(() => {
@@ -880,7 +910,8 @@ export const ConfigPage = (): React.JSX.Element => {
         providers,
         shortcuts,
         translation,
-        general
+        general,
+        update: updateSettings
       })
       setTestResult(result)
     } catch (error) {
@@ -916,7 +947,8 @@ export const ConfigPage = (): React.JSX.Element => {
         providers: sanitizedProviders,
         shortcuts,
         translation,
-        general
+        general,
+        update: updateSettings
       }
 
       const result = await window.api.saveConfig(payload)
@@ -927,7 +959,8 @@ export const ConfigPage = (): React.JSX.Element => {
           activeProviderId,
           shortcuts,
           translation,
-          general
+          general,
+          update: updateSettings
         })
         setIsDirty(false)
         // state 收敛为落盘时清洗过的数据，避免"基线是清洗值、state 是原始值"导致脏标记反复
@@ -1654,7 +1687,7 @@ export const ConfigPage = (): React.JSX.Element => {
                             updateState.status === 'error' ? 'pref-update-status-error' : ''
                           }`.trim()}
                         >
-                          {getUpdateStatusText(updateState, t)}
+                          {getUpdateStatusText(updateState, updateSettings, t)}
                         </span>
                         <span className="pref-update-description">{t('config.update.desc')}</span>
                         {updateState.status === 'downloading' ? (
@@ -1680,6 +1713,108 @@ export const ConfigPage = (): React.JSX.Element => {
                       >
                         {updateActionLabel}
                       </button>
+                    </div>
+
+                    <div
+                      className="pref-settings-row pref-settings-row-inline pref-settings-switch-row"
+                      onClick={() =>
+                        setUpdateSettings((prev) => ({ ...prev, autoCheck: !prev.autoCheck }))
+                      }
+                    >
+                      <div className="pref-settings-copy">
+                        <span className="pref-settings-name">{t('config.update.autoCheck')}</span>
+                        <span className="pref-settings-sub">
+                          {t('config.update.autoCheckDesc')}
+                        </span>
+                      </div>
+                      <div
+                        className={`pref-switch ${updateSettings.autoCheck ? 'pref-switch-on' : ''}`}
+                      >
+                        <div className="pref-switch-thumb" />
+                      </div>
+                    </div>
+
+                    <div
+                      className={`pref-settings-row pref-settings-row-inline ${
+                        updateSettings.autoCheck ? '' : 'pref-settings-row-disabled'
+                      }`.trim()}
+                    >
+                      <div className="pref-settings-copy">
+                        <label className="pref-settings-name" htmlFor="pref-update-interval">
+                          {t('config.update.interval')}
+                        </label>
+                        <span className="pref-settings-sub">{t('config.update.intervalDesc')}</span>
+                      </div>
+                      <select
+                        id="pref-update-interval"
+                        className="pref-input pref-select pref-settings-select"
+                        value={updateSettings.checkIntervalMinutes}
+                        disabled={!updateSettings.autoCheck}
+                        onChange={(event) =>
+                          setUpdateSettings((prev) => ({
+                            ...prev,
+                            checkIntervalMinutes: Number(
+                              event.target.value
+                            ) as UpdateCheckIntervalMinutes
+                          }))
+                        }
+                      >
+                        {UPDATE_CHECK_INTERVAL_OPTIONS.map((minutes) => (
+                          <option key={minutes} value={minutes}>
+                            {t('config.update.intervalHours', { hours: minutes / 60 })}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div
+                      className="pref-settings-row pref-settings-row-inline pref-settings-switch-row"
+                      onClick={() =>
+                        setUpdateSettings((prev) => ({
+                          ...prev,
+                          autoDownload: !prev.autoDownload
+                        }))
+                      }
+                    >
+                      <div className="pref-settings-copy">
+                        <span className="pref-settings-name">
+                          {t('config.update.autoDownload')}
+                        </span>
+                        <span className="pref-settings-sub">
+                          {t('config.update.autoDownloadDesc')}
+                        </span>
+                      </div>
+                      <div
+                        className={`pref-switch ${
+                          updateSettings.autoDownload ? 'pref-switch-on' : ''
+                        }`}
+                      >
+                        <div className="pref-switch-thumb" />
+                      </div>
+                    </div>
+
+                    <div
+                      className="pref-settings-row pref-settings-row-inline pref-settings-switch-row"
+                      onClick={() =>
+                        setUpdateSettings((prev) => ({
+                          ...prev,
+                          autoRestart: !prev.autoRestart
+                        }))
+                      }
+                    >
+                      <div className="pref-settings-copy">
+                        <span className="pref-settings-name">{t('config.update.autoRestart')}</span>
+                        <span className="pref-settings-sub">
+                          {t('config.update.autoRestartDesc')}
+                        </span>
+                      </div>
+                      <div
+                        className={`pref-switch ${
+                          updateSettings.autoRestart ? 'pref-switch-on' : ''
+                        }`}
+                      >
+                        <div className="pref-switch-thumb" />
+                      </div>
                     </div>
                   </div>
                 </div>

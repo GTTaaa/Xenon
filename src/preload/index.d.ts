@@ -37,6 +37,7 @@ interface AppAPI {
   checkForUpdates: () => Promise<AppUpdateState>
   downloadUpdate: () => Promise<AppUpdateState>
   installUpdate: () => Promise<void>
+  setAppActivityBusy: (busy: boolean) => void
   onUpdateState: (callback: (state: AppUpdateState) => void) => () => void
 }
 

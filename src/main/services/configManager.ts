@@ -16,7 +16,8 @@ import type {
 import {
   DEFAULT_GENERAL_SETTINGS,
   DEFAULT_SHORTCUTS,
-  DEFAULT_TRANSLATION_SETTINGS
+  DEFAULT_TRANSLATION_SETTINGS,
+  sanitizeUpdateSettings
 } from '../../shared/config'
 import { normalizeAppLanguage, translate } from '../../shared/i18n'
 import {
@@ -297,6 +298,7 @@ export const getLLMConfig = (): AppSettings => {
         shortcuts: sanitizeShortcuts(parsed.shortcuts),
         translation: sanitizeTranslationSettings(parsed.translation),
         general: sanitizeGeneralSettings(parsed.general),
+        update: sanitizeUpdateSettings(parsed.update),
         // 兼容字段
         provider: 'openai-compatible',
         baseUrl: currentProvider.baseUrl,
@@ -317,6 +319,7 @@ export const getLLMConfig = (): AppSettings => {
     shortcuts: { ...DEFAULT_SHORTCUTS },
     translation: { ...DEFAULT_TRANSLATION_SETTINGS },
     general: { ...DEFAULT_GENERAL_SETTINGS },
+    update: sanitizeUpdateSettings(),
     provider: 'openai-compatible',
     baseUrl: defaultProviders[0].baseUrl,
     apiKey: '',
@@ -352,6 +355,7 @@ export const saveLLMConfig = async (
       shortcuts: sanitizeShortcuts(newConfig.shortcuts),
       translation: sanitizeTranslationSettings(newConfig.translation),
       general: sanitizeGeneralSettings(newConfig.general),
+      update: sanitizeUpdateSettings(newConfig.update),
       // 兼容字段
       provider: 'openai-compatible',
       baseUrl: activeProvider.baseUrl,

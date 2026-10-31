@@ -212,13 +212,15 @@ function App(): React.JSX.Element {
       updateState.status === 'downloading' ||
       updateState.status === 'downloaded')
   const updatePercent = Math.min(100, Math.max(0, Math.round(updateState.percent ?? 0)))
-  const isUpdateDownloading = isDownloadingUpdate || updateState.status === 'downloading'
+  const isUpdateDownloading =
+    updateState.status !== 'downloaded' &&
+    (isDownloadingUpdate || updateState.status === 'downloading')
   const updateEntryTitle =
     updateState.status === 'downloaded'
-      ? t('app.update.restartingShort')
+      ? t('app.update.install')
       : isUpdateDownloading
         ? t('app.update.downloading', { percent: updatePercent })
-        : t('app.update.button', { version: updateVersion })
+        : t('app.update.download', { version: updateVersion })
 
   const handleTogglePin = async (): Promise<void> => {
     try {
@@ -677,6 +679,15 @@ function App(): React.JSX.Element {
     }
   }, [])
 
+  // 将翻译与 OCR 活动同步给主进程，自动重启会等待任务结束。
+  useEffect(() => {
+    window.api.setAppActivityBusy(status === 'translating' || isRecognizing)
+  }, [isRecognizing, status])
+
+  useEffect(() => {
+    return () => window.api.setAppActivityBusy(false)
+  }, [])
+
   // 卸载时清理面板动画定时器与未完成请求。
   useEffect(() => {
     return () => {
@@ -737,8 +748,17 @@ function App(): React.JSX.Element {
     }
   }
 
-  /** 用户确认后才开始下载更新包。 */
-  const handleDownloadUpdate = async (): Promise<void> => {
+  /** 点击更新图标下载新版本，或在下载完成后手动重启安装。 */
+  const handleUpdateAction = async (): Promise<void> => {
+    if (updateState.status === 'downloaded') {
+      try {
+        await window.api.installUpdate()
+      } catch (error) {
+        console.error('[renderer] 安装更新失败', error)
+      }
+      return
+    }
+
     if (updateState.status !== 'available') return
 
     setIsDownloadingUpdate(true)
@@ -901,8 +921,8 @@ function App(): React.JSX.Element {
                   aria-label={updateEntryTitle}
                   aria-busy={isUpdateDownloading}
                   title={updateEntryTitle}
-                  disabled={updateState.status !== 'available' || isDownloadingUpdate}
-                  onClick={() => void handleDownloadUpdate()}
+                  disabled={isUpdateDownloading}
+                  onClick={() => void handleUpdateAction()}
                 >
                   <svg
                     width="15"

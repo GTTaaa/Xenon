@@ -163,6 +163,28 @@ export interface GeneralSettings {
 }
 
 /**
+ * 更新检查间隔，单位分钟。
+ * 只开放适合桌面工具应用的三个档位，避免设置项过度复杂。
+ */
+export const UPDATE_CHECK_INTERVAL_OPTIONS = [60, 360, 1440] as const
+
+export type UpdateCheckIntervalMinutes = (typeof UPDATE_CHECK_INTERVAL_OPTIONS)[number]
+
+/**
+ * 应用更新策略。
+ */
+export interface UpdateSettings {
+  /** 是否在启动后及运行期间自动检查更新 */
+  autoCheck: boolean
+  /** 自动检查间隔，单位分钟 */
+  checkIntervalMinutes: UpdateCheckIntervalMinutes
+  /** 发现新版本后是否立即下载 */
+  autoDownload: boolean
+  /** 下载完成后是否自动重启并安装 */
+  autoRestart: boolean
+}
+
+/**
  * 综合应用完整偏好设置（包含大模型配置、快捷键、翻译行为与通用设置）
  */
 export interface AppSettings extends LLMConfig {
@@ -172,6 +194,8 @@ export interface AppSettings extends LLMConfig {
   translation?: TranslationSettings
   /** 通用系统设置 */
   general?: GeneralSettings
+  /** 应用更新策略 */
+  update?: UpdateSettings
 }
 
 /**
@@ -200,4 +224,36 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   launchAtLogin: false,
   alwaysOnTop: false,
   closeAction: 'tray'
+}
+
+/**
+ * 默认更新策略：自动检查、手动下载、下载完成后自动重启。
+ */
+export const DEFAULT_UPDATE_SETTINGS: UpdateSettings = {
+  autoCheck: true,
+  checkIntervalMinutes: 360,
+  autoDownload: false,
+  autoRestart: true
+}
+
+/**
+ * 清洗更新策略，兼容旧配置并拒绝不受支持的检查间隔。
+ */
+export const sanitizeUpdateSettings = (raw?: Partial<UpdateSettings>): UpdateSettings => {
+  const interval = raw?.checkIntervalMinutes
+  const isValidInterval = UPDATE_CHECK_INTERVAL_OPTIONS.some((option) => option === interval)
+
+  return {
+    autoCheck:
+      typeof raw?.autoCheck === 'boolean' ? raw.autoCheck : DEFAULT_UPDATE_SETTINGS.autoCheck,
+    checkIntervalMinutes: isValidInterval
+      ? (interval as UpdateCheckIntervalMinutes)
+      : DEFAULT_UPDATE_SETTINGS.checkIntervalMinutes,
+    autoDownload:
+      typeof raw?.autoDownload === 'boolean'
+        ? raw.autoDownload
+        : DEFAULT_UPDATE_SETTINGS.autoDownload,
+    autoRestart:
+      typeof raw?.autoRestart === 'boolean' ? raw.autoRestart : DEFAULT_UPDATE_SETTINGS.autoRestart
+  }
 }

@@ -34,4 +34,6 @@ export interface AppUpdateState {
   message?: string
   /** 最近一次完成检查的时间戳 */
   checkedAt?: number
+  /** 自动重启因应用仍在执行任务而超时，等待用户手动重启 */
+  restartDeferred?: boolean
 }

@@ -120,6 +120,9 @@ const api = {
   installUpdate: (): Promise<void> => {
     return ipcRenderer.invoke('app:update-install')
   },
+  setAppActivityBusy: (busy: boolean): void => {
+    ipcRenderer.send('app:update-activity', busy)
+  },
   onUpdateState: (callback: (state: AppUpdateState) => void): (() => void) => {
     const listener = (_: unknown, state: AppUpdateState): void => {
       callback(state)

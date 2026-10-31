@@ -1482,6 +1482,14 @@ body {
   background: var(--pref-card-hover-bg);
 }
 
+.pref-settings-row-disabled {
+  opacity: 0.55;
+}
+
+.pref-settings-row-disabled .pref-select {
+  cursor: not-allowed;
+}
+
 .pref-settings-input,
 .pref-settings-textarea {
   width: 100%;

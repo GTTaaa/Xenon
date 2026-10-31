@@ -37,11 +37,13 @@ import { triggerScreenshotTranslation } from './services/screenCapture'
 import { prewarmOcr, shutdownOcrDaemon } from './services/ocrEngine'
 import { migrateLegacyUserData } from './services/configMigration'
 import {
+  applyUpdateSettings,
   checkForUpdates,
   downloadUpdate,
   getUpdateState,
   initializeAutoUpdater,
   installDownloadedUpdate,
+  setAppActivityBusy,
   shutdownAutoUpdater
 } from './services/updater'
 
@@ -442,6 +444,7 @@ app.whenReady().then(async () => {
       const latestConfig = getLLMConfig()
       applyShortcuts(latestConfig.shortcuts)
       applyGeneralSettings(latestConfig.general)
+      applyUpdateSettings(latestConfig.update)
       mainWindow?.webContents.send('config:updated', latestConfig)
     }
     return result
@@ -492,6 +495,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:update-install', () => {
     installDownloadedUpdate()
+  })
+
+  ipcMain.on('app:update-activity', (_, busy: boolean) => {
+    setAppActivityBusy(Boolean(busy))
   })
 
   // 窗口高度实时同步设置，上限跟随创建窗口时为当前屏幕计算出的可用高度
