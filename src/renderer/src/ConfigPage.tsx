@@ -26,6 +26,7 @@ import {
 import { useI18n } from './i18n/useI18n'
 import deepseekLogo from './assets/brands/deepseek.svg'
 import clineLogo from './assets/brands/cline.svg'
+import type { AppUpdateState } from '../../shared/update'
 
 /**
  * 偏好设置一级分类菜单定义
@@ -240,6 +241,40 @@ const extractFailureHint = (message: string, t: Translate): string => {
   return ''
 }
 
+/** 将主进程的更新状态转换为设置页中的一行可读说明。 */
+const getUpdateStatusText = (updateState: AppUpdateState, t: Translate): string => {
+  const version = updateState.availableVersion || updateState.currentVersion
+
+  switch (updateState.status) {
+    case 'checking':
+      return t('config.update.statusChecking')
+    case 'available':
+      return t('config.update.statusAvailable', { version })
+    case 'downloading':
+      return t('config.update.statusDownloading', {
+        version,
+        percent: Math.round(updateState.percent ?? 0)
+      })
+    case 'downloaded':
+      return t('config.update.statusDownloaded', { version })
+    case 'not-available':
+      return t('config.update.statusNotAvailable')
+    case 'error': {
+      const errorMessage = updateState.message || ''
+      const localizedMessage = /No published versions on GitHub/i.test(errorMessage)
+        ? t('config.update.errorNoRelease')
+        : errorMessage || t('config.feedback.unknownError')
+      return t('config.update.statusError', {
+        message: localizedMessage
+      })
+    }
+    case 'disabled':
+      return t('config.update.statusDisabled')
+    default:
+      return t('config.update.statusIdle', { version: updateState.currentVersion })
+  }
+}
+
 export const ConfigPage = (): React.JSX.Element => {
   const { language, setLanguage, t } = useI18n()
 
@@ -265,6 +300,13 @@ export const ConfigPage = (): React.JSX.Element => {
 
   // 通用系统设置
   const [general, setGeneral] = useState<GeneralSettings>({ ...DEFAULT_GENERAL_SETTINGS })
+
+  // 应用更新状态与安装动作
+  const [updateState, setUpdateState] = useState<AppUpdateState>({
+    status: 'idle',
+    currentVersion: ''
+  })
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false)
 
   // API Key 密码遮罩切换
   const [showApiKey, setShowApiKey] = useState(false)
@@ -336,6 +378,28 @@ export const ConfigPage = (): React.JSX.Element => {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showAddMenu])
+
+  // 订阅主进程更新状态；窗口重新打开时先读取一次当前快照。
+  useEffect(() => {
+    let isMounted = true
+    const unsubscribe = window.api.onUpdateState((nextState) => {
+      if (isMounted) setUpdateState(nextState)
+    })
+
+    window.api
+      .getUpdateState()
+      .then((nextState) => {
+        if (isMounted) setUpdateState(nextState)
+      })
+      .catch((error) => {
+        console.error('[renderer] 读取更新状态失败', error)
+      })
+
+    return () => {
+      isMounted = false
+      unsubscribe()
+    }
+  }, [])
 
   // 初始化加载全局配置
   useEffect(() => {
@@ -892,6 +956,37 @@ export const ConfigPage = (): React.JSX.Element => {
     }
   }
 
+  /** 执行检查更新，或立即安装已经下载完成的更新。 */
+  const handleUpdateAction = async (): Promise<void> => {
+    if (updateState.status === 'downloaded') {
+      setIsInstallingUpdate(true)
+      try {
+        await window.api.installUpdate()
+      } catch (error) {
+        setIsInstallingUpdate(false)
+        showFeedback(
+          t('config.update.statusError', {
+            message: error instanceof Error ? error.message : t('config.feedback.unknownError')
+          }),
+          'error'
+        )
+      }
+      return
+    }
+
+    try {
+      const nextState = await window.api.checkForUpdates()
+      setUpdateState(nextState)
+    } catch (error) {
+      showFeedback(
+        t('config.update.statusError', {
+          message: error instanceof Error ? error.message : t('config.feedback.unknownError')
+        }),
+        'error'
+      )
+    }
+  }
+
   // 尚未添加的预置模板
   const unaddedTemplates = useMemo(() => {
     return presetTemplates.filter((tmpl) => !providers.some((p) => p.id === tmpl.id))
@@ -909,6 +1004,26 @@ export const ConfigPage = (): React.JSX.Element => {
 
   // 失败时用于紧凑结果胶囊的简短提示，例如「(404)」
   const failureHint = testResult ? extractFailureHint(testResult.message, t) : ''
+
+  const isUpdateBusy =
+    updateState.status === 'checking' ||
+    updateState.status === 'available' ||
+    updateState.status === 'downloading'
+  const updateActionDisabled =
+    isInstallingUpdate || isUpdateBusy || updateState.status === 'disabled'
+  const updateActionLabel = isInstallingUpdate
+    ? t('config.update.installing')
+    : updateState.status === 'downloaded'
+      ? t('config.update.install')
+      : updateState.status === 'checking'
+        ? t('config.update.checking')
+        : updateState.status === 'available' || updateState.status === 'downloading'
+          ? t('config.update.downloading')
+          : updateState.status === 'disabled'
+            ? t('config.update.unavailable')
+            : updateState.status === 'error'
+              ? t('config.update.retry')
+              : t('config.update.check')
 
   return (
     <div className="pref-root" data-pref-theme={PREF_THEME}>
@@ -1509,6 +1624,47 @@ export const ConfigPage = (): React.JSX.Element => {
                           <span>{t('config.general.quitApp')}</span>
                         </label>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pref-settings-group">
+                  <div className="pref-settings-group-title">{t('config.update.group')}</div>
+                  <div className="pref-settings-list">
+                    <div className="pref-settings-row pref-settings-row-inline pref-update-row">
+                      <div className="pref-settings-copy">
+                        <span className="pref-settings-name">{t('config.update.title')}</span>
+                        <span
+                          className={`pref-settings-sub ${
+                            updateState.status === 'error' ? 'pref-update-status-error' : ''
+                          }`.trim()}
+                        >
+                          {getUpdateStatusText(updateState, t)}
+                        </span>
+                        <span className="pref-update-description">{t('config.update.desc')}</span>
+                        {updateState.status === 'downloading' ? (
+                          <div
+                            className="pref-update-progress"
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={Math.round(updateState.percent ?? 0)}
+                          >
+                            <span
+                              className="pref-update-progress-bar"
+                              style={{ width: `${Math.max(2, updateState.percent ?? 0)}%` }}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="pref-settings-action pref-update-action"
+                        onClick={() => void handleUpdateAction()}
+                        disabled={updateActionDisabled}
+                      >
+                        {updateActionLabel}
+                      </button>
                     </div>
                   </div>
                 </div>

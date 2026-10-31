@@ -12,6 +12,7 @@ import type {
   TestConnectionResult
 } from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
+import type { AppUpdateState } from '../shared/update'
 
 // 暴露给渲染进程的应用 API
 const api = {
@@ -105,6 +106,26 @@ const api = {
 
     return () => {
       ipcRenderer.removeListener('config:updated', listener)
+    }
+  },
+  getUpdateState: (): Promise<AppUpdateState> => {
+    return ipcRenderer.invoke('app:update-state')
+  },
+  checkForUpdates: (): Promise<AppUpdateState> => {
+    return ipcRenderer.invoke('app:update-check')
+  },
+  installUpdate: (): Promise<void> => {
+    return ipcRenderer.invoke('app:update-install')
+  },
+  onUpdateState: (callback: (state: AppUpdateState) => void): (() => void) => {
+    const listener = (_: unknown, state: AppUpdateState): void => {
+      callback(state)
+    }
+
+    ipcRenderer.on('app:update-state', listener)
+
+    return () => {
+      ipcRenderer.removeListener('app:update-state', listener)
     }
   }
 }

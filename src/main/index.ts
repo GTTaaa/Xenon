@@ -36,6 +36,13 @@ import {
 import { triggerScreenshotTranslation } from './services/screenCapture'
 import { prewarmOcr, shutdownOcrDaemon } from './services/ocrEngine'
 import { migrateLegacyUserData } from './services/configMigration'
+import {
+  checkForUpdates,
+  getUpdateState,
+  initializeAutoUpdater,
+  installDownloadedUpdate,
+  shutdownAutoUpdater
+} from './services/updater'
 
 loadEnv({ path: resolve(process.cwd(), '.env'), quiet: true })
 loadEnv({ path: resolve(process.cwd(), '.env.local'), override: true, quiet: true })
@@ -231,6 +238,12 @@ function buildTrayMenu(): Menu {
   const language = normalizeAppLanguage(config.general?.language)
   const t = (key: Parameters<typeof translate>[1]): string => translate(language, key)
   const canCapture = canCaptureOnThisPlatform()
+  const updateState = getUpdateState()
+  const updateReady = updateState.status === 'downloaded'
+  const updateBusy =
+    updateState.status === 'checking' ||
+    updateState.status === 'available' ||
+    updateState.status === 'downloading'
 
   return Menu.buildFromTemplate([
     {
@@ -256,6 +269,17 @@ function buildTrayMenu(): Menu {
       accelerator: shortcuts.openPreferences,
       click: () => {
         openConfigWindow()
+      }
+    },
+    {
+      label: updateReady ? t('tray.restartUpdate') : t('tray.checkUpdate'),
+      enabled: app.isPackaged && !updateBusy,
+      click: () => {
+        if (updateReady) {
+          installDownloadedUpdate()
+          return
+        }
+        void checkForUpdates()
       }
     },
     { type: 'separator' },
@@ -447,6 +471,18 @@ app.whenReady().then(async () => {
     return mainWindow.isAlwaysOnTop()
   })
 
+  ipcMain.handle('app:update-state', () => {
+    return getUpdateState()
+  })
+
+  ipcMain.handle('app:update-check', async () => {
+    return await checkForUpdates()
+  })
+
+  ipcMain.handle('app:update-install', () => {
+    installDownloadedUpdate()
+  })
+
   // 窗口高度实时同步设置，上限跟随创建窗口时为当前屏幕计算出的可用高度
   ipcMain.handle('window:set-height', (_, targetHeight: number, allowCompactHeight = false) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
@@ -468,6 +504,21 @@ app.whenReady().then(async () => {
 
   createWindow()
   createTray()
+
+  let lastUpdateStatus = ''
+  initializeAutoUpdater((nextUpdateState) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('app:update-state', nextUpdateState)
+      }
+    }
+
+    // 下载进度会高频更新，只在阶段变化时重建托盘菜单。
+    if (nextUpdateState.status !== lastUpdateStatus) {
+      lastUpdateStatus = nextUpdateState.status
+      refreshTrayMenu()
+    }
+  })
 
   // 后台预热 Vision OCR daemon，把 CoreML/e5rt 模型首次编译开销移出用户截图关键路径
   void prewarmOcr()
@@ -568,6 +619,7 @@ app.whenReady().then(async () => {
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
+    shutdownAutoUpdater()
     shutdownOcrDaemon()
   })
 })

@@ -1,6 +1,6 @@
 {
   "name": "xenon",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Xenon — 本地 OCR、流式译文的桌面截图翻译器",
   "main": "./out/main/index.js",
   "author": "GTTaaa",
@@ -19,6 +19,7 @@
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:win": "pnpm run build && electron-builder --win",
     "build:mac": "pnpm run build && electron-builder --mac",
+    "release:mac": "pnpm run build && electron-builder --mac --publish always",
     "build:linux": "pnpm run build && electron-builder --linux",
     "build:ocr": "mkdir -p resources/bin && swiftc -O -o resources/bin/mac-vision-ocr src/main/native/mac-ocr/main.swift",
     "verify:ocr-cold": "node scripts/verify-ocr-cold.mjs",
@@ -28,7 +29,8 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "dotenv": "^17.3.1"
+    "dotenv": "^17.3.1",
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",

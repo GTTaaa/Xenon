@@ -1463,6 +1463,47 @@ body {
   width: 178px;
 }
 
+/* 应用更新卡片：状态说明允许换行，右侧动作按钮保持固定宽度 */
+.pref-update-row {
+  align-items: center;
+}
+
+.pref-update-description {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--pref-text-muted);
+}
+
+.pref-update-status-error {
+  color: #a83232;
+}
+
+.pref-update-action {
+  min-width: 104px;
+}
+
+.pref-update-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pref-update-progress {
+  width: 100%;
+  height: 3px;
+  margin-top: 2px;
+  overflow: hidden;
+  background: var(--pref-field-btn-border);
+  border-radius: 999px;
+}
+
+.pref-update-progress-bar {
+  display: block;
+  height: 100%;
+  background: var(--pref-accent);
+  border-radius: inherit;
+  transition: width 180ms ease;
+}
+
 /*
  * 单条服务商：一行承载品牌标识、名称、默认模型、模型数量与两个动作。
  * 版式用 flex + 弹性文本列，模型名是唯一可压缩的单元格，窗口再窄也不会挤掉右侧动作。

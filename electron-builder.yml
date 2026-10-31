@@ -1,5 +1,10 @@
 appId: com.electron.app
 productName: Xenon
+publish:
+  provider: github
+  owner: GTTaaa
+  repo: Xenon
+  releaseType: release
 directories:
   buildResources: build
 files:

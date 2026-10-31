@@ -7,6 +7,7 @@ import type {
   TestConnectionResult
 } from '../shared/config'
 import type { OcrStatus } from '../shared/ocr'
+import type { AppUpdateState } from '../shared/update'
 
 interface AppAPI {
   translateTextStream: (
@@ -32,6 +33,10 @@ interface AppAPI {
   toggleAlwaysOnTop: () => Promise<boolean>
   getAlwaysOnTop: () => Promise<boolean>
   onConfigUpdated: (callback: (config: AppSettings) => void) => () => void
+  getUpdateState: () => Promise<AppUpdateState>
+  checkForUpdates: () => Promise<AppUpdateState>
+  installUpdate: () => Promise<void>
+  onUpdateState: (callback: (state: AppUpdateState) => void) => () => void
 }
 
 declare global {
