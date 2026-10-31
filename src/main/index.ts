@@ -38,6 +38,7 @@ import { prewarmOcr, shutdownOcrDaemon } from './services/ocrEngine'
 import { migrateLegacyUserData } from './services/configMigration'
 import {
   checkForUpdates,
+  downloadUpdate,
   getUpdateState,
   initializeAutoUpdater,
   installDownloadedUpdate,
@@ -240,10 +241,8 @@ function buildTrayMenu(): Menu {
   const canCapture = canCaptureOnThisPlatform()
   const updateState = getUpdateState()
   const updateReady = updateState.status === 'downloaded'
-  const updateBusy =
-    updateState.status === 'checking' ||
-    updateState.status === 'available' ||
-    updateState.status === 'downloading'
+  const updateAvailable = updateState.status === 'available'
+  const updateBusy = updateState.status === 'checking' || updateState.status === 'downloading'
 
   return Menu.buildFromTemplate([
     {
@@ -272,11 +271,19 @@ function buildTrayMenu(): Menu {
       }
     },
     {
-      label: updateReady ? t('tray.restartUpdate') : t('tray.checkUpdate'),
+      label: updateReady
+        ? t('tray.restartUpdate')
+        : updateAvailable
+          ? t('tray.downloadUpdate')
+          : t('tray.checkUpdate'),
       enabled: app.isPackaged && !updateBusy,
       click: () => {
         if (updateReady) {
           installDownloadedUpdate()
+          return
+        }
+        if (updateAvailable) {
+          void downloadUpdate()
           return
         }
         void checkForUpdates()
@@ -477,6 +484,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:update-check', async () => {
     return await checkForUpdates()
+  })
+
+  ipcMain.handle('app:update-download', async () => {
+    return await downloadUpdate()
   })
 
   ipcMain.handle('app:update-install', () => {

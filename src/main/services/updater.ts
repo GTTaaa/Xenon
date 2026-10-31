@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron'
+import { app } from 'electron'
 import {
   autoUpdater,
   type ProgressInfo,
@@ -6,8 +6,6 @@ import {
   type UpdateInfo
 } from 'electron-updater'
 import type { AppUpdateState } from '../../shared/update'
-import { normalizeAppLanguage, translate } from '../../shared/i18n'
-import { getLLMConfig } from './configManager'
 
 type UpdateStateListener = (state: AppUpdateState) => void
 
@@ -18,8 +16,9 @@ let state: AppUpdateState = {
 let stateListener: UpdateStateListener | null = null
 let initialized = false
 let checkPromise: Promise<AppUpdateState> | null = null
-let promptedVersion: string | null = null
+let downloadPromise: Promise<AppUpdateState> | null = null
 let autoCheckTimer: NodeJS.Timeout | null = null
+let installTimer: NodeJS.Timeout | null = null
 
 /** 返回当前更新状态的只读快照，避免调用方修改内部状态。 */
 export const getUpdateState = (): AppUpdateState => ({ ...state })
@@ -33,36 +32,6 @@ const updateState = (patch: Partial<AppUpdateState>): AppUpdateState => {
   }
   stateListener?.(getUpdateState())
   return getUpdateState()
-}
-
-/**
- * 读取当前界面语言并弹出安装提示。
- * 用户选择“稍后”时保留已下载状态，退出应用时仍由 autoInstallOnAppQuit 完成安装。
- */
-const promptInstallUpdate = async (info: UpdateDownloadedEvent): Promise<void> => {
-  if (promptedVersion === info.version) return
-  promptedVersion = info.version
-
-  const language = normalizeAppLanguage(getLLMConfig().general?.language)
-  const t = (
-    key: Parameters<typeof translate>[1],
-    params?: Parameters<typeof translate>[2]
-  ): string => translate(language, key, params)
-
-  const result = await dialog.showMessageBox({
-    type: 'info',
-    title: t('update.dialog.title'),
-    message: t('update.dialog.message', { version: info.version }),
-    detail: t('update.dialog.detail'),
-    buttons: [t('update.dialog.restart'), t('update.dialog.later')],
-    defaultId: 0,
-    cancelId: 1,
-    noLink: true
-  })
-
-  if (result.response === 0) {
-    installDownloadedUpdate()
-  }
 }
 
 /** 将 electron-updater 的进度事件收敛为渲染进程可直接展示的状态。 */
@@ -90,7 +59,8 @@ export const initializeAutoUpdater = (listener: UpdateStateListener): void => {
     return
   }
 
-  autoUpdater.autoDownload = true
+  // 发现新版本后只提示，必须由用户确认后才开始下载。
+  autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.autoRunAppAfterInstall = true
 
@@ -131,7 +101,13 @@ export const initializeAutoUpdater = (listener: UpdateStateListener): void => {
       checkedAt: Date.now(),
       message: undefined
     })
-    void promptInstallUpdate(info)
+
+    // 用户已通过下载按钮确认更新，下载完成后直接重启安装。
+    if (installTimer) clearTimeout(installTimer)
+    installTimer = setTimeout(() => {
+      installTimer = null
+      installDownloadedUpdate()
+    }, 600)
   })
 
   autoUpdater.on('error', (error: Error) => {
@@ -186,6 +162,46 @@ export const checkForUpdates = async (): Promise<AppUpdateState> => {
   return checkPromise
 }
 
+/** 用户确认后下载已发现的更新，并复用同一轮下载任务。 */
+export const downloadUpdate = async (): Promise<AppUpdateState> => {
+  if (!app.isPackaged) {
+    return updateState({
+      status: 'disabled',
+      message: '开发模式下不检查更新'
+    })
+  }
+
+  if (downloadPromise) return downloadPromise
+  if (state.status !== 'available') return getUpdateState()
+
+  downloadPromise = (async () => {
+    updateState({
+      status: 'downloading',
+      percent: 0,
+      transferred: 0,
+      total: undefined,
+      bytesPerSecond: undefined,
+      message: undefined
+    })
+
+    try {
+      await autoUpdater.downloadUpdate()
+    } catch (error) {
+      updateState({
+        status: 'error',
+        checkedAt: Date.now(),
+        message: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      downloadPromise = null
+    }
+
+    return getUpdateState()
+  })()
+
+  return downloadPromise
+}
+
 /**
  * 立即退出并安装已经下载完成的更新。
  * 第二个参数确保安装器结束后重新启动应用。
@@ -200,5 +216,9 @@ export const shutdownAutoUpdater = (): void => {
   if (autoCheckTimer) {
     clearTimeout(autoCheckTimer)
     autoCheckTimer = null
+  }
+  if (installTimer) {
+    clearTimeout(installTimer)
+    installTimer = null
   }
 }

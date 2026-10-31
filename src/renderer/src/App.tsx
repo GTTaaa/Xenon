@@ -88,8 +88,7 @@ function App(): React.JSX.Element {
     status: 'idle',
     currentVersion: ''
   })
-  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
-  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false)
+  const [isDownloadingUpdate, setIsDownloadingUpdate] = useState(false)
 
   const [providers, setProviders] = useState<ProviderItem[]>([])
   const [selectedProviderId, setSelectedProviderId] = useState<string>(() => {
@@ -207,13 +206,18 @@ function App(): React.JSX.Element {
   const isBlankState =
     !hasSourceText && !hasTargetText && status === 'idle' && !errorMessage && !isRecognizing
   const updateVersion = updateState.availableVersion || ''
-  const isUpdateNoticeVisible =
+  const hasUpdateNotice =
     Boolean(updateVersion) &&
-    dismissedUpdateVersion !== updateVersion &&
     (updateState.status === 'available' ||
       updateState.status === 'downloading' ||
       updateState.status === 'downloaded')
   const updatePercent = Math.min(100, Math.max(0, Math.round(updateState.percent ?? 0)))
+  const updateEntryLabel =
+    isDownloadingUpdate || updateState.status === 'downloading'
+      ? `${updatePercent}%`
+      : updateState.status === 'downloaded'
+        ? t('app.update.restartingShort')
+        : t('app.update.button', { version: updateVersion })
 
   const handleTogglePin = async (): Promise<void> => {
     try {
@@ -401,7 +405,7 @@ function App(): React.JSX.Element {
     }
   }, [])
 
-  // 浮层打开时支持点击外部区域或按 Esc 关闭。
+  // 菜单打开时支持点击外部区域或按 Esc 关闭。
   useEffect(() => {
     if (!isModelMenuOpen && !isSourceLangMenuOpen && !isTargetLangMenuOpen) return
 
@@ -641,15 +645,7 @@ function App(): React.JSX.Element {
 
   useLayoutEffect(() => {
     syncWindowHeight()
-  }, [
-    errorMessage,
-    isRecognizing,
-    isUpdateNoticeVisible,
-    sourceText,
-    status,
-    targetText,
-    syncWindowHeight
-  ])
+  }, [errorMessage, isRecognizing, sourceText, status, targetText, syncWindowHeight])
 
   // 复制成功或失败的反馈只保留 1 秒。
   useEffect(() => {
@@ -680,7 +676,7 @@ function App(): React.JSX.Element {
     }
   }, [])
 
-  // 卸载时清理浮层动画定时器与未完成请求。
+  // 卸载时清理面板动画定时器与未完成请求。
   useEffect(() => {
     return () => {
       translationAbortRef.current?.abort()
@@ -740,19 +736,17 @@ function App(): React.JSX.Element {
     }
   }
 
-  /** 下载完成后立即重启；下载期间则打开设置页查看完整状态。 */
-  const handleUpdateNoticeAction = async (): Promise<void> => {
-    if (updateState.status !== 'downloaded') {
-      await window.api.openConfigWindow()
-      return
-    }
+  /** 用户确认后才开始下载更新包。 */
+  const handleDownloadUpdate = async (): Promise<void> => {
+    if (updateState.status !== 'available') return
 
-    setIsInstallingUpdate(true)
+    setIsDownloadingUpdate(true)
     try {
-      await window.api.installUpdate()
+      setUpdateState(await window.api.downloadUpdate())
     } catch (error) {
-      setIsInstallingUpdate(false)
-      console.error('[renderer] 安装更新失败', error)
+      console.error('[renderer] 下载更新失败', error)
+    } finally {
+      setIsDownloadingUpdate(false)
     }
   }
 
@@ -893,6 +887,52 @@ function App(): React.JSX.Element {
             </div>
 
             <div className="window-actions">
+              {hasUpdateNotice ? (
+                <button
+                  type="button"
+                  className={`update-entry update-entry-${updateState.status}`}
+                  aria-label={
+                    updateState.status === 'downloaded'
+                      ? t('app.update.restartingShort')
+                      : updateState.status === 'downloading'
+                        ? t('app.update.downloading', { percent: updatePercent })
+                        : t('app.update.button', { version: updateVersion })
+                  }
+                  title={
+                    updateState.status === 'downloaded'
+                      ? t('app.update.restartingShort')
+                      : updateState.status === 'downloading'
+                        ? t('app.update.downloading', { percent: updatePercent })
+                        : t('app.update.button', { version: updateVersion })
+                  }
+                  disabled={updateState.status !== 'available' || isDownloadingUpdate}
+                  onClick={() => void handleDownloadUpdate()}
+                >
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    {updateState.status === 'downloaded' ? (
+                      <path d="M5 13l4 4L19 7" />
+                    ) : (
+                      <>
+                        <path d="M12 3v12" />
+                        <path d="M7 10l5 5 5-5" />
+                        <path d="M5 20h14" />
+                      </>
+                    )}
+                  </svg>
+                  <span>{updateEntryLabel}</span>
+                </button>
+              ) : null}
+
               <button
                 className="icon-btn settings-btn"
                 type="button"
@@ -944,107 +984,6 @@ function App(): React.JSX.Element {
             </div>
           </div>
         </header>
-
-        {isUpdateNoticeVisible ? (
-          <aside
-            className={`update-notice${
-              updateState.status === 'downloaded' ? ' update-notice-ready' : ''
-            }`}
-            aria-label={t('app.update.aria')}
-          >
-            <span className="update-notice-icon" aria-hidden="true">
-              {updateState.status === 'downloaded' ? (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M12 3v12" />
-                  <path d="M7 10l5 5 5-5" />
-                  <path d="M5 20h14" />
-                </svg>
-              )}
-            </span>
-
-            <div className="update-notice-copy">
-              <span className="update-notice-title">
-                {updateState.status === 'downloaded'
-                  ? t('app.update.ready', { version: updateVersion })
-                  : t('app.update.available', { version: updateVersion })}
-              </span>
-              <span className="update-notice-detail" aria-live="polite">
-                {updateState.status === 'downloaded'
-                  ? t('app.update.readyDetail')
-                  : updateState.status === 'downloading'
-                    ? t('app.update.downloading', { percent: updatePercent })
-                    : t('app.update.preparing')}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              className="update-notice-action"
-              onClick={() => void handleUpdateNoticeAction()}
-              disabled={isInstallingUpdate}
-            >
-              {updateState.status === 'downloaded'
-                ? isInstallingUpdate
-                  ? t('app.update.installing')
-                  : t('app.update.restart')
-                : t('app.update.view')}
-            </button>
-
-            <button
-              type="button"
-              className="update-notice-dismiss"
-              aria-label={t('app.update.dismiss')}
-              title={t('app.update.dismiss')}
-              onClick={() => setDismissedUpdateVersion(updateVersion)}
-            >
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-
-            {updateState.status === 'downloading' ? (
-              <span
-                className="update-notice-progress"
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={updatePercent}
-                style={{ width: `${Math.max(2, updatePercent)}%` }}
-              />
-            ) : null}
-          </aside>
-        ) : null}
 
         <div className="device-body">
           <div className="reading-column">

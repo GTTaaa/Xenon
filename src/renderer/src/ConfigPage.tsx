@@ -974,6 +974,22 @@ export const ConfigPage = (): React.JSX.Element => {
       return
     }
 
+    if (updateState.status === 'available') {
+      try {
+        setUpdateState(await window.api.downloadUpdate())
+      } catch (error) {
+        showFeedback(
+          t('config.update.statusError', {
+            message: error instanceof Error ? error.message : t('config.feedback.unknownError')
+          }),
+          'error'
+        )
+      }
+      return
+    }
+
+    if (updateState.status === 'downloading') return
+
     try {
       const nextState = await window.api.checkForUpdates()
       setUpdateState(nextState)
@@ -1005,10 +1021,7 @@ export const ConfigPage = (): React.JSX.Element => {
   // 失败时用于紧凑结果胶囊的简短提示，例如「(404)」
   const failureHint = testResult ? extractFailureHint(testResult.message, t) : ''
 
-  const isUpdateBusy =
-    updateState.status === 'checking' ||
-    updateState.status === 'available' ||
-    updateState.status === 'downloading'
+  const isUpdateBusy = updateState.status === 'checking' || updateState.status === 'downloading'
   const updateActionDisabled =
     isInstallingUpdate || isUpdateBusy || updateState.status === 'disabled'
   const updateActionLabel = isInstallingUpdate
@@ -1017,13 +1030,15 @@ export const ConfigPage = (): React.JSX.Element => {
       ? t('config.update.install')
       : updateState.status === 'checking'
         ? t('config.update.checking')
-        : updateState.status === 'available' || updateState.status === 'downloading'
+        : updateState.status === 'downloading'
           ? t('config.update.downloading')
-          : updateState.status === 'disabled'
-            ? t('config.update.unavailable')
-            : updateState.status === 'error'
-              ? t('config.update.retry')
-              : t('config.update.check')
+          : updateState.status === 'available'
+            ? t('config.update.download')
+            : updateState.status === 'disabled'
+              ? t('config.update.unavailable')
+              : updateState.status === 'error'
+                ? t('config.update.retry')
+                : t('config.update.check')
 
   return (
     <div className="pref-root" data-pref-theme={PREF_THEME}>

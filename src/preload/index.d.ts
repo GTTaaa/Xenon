@@ -35,6 +35,7 @@ interface AppAPI {
   onConfigUpdated: (callback: (config: AppSettings) => void) => () => void
   getUpdateState: () => Promise<AppUpdateState>
   checkForUpdates: () => Promise<AppUpdateState>
+  downloadUpdate: () => Promise<AppUpdateState>
   installUpdate: () => Promise<void>
   onUpdateState: (callback: (state: AppUpdateState) => void) => () => void
 }

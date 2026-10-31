@@ -114,6 +114,9 @@ const api = {
   checkForUpdates: (): Promise<AppUpdateState> => {
     return ipcRenderer.invoke('app:update-check')
   },
+  downloadUpdate: (): Promise<AppUpdateState> => {
+    return ipcRenderer.invoke('app:update-download')
+  },
   installUpdate: (): Promise<void> => {
     return ipcRenderer.invoke('app:update-install')
   },
