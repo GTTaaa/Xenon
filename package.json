@@ -1,6 +1,6 @@
 {
   "name": "xenon",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Xenon — 本地 OCR、流式译文的桌面截图翻译器",
   "main": "./out/main/index.js",
   "author": "GTTaaa",
