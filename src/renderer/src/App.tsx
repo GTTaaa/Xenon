@@ -930,40 +930,35 @@ function App(): React.JSX.Element {
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.8"
+                    strokeWidth={updateState.status === 'downloaded' ? '1.8' : '1.5'}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
                     {updateState.status === 'downloaded' ? (
                       <path d="m5 12.5 4.2 4.2L19 7.5" />
-                    ) : (
+                    ) : isUpdateDownloading ? (
                       <>
-                        {isUpdateDownloading ? (
-                          <>
-                            <circle
-                              className="update-progress-track"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              strokeWidth="1.3"
-                            />
-                            <circle
-                              className="update-progress-value"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              pathLength="100"
-                              strokeDasharray="100"
-                              strokeDashoffset={100 - updatePercent}
-                              transform="rotate(-90 12 12)"
-                            />
-                          </>
-                        ) : null}
-                        <path d="M12 5v8.2" />
-                        <path d="m8.5 10 3.5 3.5 3.5-3.5" />
-                        {isUpdateDownloading ? null : <path d="M6 19h12" />}
+                        <circle
+                          className="update-progress-track"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          strokeWidth="1.3"
+                        />
+                        <circle
+                          className="update-progress-value"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          pathLength="100"
+                          strokeDasharray="100"
+                          strokeDashoffset={100 - updatePercent}
+                          transform="rotate(-90 12 12)"
+                        />
                       </>
+                    ) : (
+                      <path d="M20.25 14.75V18.25C20.25 19.3546 19.3546 20.25 18.25 20.25H5.75C4.64543 20.25 3.75 19.3546 3.75 18.25V14.75M12 15V3.75M12 15L8.5 11.5M12 15L15.5 11.5" />
                     )}
                   </svg>
                 </button>
