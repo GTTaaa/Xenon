@@ -306,70 +306,34 @@ body {
 }
 
 /* ==========================================================================
-   更新入口：顶栏小胶囊同时承担下载触发与下载进度展示
+   更新入口：与窗口操作共用尺寸的单图标，下载中以环形进度替代文字
    ========================================================================== */
 
 .update-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 22px;
-  padding: 0 6px;
-  border: 1px solid rgba(26, 127, 69, 0.16);
-  border-radius: 7px;
-  background: rgba(26, 127, 69, 0.07);
-  color: #28613f;
-  font-family: inherit;
-  font-size: 9.5px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    color 120ms ease,
-    background 120ms ease,
-    border-color 120ms ease;
-  -webkit-app-region: no-drag;
+  color: var(--app-accent);
 }
 
 .update-entry:hover:not(:disabled) {
-  border-color: rgba(26, 127, 69, 0.26);
-  background: rgba(26, 127, 69, 0.11);
+  color: var(--app-accent);
+  background: rgba(26, 127, 69, 0.08);
 }
 
 .update-entry:disabled {
+  color: var(--app-accent);
   cursor: default;
 }
 
-.update-entry-downloading svg {
-  animation: updateEntryDownload 900ms ease-in-out infinite;
+.update-progress-track {
+  opacity: 0.16;
 }
 
-@keyframes updateEntryDownload {
-  0%,
-  100% {
-    transform: translateY(-1px);
-  }
-
-  50% {
-    transform: translateY(1px);
-  }
-}
-
-.update-entry-downloaded {
-  border-color: var(--app-accent);
-  background: var(--app-accent);
-  color: #ffffff;
-}
-
-.update-entry-downloaded:hover:not(:disabled) {
-  border-color: #166d3b;
-  background: #166d3b;
+.update-progress-value {
+  transition: stroke-dashoffset 200ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .update-entry-downloading svg {
-    animation: none;
+  .update-progress-value {
+    transition: none;
   }
 }
 

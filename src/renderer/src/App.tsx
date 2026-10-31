@@ -212,11 +212,12 @@ function App(): React.JSX.Element {
       updateState.status === 'downloading' ||
       updateState.status === 'downloaded')
   const updatePercent = Math.min(100, Math.max(0, Math.round(updateState.percent ?? 0)))
-  const updateEntryLabel =
-    isDownloadingUpdate || updateState.status === 'downloading'
-      ? `${updatePercent}%`
-      : updateState.status === 'downloaded'
-        ? t('app.update.restartingShort')
+  const isUpdateDownloading = isDownloadingUpdate || updateState.status === 'downloading'
+  const updateEntryTitle =
+    updateState.status === 'downloaded'
+      ? t('app.update.restartingShort')
+      : isUpdateDownloading
+        ? t('app.update.downloading', { percent: updatePercent })
         : t('app.update.button', { version: updateVersion })
 
   const handleTogglePin = async (): Promise<void> => {
@@ -890,46 +891,61 @@ function App(): React.JSX.Element {
               {hasUpdateNotice ? (
                 <button
                   type="button"
-                  className={`update-entry update-entry-${updateState.status}`}
-                  aria-label={
+                  className={`icon-btn update-entry update-entry-${
                     updateState.status === 'downloaded'
-                      ? t('app.update.restartingShort')
-                      : updateState.status === 'downloading'
-                        ? t('app.update.downloading', { percent: updatePercent })
-                        : t('app.update.button', { version: updateVersion })
-                  }
-                  title={
-                    updateState.status === 'downloaded'
-                      ? t('app.update.restartingShort')
-                      : updateState.status === 'downloading'
-                        ? t('app.update.downloading', { percent: updatePercent })
-                        : t('app.update.button', { version: updateVersion })
-                  }
+                      ? 'downloaded'
+                      : isUpdateDownloading
+                        ? 'downloading'
+                        : updateState.status
+                  }`}
+                  aria-label={updateEntryTitle}
+                  aria-busy={isUpdateDownloading}
+                  title={updateEntryTitle}
                   disabled={updateState.status !== 'available' || isDownloadingUpdate}
                   onClick={() => void handleDownloadUpdate()}
                 >
                   <svg
-                    width="11"
-                    height="11"
+                    width="15"
+                    height="15"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="1.8"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
                     {updateState.status === 'downloaded' ? (
-                      <path d="M5 13l4 4L19 7" />
+                      <path d="m5 12.5 4.2 4.2L19 7.5" />
                     ) : (
                       <>
-                        <path d="M12 3v12" />
-                        <path d="M7 10l5 5 5-5" />
-                        <path d="M5 20h14" />
+                        {isUpdateDownloading ? (
+                          <>
+                            <circle
+                              className="update-progress-track"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              strokeWidth="1.3"
+                            />
+                            <circle
+                              className="update-progress-value"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              pathLength="100"
+                              strokeDasharray="100"
+                              strokeDashoffset={100 - updatePercent}
+                              transform="rotate(-90 12 12)"
+                            />
+                          </>
+                        ) : null}
+                        <path d="M12 5v8.2" />
+                        <path d="m8.5 10 3.5 3.5 3.5-3.5" />
+                        {isUpdateDownloading ? null : <path d="M6 19h12" />}
                       </>
                     )}
                   </svg>
-                  <span>{updateEntryLabel}</span>
                 </button>
               ) : null}
 
