@@ -1,0 +1,123 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #f2f1f6;
+    }
+
+    #s6-line {
+      position: absolute;
+      left: 380px;
+      top: 470px;
+      width: 1160px;
+      font-size: 110px;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: -0.015em;
+      color: #141418;
+      white-space: nowrap;
+    }
+
+    .select-wrap {
+      position: absolute;
+      left: 918px;
+      top: 452px;
+      width: 122px;
+      height: 140px;
+      pointer-events: none;
+    }
+
+    #s6-selection {
+      position: absolute;
+      inset: 0;
+      border: 2.5px solid #99f253;
+      z-index: 3;
+      transform-origin: left top;
+    }
+
+    .s6-handle {
+      position: absolute;
+      width: 15px;
+      height: 15px;
+      border: 3px solid #99f253;
+    }
+
+    .s6-handle.tl {
+      left: -3px;
+      top: -3px;
+      border-right: 0;
+      border-bottom: 0;
+    }
+
+    .s6-handle.tr {
+      right: -3px;
+      top: -3px;
+      border-left: 0;
+      border-bottom: 0;
+    }
+
+    .s6-handle.bl {
+      left: -3px;
+      bottom: -3px;
+      border-right: 0;
+      border-top: 0;
+    }
+
+    .s6-handle.br {
+      right: -3px;
+      bottom: -3px;
+      border-left: 0;
+      border-top: 0;
+    }
+  </style>
+
+  <div id="root" data-composition-id="s6-claim" data-width="1920" data-height="1080">
+    <div
+      id="s6-line"
+      class="clip"
+      data-start="0"
+      data-duration="2.6"
+      data-track-index="0"
+    >
+      截到哪里，译到哪里。
+    </div>
+
+    <div class="select-wrap" aria-hidden="true">
+      <div id="s6-selection"></div>
+      <span class="s6-handle tl"></span>
+      <span class="s6-handle tr"></span>
+      <span class="s6-handle bl"></span>
+      <span class="s6-handle br"></span>
+    </div>
+  </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    tl.fromTo(
+      '#s6-line',
+      { opacity: 0, filter: 'blur(10px)', y: 10 },
+      { opacity: 1, filter: 'blur(0px)', y: 0, duration: 0.44, ease: 'power3.out' },
+      0.12,
+    );
+
+    // 用真实截图选择器的语义框住「译」字。
+    tl.fromTo(
+      '#s6-selection',
+      { clipPath: 'inset(0 100% 0 0)' },
+      { clipPath: 'inset(0 0% 0 0)', duration: 0.3, ease: 'power3.out' },
+      0.56,
+    );
+    tl.fromTo(
+      '.s6-handle',
+      { opacity: 0, scale: 0.6 },
+      { opacity: 1, scale: 1, duration: 0.18, stagger: 0.03, ease: 'power2.out' },
+      0.78,
+    );
+    tl.to('#s6-selection', { scale: 0.96, duration: 0.2, ease: 'power2.out' }, 1.02);
+
+    window.__timelines['s6-claim'] = tl;
+  </script>
+</template>

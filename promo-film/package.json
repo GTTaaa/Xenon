@@ -1,0 +1,11 @@
+{
+  "name": "promo-film",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.9.37 preview",
+    "check": "npx --yes hyperframes@0.9.37 check",
+    "render": "npx --yes hyperframes@0.9.37 render",
+    "publish": "npx --yes hyperframes@0.9.37 publish"
+  }
+}

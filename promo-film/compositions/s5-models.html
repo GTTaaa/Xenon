@@ -1,0 +1,141 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #f2f1f6;
+    }
+
+    #s5-settings {
+      position: absolute;
+      left: 624px;
+      top: 0;
+      width: 1296px;
+      height: 1080px;
+      border-radius: 24px;
+      overflow: hidden;
+      background: #f2f1f6;
+      box-shadow: -18px 0 50px rgba(20, 20, 24, 0.14);
+    }
+
+    #s5-settings img {
+      width: 1296px;
+      height: 1080px;
+      transform-origin: 50% 30%;
+    }
+
+    .models-copy {
+      left: 88px;
+      top: 352px;
+      width: 440px;
+    }
+
+    .models-copy h2 {
+      font-size: 60px;
+      line-height: 1.24;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+      color: #141418;
+    }
+
+    .models-copy p {
+      margin-top: 20px;
+      font-size: 30px;
+      line-height: 1.62;
+      font-weight: 500;
+      color: #6f6f7a;
+    }
+  </style>
+
+  <div id="root" data-composition-id="s5-models" data-width="1920" data-height="1080">
+    <div
+      id="s5-settings"
+      class="clip"
+      data-start="0"
+      data-duration="3.9"
+      data-track-index="0"
+    >
+      <img
+        src="assets/settings.png"
+        alt="真实 Xenon 设置页：五个模型渠道，三个已启用"
+      />
+    </div>
+
+    <div
+      id="s5-copy-a"
+      class="clip models-copy"
+      data-start="0.45"
+      data-duration="1.75"
+      data-track-index="1"
+    >
+      <div id="s5-copy-a-inner">
+        <h2>图片<br />不出本机</h2>
+        <p>识别只在本机。</p>
+      </div>
+    </div>
+
+    <div
+      id="s5-copy-b"
+      class="clip models-copy"
+      data-start="2"
+      data-duration="1.9"
+      data-track-index="2"
+    >
+      <div id="s5-copy-b-inner">
+        <h2>模型<br />自选</h2>
+        <p>五个渠道，随时切换。</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // 设置页从右侧进入，占住工作区之外的另一半画面。
+    tl.fromTo(
+      '#s5-settings',
+      { x: 1296 },
+      { x: 0, duration: 0.45, ease: 'power3.out' },
+      0.02,
+    );
+    tl.fromTo(
+      '#s5-copy-a-inner',
+      { opacity: 0, filter: 'blur(7px)' },
+      { opacity: 1, filter: 'blur(0px)', duration: 0.36, ease: 'power3.out' },
+      0.52,
+    );
+
+    // 推近真实模型行，让渠道、默认项与开关成为证据。
+    tl.to(
+      '#s5-settings img',
+      { scale: 1.08, x: -18, y: -36, duration: 0.9, ease: 'power2.inOut' },
+      1.4,
+    );
+    tl.to(
+      '#s5-copy-a-inner',
+      { opacity: 0, filter: 'blur(6px)', duration: 0.18, ease: 'power2.in' },
+      2.0,
+    );
+    tl.fromTo(
+      '#s5-copy-b-inner',
+      { opacity: 0, filter: 'blur(7px)' },
+      { opacity: 1, filter: 'blur(0px)', duration: 0.36, ease: 'power3.out' },
+      2.02,
+    );
+
+    // 在主张出现前，让设置页退成纸白，避免两个世界交叉溶解。
+    tl.to(
+      '#s5-copy-b-inner',
+      { opacity: 0, filter: 'blur(6px)', duration: 0.2, ease: 'power2.in' },
+      3.5,
+    );
+    tl.to(
+      '#s5-settings',
+      { opacity: 0, filter: 'blur(9px)', duration: 0.3, ease: 'power2.in' },
+      3.54,
+    );
+
+    window.__timelines['s5-models'] = tl;
+  </script>
+</template>

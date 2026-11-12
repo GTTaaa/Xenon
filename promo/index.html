@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Xenon 宣传短片</title>
+    <!--
+      Xenon 宣传短片画面源文件。
+      所有动画都由 window.render(t) 这个纯函数驱动：给定时间 t（秒）即可得到确定的一帧，
+      render.mjs 会逐帧调用它并截图，再由 ffmpeg 合成视频。
+      直接用浏览器打开本文件时会自动循环实时播放，便于预览。
+    -->
+    <style>
+      :root {
+        --bg: #ffffff;
+        --app-bg: #f2f2f5;
+        --border: #e6e6ea;
+        --fg: #1c1c21;
+        --fg-body: #5a5a62;
+        --fg-read: #141418;
+        --fg-source: #72727a;
+        --fg-muted: #8a8a92;
+        --fg-faint: #b6b6be;
+        --accent: #1a7f45;
+        --lime: #8bef4f;
+        --cn: -apple-system, 'PingFang SC', 'SF Pro Display', system-ui, sans-serif;
+        --mono: 'SF Mono', ui-monospace, Menlo, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--bg);
+        font-family: var(--cn);
+        color: var(--fg);
+        -webkit-font-smoothing: antialiased;
+      }
+      #stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        will-change: opacity, transform;
+      }
+      .abs {
+        position: absolute;
+      }
+      .label {
+        color: var(--accent);
+        font-size: 30px;
+        font-weight: 500;
+        letter-spacing: 2px;
+      }
+      .headline {
+        font-size: 78px;
+        font-weight: 600;
+        line-height: 1.22;
+        letter-spacing: 1px;
+      }
+      .sub {
+        font-size: 30px;
+        color: var(--fg-body);
+        line-height: 1.6;
+      }
+      .keycap {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 112px;
+        height: 112px;
+        padding: 0 26px;
+        border-radius: 24px;
+        background: #fff;
+        border: 1px solid #e2e2e8;
+        box-shadow:
+          0 6px 0 #d9d9df,
+          0 18px 40px rgba(0, 0, 0, 0.08);
+        font-size: 56px;
+        font-weight: 500;
+        color: var(--fg);
+      }
+
+      /* ---------- 场景 1：开场 ---------- */
+      #s1-icon {
+        left: 50%;
+        top: 300px;
+        width: 260px;
+        height: 260px;
+        margin-left: -130px;
+      }
+      #s1-title {
+        left: 0;
+        right: 0;
+        top: 590px;
+        text-align: center;
+        font-size: 120px;
+        font-weight: 700;
+        letter-spacing: 6px;
+      }
+      #s1-tag {
+        left: 0;
+        right: 0;
+        top: 760px;
+        text-align: center;
+        font-size: 40px;
+        color: var(--fg-body);
+        letter-spacing: 4px;
+      }
+      #s1-glow {
+        left: 50%;
+        top: 430px;
+        width: 1400px;
+        height: 1400px;
+        margin: -700px 0 0 -700px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(139, 239, 79, 0.22) 0%, rgba(139, 239, 79, 0) 60%);
+      }
+
+      /* ---------- 场景 2：痛点 ---------- */
+      #s2-chips {
+        left: 0;
+        right: 0;
+        top: 300px;
+        display: flex;
+        justify-content: center;
+        gap: 28px;
+      }
+      .chip {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 26px 38px;
+        border-radius: 24px;
+        background: var(--app-bg);
+        border: 1px solid var(--border);
+        font-size: 36px;
+        font-weight: 500;
+        color: var(--fg);
+      }
+      .chip .dot {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+      }
+      #s2-line1,
+      #s2-line2,
+      #s2-line3 {
+        left: 0;
+        right: 0;
+        text-align: center;
+      }
+      #s2-line1 {
+        top: 520px;
+        font-size: 56px;
+        font-weight: 600;
+      }
+      #s2-line2 {
+        top: 610px;
+        font-size: 56px;
+        font-weight: 600;
+        color: var(--fg-muted);
+      }
+      #s2-line3 {
+        top: 760px;
+        font-size: 64px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+
+      /* ---------- 场景 3：框选演示 ---------- */
+      #s3-ide {
+        left: 120px;
+        top: 300px;
+        width: 1360px;
+        height: 660px;
+        border-radius: 22px;
+        background: #1b1c1f;
+        box-shadow: 0 40px 100px rgba(0, 0, 0, 0.22);
+        overflow: hidden;
+      }
+      .ide-bar {
+        height: 52px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 22px;
+        background: #232428;
+        color: #8a8b92;
+        font-size: 20px;
+      }
+      .ide-bar i {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .ide-code {
+        padding: 30px 0 0 0;
+        font-family: var(--mono);
+        font-size: 25px;
+        line-height: 44px;
+        color: #d6d7dc;
+      }
+      .ide-code .ln {
+        display: flex;
+      }
+      .ide-code .no {
+        width: 90px;
+        text-align: right;
+        padding-right: 34px;
+        color: #5b5c63;
+      }
+      .kw {
+        color: #6ea8ff;
+        font-weight: 600;
+      }
+      .cm {
+        color: #6b7d6e;
+      }
+      #s3-dim {
+        inset: 0;
+        background: rgba(10, 10, 14, 0.35);
+      }
+      #s3-sel {
+        border: 2px solid #ffffff;
+        background: rgba(255, 255, 255, 0.1);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+      }
+      #s3-sel-size {
+        font-family: var(--mono);
+        font-size: 18px;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 4px 10px;
+        border-radius: 6px;
+        white-space: nowrap;
+      }
+      #s3-cursor {
+        width: 44px;
+        height: 44px;
+      }
+      #s3-flash {
+        inset: 0;
+        background: #fff;
+      }
+      #s3-keys {
+        left: 120px;
+        width: 1360px;
+        top: 560px;
+        display: flex;
+        justify-content: center;
+        gap: 26px;
+      }
+      #s3-win {
+        left: 1150px;
+        top: 230px;
+        width: 650px;
+        border-radius: 26px;
+        background: var(--app-bg);
+        box-shadow:
+          0 30px 90px rgba(0, 0, 0, 0.22),
+          0 0 0 1px rgba(0, 0, 0, 0.05);
+        padding: 30px 34px 26px;
+      }
+      .win-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 26px;
+        font-weight: 600;
+      }
+      .win-head .swap {
+        color: var(--fg-faint);
+        font-size: 20px;
+      }
+      .win-head .sp {
+        flex: 1;
+      }
+      .win-head .ico {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 2px solid var(--fg-faint);
+      }
+      .win-status {
+        margin-top: 22px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--accent);
+        font-size: 22px;
+        height: 30px;
+      }
+      .pulse {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .win-src {
+        margin-top: 6px;
+        font-size: 23px;
+        line-height: 1.6;
+        color: var(--fg-source);
+      }
+      .win-dst {
+        margin-top: 22px;
+        font-size: 31px;
+        font-weight: 600;
+        line-height: 1.6;
+        color: var(--fg-read);
+        min-height: 150px;
+      }
+      .caret {
+        display: inline-block;
+        width: 3px;
+        height: 32px;
+        margin-left: 4px;
+        vertical-align: -5px;
+        background: var(--fg-read);
+      }
+      .win-foot {
+        margin-top: 18px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: var(--fg-faint);
+        font-family: var(--mono);
+        font-size: 19px;
+      }
+      .win-foot .sp {
+        flex: 1;
+      }
+      #s3-copied {
+        font-family: var(--cn);
+        color: var(--accent);
+        font-size: 20px;
+        font-weight: 500;
+      }
+      #s3-caption {
+        left: 120px;
+        top: 96px;
+      }
+
+      /* ---------- 通用：左侧文案 + 右侧画面 ---------- */
+      .copy {
+        left: 120px;
+        top: 260px;
+        width: 700px;
+      }
+      .copy .headline {
+        margin-top: 28px;
+      }
+      .copy .sub {
+        margin-top: 40px;
+      }
+      .bullets {
+        margin-top: 56px;
+        display: flex;
+        flex-direction: column;
+        gap: 26px;
+      }
+      .bullet {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        font-size: 32px;
+        color: var(--fg);
+      }
+      .bullet .ck {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(26, 127, 69, 0.1);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .panel {
+        left: 900px;
+        top: 170px;
+        width: 900px;
+        height: 740px;
+        border-radius: 36px;
+        background: #f7f7f9;
+        border: 1px solid #ececf0;
+      }
+
+      /* ---------- 场景 4：端侧 OCR ---------- */
+      #s4-mac {
+        left: 70px;
+        top: 150px;
+        width: 760px;
+        height: 440px;
+        border-radius: 28px;
+        border: 3px solid var(--fg);
+        background: #fff;
+      }
+      #s4-mac-label {
+        left: 0;
+        right: 0;
+        top: -26px;
+        text-align: center;
+      }
+      #s4-mac-label span {
+        background: #f7f7f9;
+        padding: 0 22px;
+        font-size: 30px;
+        font-weight: 600;
+      }
+      .node {
+        width: 190px;
+        height: 190px;
+        top: 125px;
+        border-radius: 32px;
+        background: var(--app-bg);
+        border: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        font-size: 26px;
+        font-weight: 600;
+      }
+      .node .glyph {
+        font-size: 64px;
+        line-height: 1;
+      }
+      .link {
+        top: 218px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--accent);
+        transform-origin: left center;
+      }
+      #s4-cloud {
+        left: 300px;
+        top: 620px;
+        width: 300px;
+        height: 90px;
+        border-radius: 45px;
+        border: 3px dashed var(--fg-faint);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        color: var(--fg-faint);
+      }
+      #s4-x {
+        left: 600px;
+        top: 618px;
+        font-size: 64px;
+        color: #b3371f;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      /* ---------- 场景 5：结构保留 ---------- */
+      .doc {
+        top: 90px;
+        width: 400px;
+        height: 560px;
+        border-radius: 26px;
+        background: #fff;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.07);
+        padding: 36px 34px;
+      }
+      .doc .tt {
+        font-size: 18px;
+        color: var(--fg-faint);
+        letter-spacing: 2px;
+        margin-bottom: 22px;
+      }
+      .row {
+        margin-bottom: 18px;
+        line-height: 1.45;
+      }
+      .row.h {
+        font-size: 30px;
+        font-weight: 700;
+      }
+      .row.li {
+        font-size: 22px;
+        padding-left: 30px;
+        position: relative;
+        color: var(--fg-body);
+      }
+      .row.li::before {
+        content: '';
+        position: absolute;
+        left: 8px;
+        top: 13px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--fg-muted);
+      }
+      .row.p {
+        font-size: 22px;
+        color: var(--fg-body);
+      }
+      .row.url {
+        font-family: var(--mono);
+        font-size: 19px;
+        color: #2d6fd6;
+      }
+      .doc.dst .row.li,
+      .doc.dst .row.p {
+        color: var(--fg-read);
+        font-size: 24px;
+      }
+      #s5-arrow {
+        left: 432px;
+        top: 330px;
+        font-size: 44px;
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      /* ---------- 场景 6：BYOK ---------- */
+      .prov {
+        left: 70px;
+        width: 760px;
+        height: 132px;
+        border-radius: 26px;
+        background: #fff;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+        display: flex;
+        align-items: center;
+        padding: 0 34px;
+        gap: 26px;
+      }
+      .prov .logo {
+        width: 68px;
+        height: 68px;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        font-weight: 700;
+        color: #fff;
+      }
+      .prov .meta {
+        flex: 1;
+      }
+      .prov .name {
+        font-size: 30px;
+        font-weight: 600;
+      }
+      .prov .model {
+        margin-top: 6px;
+        font-family: var(--mono);
+        font-size: 20px;
+        color: var(--fg-muted);
+      }
+      .prov .stat {
+        font-family: var(--mono);
+        font-size: 20px;
+        color: var(--accent);
+        text-align: right;
+        line-height: 1.5;
+        width: 200px;
+      }
+      .toggle {
+        width: 74px;
+        height: 42px;
+        border-radius: 21px;
+        background: #d6d6dc;
+        position: relative;
+      }
+      .toggle i {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+      }
+
+      /* ---------- 场景 7：结尾 ---------- */
+      #s7-icon {
+        left: 50%;
+        top: 210px;
+        width: 220px;
+        height: 220px;
+        margin-left: -110px;
+      }
+      #s7-title {
+        left: 0;
+        right: 0;
+        top: 450px;
+        text-align: center;
+        font-size: 104px;
+        font-weight: 700;
+        letter-spacing: 6px;
+      }
+      #s7-tag {
+        left: 0;
+        right: 0;
+        top: 600px;
+        text-align: center;
+        font-size: 44px;
+        font-weight: 500;
+        color: var(--fg);
+        letter-spacing: 3px;
+      }
+      #s7-keys {
+        left: 0;
+        right: 0;
+        top: 710px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+        font-size: 30px;
+        color: var(--fg-body);
+      }
+      #s7-keys .keycap {
+        min-width: 78px;
+        height: 78px;
+        font-size: 38px;
+        border-radius: 18px;
+        padding: 0 18px;
+      }
+      #s7-foot {
+        left: 0;
+        right: 0;
+        top: 920px;
+        text-align: center;
+        font-size: 26px;
+        color: var(--fg-muted);
+        letter-spacing: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <!-- 场景 1：品牌开场 -->
+      <section class="scene" id="s1">
+        <div class="abs" id="s1-glow"></div>
+        <img class="abs" id="s1-icon" src="../resources/icon.png" alt="" />
+        <div class="abs" id="s1-title">Xenon</div>
+        <div class="abs" id="s1-tag">截图翻译，语境不丢</div>
+      </section>
+
+      <!-- 场景 2：痛点 -->
+      <section class="scene" id="s2">
+        <div class="abs" id="s2-chips">
+          <div class="chip"><span class="dot" style="background: #e5484d"></span>PDF</div>
+          <div class="chip"><span class="dot" style="background: #3b82f6"></span>IDE</div>
+          <div class="chip"><span class="dot" style="background: #1c1c21"></span>终端</div>
+          <div class="chip"><span class="dot" style="background: #a855f7"></span>设计稿</div>
+          <div class="chip"><span class="dot" style="background: #f59e0b"></span>视频画面</div>
+        </div>
+        <div class="abs" id="s2-line1">浏览器插件，够不着这些地方</div>
+        <div class="abs" id="s2-line2">复制、粘贴、切窗口，阅读一次次被打断</div>
+        <div class="abs" id="s2-line3">换个方式：看到哪里，就译到哪里</div>
+      </section>
+
+      <!-- 场景 3：框选即译演示 -->
+      <section class="scene" id="s3">
+        <div class="abs" id="s3-caption">
+          <div class="label">框选即译</div>
+          <div class="headline" style="font-size: 64px; margin-top: 14px">
+            在任意 App 里，框选即译
+          </div>
+        </div>
+        <div class="abs" id="s3-ide">
+          <div class="ide-bar">
+            <i style="background: #ff5f57"></i><i style="background: #febc2e"></i
+            ><i style="background: #28c840"></i>
+            <span style="margin-left: 18px">docs / designing-calm-software.md</span>
+          </div>
+          <div class="ide-code">
+            <div class="ln"><span class="no">1</span><span class="kw"># Designing calm software</span></div>
+            <div class="ln"><span class="no">2</span><span></span></div>
+            <div class="ln">
+              <span class="no">3</span><span>Screenshot translation should stay close to the work.</span>
+            </div>
+            <div class="ln">
+              <span class="no">4</span><span>Select any text on screen, then read the translation</span>
+            </div>
+            <div class="ln"><span class="no">5</span><span>in the same place.</span></div>
+            <div class="ln"><span class="no">6</span><span></span></div>
+            <div class="ln">
+              <span class="no">7</span><span class="cm">&lt;!-- A quiet interface keeps the original context visible. --&gt;</span>
+            </div>
+            <div class="ln"><span class="no">8</span><span></span></div>
+            <div class="ln">
+              <span class="no">9</span><span>Every shortcut hides a tradeoff somewhere.</span>
+            </div>
+          </div>
+        </div>
+        <div class="abs" id="s3-dim"></div>
+        <div class="abs" id="s3-sel"></div>
+        <div class="abs" id="s3-sel-size"></div>
+        <svg class="abs" id="s3-cursor" viewBox="0 0 44 44">
+          <path d="M22 4v14M22 26v14M4 22h14M26 22h14" stroke="#000" stroke-width="5" stroke-linecap="round" />
+          <path d="M22 4v14M22 26v14M4 22h14M26 22h14" stroke="#fff" stroke-width="2.5" stroke-linecap="round" />
+        </svg>
+        <div class="abs" id="s3-keys">
+          <div class="keycap" id="s3-k1">⌥</div>
+          <div class="keycap" id="s3-k2">S</div>
+        </div>
+        <div class="abs" id="s3-flash"></div>
+        <div class="abs" id="s3-win">
+          <div class="win-head">
+            <span>英语</span><span class="swap">⇄</span><span>中文</span><span class="sp"></span
+            ><span class="ico"></span><span class="ico"></span>
+          </div>
+          <div class="win-status" id="s3-status">
+            <span class="pulse" id="s3-pulse"></span><span id="s3-status-text">本地识别中…</span>
+          </div>
+          <div class="win-src" id="s3-src">
+            Screenshot translation should stay close to the work. Select any text on screen, then read
+            the translation in the same place.
+          </div>
+          <div class="win-dst"><span id="s3-dst"></span><span class="caret" id="s3-caret"></span></div>
+          <div class="win-foot">
+            <span>✕</span><span>deepseek-chat</span><span class="sp"></span
+            ><span id="s3-copied">✓ 已自动复制</span><span>⧉</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 场景 4：端侧 OCR -->
+      <section class="scene" id="s4">
+        <div class="abs copy" id="s4-copy">
+          <div class="label">端侧识别</div>
+          <div class="headline">截图从不<br />离开你的 Mac</div>
+          <div class="bullets">
+            <div class="bullet"><span class="ck">✓</span>macOS Vision 本地 OCR</div>
+            <div class="bullet"><span class="ck">✓</span>临时图片识别后立即删除</div>
+            <div class="bullet"><span class="ck">✓</span>无账号 · 无遥测 · 无中转</div>
+          </div>
+        </div>
+        <div class="abs panel" id="s4-panel">
+          <div class="abs" id="s4-mac">
+            <div class="abs" id="s4-mac-label"><span>你的 Mac</span></div>
+            <div class="abs node" id="s4-n1" style="left: 45px"><span class="glyph">⬚</span>截图</div>
+            <div class="abs link" id="s4-l1" style="left: 235px; width: 50px"></div>
+            <div class="abs node" id="s4-n2" style="left: 285px"><span class="glyph">◎</span>Vision</div>
+            <div class="abs link" id="s4-l2" style="left: 475px; width: 50px"></div>
+            <div class="abs node" id="s4-n3" style="left: 525px"><span class="glyph">¶</span>文本</div>
+          </div>
+          <div class="abs" id="s4-cloud">云端 OCR</div>
+          <div class="abs" id="s4-x">✕</div>
+        </div>
+      </section>
+
+      <!-- 场景 5：结构保留 -->
+      <section class="scene" id="s5">
+        <div class="abs copy" id="s5-copy">
+          <div class="label">结构保留</div>
+          <div class="headline">标题、列表、链接<br />原样保留</div>
+          <div class="sub">按 Vision 识别出的行结构翻译，<br />技术文档不再被揉成一团。</div>
+        </div>
+        <div class="abs panel" id="s5-panel">
+          <div class="abs doc" id="s5-src" style="left: 30px">
+            <div class="tt">ORIGINAL</div>
+            <div class="row h">Release notes</div>
+            <div class="row li">Faster cold start</div>
+            <div class="row li">Streaming output</div>
+            <div class="row li">Custom shortcuts</div>
+            <div class="row p">See the full changelog at:</div>
+            <div class="row url">github.com/GTTaaa/Xenon</div>
+            <div class="row p">Updated 2026-11-12</div>
+          </div>
+          <div class="abs" id="s5-arrow">→</div>
+          <div class="abs doc dst" id="s5-dst" style="left: 470px">
+            <div class="tt">译文</div>
+            <div class="row h">更新说明</div>
+            <div class="row li">更快的冷启动</div>
+            <div class="row li">流式输出</div>
+            <div class="row li">自定义快捷键</div>
+            <div class="row p">完整更新日志见：</div>
+            <div class="row url">github.com/GTTaaa/Xenon</div>
+            <div class="row p">更新于 2026-11-12</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 场景 6：BYOK 多模型 -->
+      <section class="scene" id="s6">
+        <div class="abs copy" id="s6-copy">
+          <div class="label">自带密钥</div>
+          <div class="headline">模型由你选<br />费用不经手</div>
+          <div class="sub">
+            兼容任意 OpenAI Chat Completions 接口，<br />请求直连服务商，Xenon 不收一分钱。
+          </div>
+        </div>
+        <div class="abs panel" id="s6-panel">
+          <div class="abs prov" style="top: 70px">
+            <div class="logo" style="background: #4d6bfe">D</div>
+            <div class="meta">
+              <div class="name">DeepSeek</div>
+              <div class="model">deepseek-chat</div>
+            </div>
+            <div class="stat" id="s6-st0"></div>
+            <div class="toggle" id="s6-tg0"><i></i></div>
+          </div>
+          <div class="abs prov" style="top: 232px">
+            <div class="logo" style="background: #615ced">Q</div>
+            <div class="meta">
+              <div class="name">Qwen</div>
+              <div class="model">qwen-plus</div>
+            </div>
+            <div class="stat" id="s6-st1"></div>
+            <div class="toggle" id="s6-tg1"><i></i></div>
+          </div>
+          <div class="abs prov" style="top: 394px">
+            <div class="logo" style="background: #1c1c21">C</div>
+            <div class="meta">
+              <div class="name">ClinePass</div>
+              <div class="model">cline/auto</div>
+            </div>
+            <div class="stat" id="s6-st2"></div>
+            <div class="toggle" id="s6-tg2"><i></i></div>
+          </div>
+          <div class="abs prov" style="top: 556px">
+            <div class="logo" style="background: #10a37f">+</div>
+            <div class="meta">
+              <div class="name">OpenAI 兼容</div>
+              <div class="model">自定义 Base URL</div>
+            </div>
+            <div class="stat" id="s6-st3"></div>
+            <div class="toggle" id="s6-tg3"><i></i></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 场景 7：结尾 -->
+      <section class="scene" id="s7">
+        <img class="abs" id="s7-icon" src="../resources/icon.png" alt="" />
+        <div class="abs" id="s7-title">Xenon</div>
+        <div class="abs" id="s7-tag">屏幕上的每一个字，触手可及</div>
+        <div class="abs" id="s7-keys">
+          <span class="keycap">⌥</span><span>+</span><span class="keycap">S</span
+          ><span style="margin-left: 16px">随时开始</span>
+        </div>
+        <div class="abs" id="s7-foot">macOS 12+ · MIT 开源 · github.com/GTTaaa/Xenon</div>
+      </section>
+    </div>
+
+    <script>
+      // ===================== 时间轴工具函数 =====================
+
+      /** 总时长（秒），供渲染脚本读取 */
+      window.DURATION = 33
+
+      /** 把数值限制在区间内 */
+      const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x))
+      /** 计算 t 在 [s, e] 区间中的进度，返回 0~1 */
+      const prog = (t, s, e) => clamp((t - s) / (e - s))
+      /** 三次缓出 */
+      const easeOut = (x) => 1 - Math.pow(1 - x, 3)
+      /** 三次缓入缓出 */
+      const easeInOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
+      /** 带轻微回弹的缓出，用于弹出类动画 */
+      const backOut = (x) => {
+        const c1 = 1.5
+        const c3 = c1 + 1
+        return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2)
+      }
+      /** 线性插值 */
+      const lerp = (a, b, x) => a + (b - a) * x
+      /** 场景可见度：在 [s, e] 内淡入淡出 */
+      const sceneVis = (t, s, e, fi = 0.5, fo = 0.5) =>
+        Math.min(easeOut(prog(t, s, s + fi)), 1 - easeInOut(prog(t, e - fo, e)))
+
+      const $ = (id) => document.getElementById(id)
+
+      /** 元素入场：从下方 dy 像素处淡入上移 */
+      function rise(el, t, start, dur = 0.6, dy = 40) {
+        const p = easeOut(prog(t, start, start + dur))
+        el.style.opacity = p
+        el.style.transform = `translateY(${(1 - p) * dy}px)`
+      }
+
+      // 场景 3 的译文全文，按时间逐字流出
+      const TRANSLATION = '截屏翻译应紧贴工作内容。在屏幕上选择任意文本，然后在同一位置阅读译文。'
+
+      // 选区起止坐标（相对舞台），覆盖 IDE 第 3~5 行正文
+      const SEL = { x0: 198, y0: 464, x1: 1040, y1: 606 }
+
+      // ===================== 主渲染函数 =====================
+
+      /** 根据时间 t（秒）渲染一帧，必须是纯函数，不依赖上一帧状态 */
+      window.render = function render(t) {
+        // ---------- 场景 1：0 ~ 4s ----------
+        {
+          const v = sceneVis(t, 0, 4.0, 0.01, 0.6)
+          $('s1').style.opacity = v
+          const ip = backOut(prog(t, 0.2, 1.1))
+          const icon = $('s1-icon')
+          icon.style.opacity = prog(t, 0.2, 0.6)
+          icon.style.transform = `scale(${lerp(0.5, 1, ip)}) rotate(${lerp(-12, 0, ip)}deg)`
+          const glow = $('s1-glow')
+          glow.style.opacity = easeOut(prog(t, 0.3, 1.6))
+          glow.style.transform = `scale(${lerp(0.6, 1, easeOut(prog(t, 0.3, 2.5)))})`
+          rise($('s1-title'), t, 0.8, 0.7, 50)
+          $('s1-title').style.letterSpacing = `${lerp(30, 6, easeOut(prog(t, 0.8, 1.8)))}px`
+          rise($('s1-tag'), t, 1.4, 0.7, 30)
+          $('s1').style.transform = `scale(${lerp(1, 1.06, easeInOut(prog(t, 3.3, 4.0)))})`
+        }
+
+        // ---------- 场景 2：4 ~ 8.4s ----------
+        {
+          $('s2').style.opacity = sceneVis(t, 3.8, 8.4, 0.5, 0.5)
+          const chips = $('s2-chips').children
+          for (let i = 0; i < chips.length; i++) {
+            const p = backOut(prog(t, 4.0 + i * 0.12, 4.5 + i * 0.12))
+            const fade = 1 - 0.55 * easeInOut(prog(t, 6.6, 7.1))
+            chips[i].style.opacity = prog(t, 4.0 + i * 0.12, 4.3 + i * 0.12) * fade
+            chips[i].style.transform = `translateY(${(1 - p) * 60}px) scale(${lerp(0.8, 1, p)})`
+          }
+          rise($('s2-line1'), t, 4.8, 0.6)
+          rise($('s2-line2'), t, 5.6, 0.6)
+          const l3 = $('s2-line3')
+          const p3 = easeOut(prog(t, 6.8, 7.4))
+          l3.style.opacity = p3
+          l3.style.transform = `translateY(${(1 - p3) * 40}px) scale(${lerp(0.94, 1, p3)})`
+        }
+
+        // ---------- 场景 3：8.4 ~ 17.6s 框选演示 ----------
+        {
+          $('s3').style.opacity = sceneVis(t, 8.2, 17.6, 0.5, 0.5)
+          rise($('s3-caption'), t, 8.4, 0.6, 30)
+          const ide = $('s3-ide')
+          const ip = easeOut(prog(t, 8.3, 9.0))
+          ide.style.opacity = ip
+          ide.style.transform = `translateY(${(1 - ip) * 80}px)`
+
+          // 快捷键 ⌥ + S：9.0 出现，9.5 按下，10.1 消失
+          const keys = $('s3-keys')
+          const kIn = backOut(prog(t, 9.0, 9.4))
+          const kOut = easeInOut(prog(t, 9.9, 10.2))
+          keys.style.opacity = prog(t, 9.0, 9.2) * (1 - kOut)
+          const press = t > 9.5 && t < 9.8 ? 1 : 0
+          keys.style.transform = `scale(${lerp(0.7, 1, kIn) * lerp(1, 0.85, kOut)})`
+          for (const k of [$('s3-k1'), $('s3-k2')]) {
+            k.style.transform = `translateY(${press * 6}px)`
+            k.style.boxShadow = press
+              ? '0 0 0 #d9d9df, 0 8px 20px rgba(0,0,0,0.08)'
+              : '0 6px 0 #d9d9df, 0 18px 40px rgba(0,0,0,0.08)'
+            k.style.background = press ? '#eaf8e1' : '#fff'
+          }
+
+          // 选区阶段：10.1 ~ 11.6
+          const dimV = prog(t, 10.1, 10.3) * (1 - prog(t, 11.6, 11.7))
+          $('s3-dim').style.opacity = dimV
+          const sp = easeInOut(prog(t, 10.4, 11.3))
+          const x = SEL.x0
+          const y = SEL.y0
+          const w = (SEL.x1 - SEL.x0) * sp
+          const h = (SEL.y1 - SEL.y0) * sp
+          const sel = $('s3-sel')
+          sel.style.left = x + 'px'
+          sel.style.top = y + 'px'
+          sel.style.width = w + 'px'
+          sel.style.height = h + 'px'
+          const selV = t > 10.4 && t < 11.65 ? 1 : 0
+          sel.style.opacity = selV
+          const size = $('s3-sel-size')
+          size.textContent = `${Math.round(w)} × ${Math.round(h)}`
+          size.style.left = x + w + 12 + 'px'
+          size.style.top = y + h + 10 + 'px'
+          size.style.opacity = selV * prog(t, 10.5, 10.6)
+          const cur = $('s3-cursor')
+          cur.style.opacity = dimV
+          cur.style.left = x + w - 22 + 'px'
+          cur.style.top = y + h - 22 + 'px'
+
+          // 截图闪白
+          const fl = prog(t, 11.6, 11.68) * (1 - prog(t, 11.68, 12.0))
+          $('s3-flash').style.opacity = fl * 0.85
+
+          // Xenon 窗口从右侧滑入
+          const win = $('s3-win')
+          const wp = easeOut(prog(t, 11.8, 12.4))
+          win.style.opacity = prog(t, 11.8, 12.1)
+          win.style.transform = `translateX(${(1 - wp) * 160}px) scale(${lerp(0.96, 1, wp)})`
+
+          // 状态行：识别中 → 正在翻译 → 完成
+          const statusText = $('s3-status-text')
+          const pulse = $('s3-pulse')
+          if (t < 12.9) statusText.textContent = '本地识别中…'
+          else if (t < 15.9) statusText.textContent = '正在流式翻译…'
+          else statusText.textContent = '翻译完成'
+          pulse.style.opacity = t < 15.9 ? 0.4 + 0.6 * Math.abs(Math.sin(t * 5)) : 1
+
+          // 原文淡入
+          const src = $('s3-src')
+          const srcP = easeOut(prog(t, 12.7, 13.2))
+          src.style.opacity = srcP
+          src.style.transform = `translateY(${(1 - srcP) * 12}px)`
+
+          // 译文逐字流出：13.1 ~ 15.8
+          const n = Math.floor(TRANSLATION.length * prog(t, 13.1, 15.8))
+          $('s3-dst').textContent = TRANSLATION.slice(0, n)
+          const caret = $('s3-caret')
+          const blinking = t > 15.8 ? (Math.floor(t * 2.5) % 2 === 0 ? 1 : 0) : 1
+          caret.style.opacity = t > 13.0 && t < 16.8 ? blinking : 0
+
+          // 自动复制提示
+          const cp = backOut(prog(t, 16.0, 16.4))
+          const copied = $('s3-copied')
+          copied.style.opacity = prog(t, 16.0, 16.2)
+          copied.style.display = 'inline-block'
+          copied.style.transform = `scale(${lerp(0.6, 1, cp)})`
+        }
+
+        // ---------- 场景 4：17.4 ~ 21.8s 端侧 OCR ----------
+        {
+          $('s4').style.opacity = sceneVis(t, 17.4, 21.8, 0.5, 0.5)
+          const cp = $('s4-copy').children
+          rise(cp[0], t, 17.6)
+          rise(cp[1], t, 17.75)
+          const bl = cp[2].children
+          for (let i = 0; i < bl.length; i++) rise(bl[i], t, 18.6 + i * 0.25, 0.5, 24)
+          rise($('s4-panel'), t, 17.6, 0.7, 60)
+          const nodes = [$('s4-n1'), $('s4-n2'), $('s4-n3')]
+          const links = [$('s4-l1'), $('s4-l2')]
+          nodes.forEach((nd, i) => {
+            const st = 18.2 + i * 0.6
+            const p = backOut(prog(t, st, st + 0.45))
+            nd.style.opacity = prog(t, st, st + 0.2)
+            nd.style.transform = `scale(${lerp(0.6, 1, p)})`
+            // 当前处理中的节点高亮
+            const active = t > st && t < st + 0.9
+            nd.style.borderColor = active ? '#1a7f45' : '#e6e6ea'
+            nd.style.background = active ? '#eef8f1' : '#f2f2f5'
+          })
+          links.forEach((ln, i) => {
+            const st = 18.5 + i * 0.6
+            ln.style.transform = `scaleX(${easeOut(prog(t, st, st + 0.35))})`
+          })
+          rise($('s4-cloud'), t, 20.0, 0.5, 20)
+          const xp = backOut(prog(t, 20.4, 20.8))
+          const x = $('s4-x')
+          x.style.opacity = prog(t, 20.4, 20.55)
+          x.style.transform = `scale(${lerp(2, 1, xp)})`
+          $('s4-cloud').style.textDecoration = t > 20.5 ? 'line-through' : 'none'
+        }
+
+        // ---------- 场景 5：21.6 ~ 26s 结构保留 ----------
+        {
+          $('s5').style.opacity = sceneVis(t, 21.6, 26.0, 0.5, 0.5)
+          const cp = $('s5-copy').children
+          rise(cp[0], t, 21.8)
+          rise(cp[1], t, 21.95)
+          rise(cp[2], t, 22.6)
+          rise($('s5-panel'), t, 21.8, 0.7, 60)
+          rise($('s5-src'), t, 22.1, 0.5, 30)
+          const arrow = $('s5-arrow')
+          arrow.style.opacity = prog(t, 22.6, 22.8)
+          arrow.style.transform = `translateX(${(1 - easeOut(prog(t, 22.6, 23.0))) * -20}px)`
+          const dst = $('s5-dst')
+          dst.style.opacity = prog(t, 22.7, 22.9)
+          const rows = dst.querySelectorAll('.row')
+          const srcRows = $('s5-src').querySelectorAll('.row')
+          rows.forEach((r, i) => {
+            const st = 23.0 + i * 0.22
+            rise(r, t, st, 0.4, 14)
+            // 对应原文行同步高亮一下
+            const hl = prog(t, st, st + 0.15) * (1 - prog(t, st + 0.35, st + 0.6))
+            srcRows[i].style.background = `rgba(139, 239, 79, ${0.35 * hl})`
+            srcRows[i].style.borderRadius = '6px'
+          })
+        }
+
+        // ---------- 场景 6：25.8 ~ 30.2s BYOK ----------
+        {
+          $('s6').style.opacity = sceneVis(t, 25.8, 30.2, 0.5, 0.5)
+          const cp = $('s6-copy').children
+          rise(cp[0], t, 26.0)
+          rise(cp[1], t, 26.15)
+          rise(cp[2], t, 26.8)
+          rise($('s6-panel'), t, 26.0, 0.7, 60)
+          const cards = $('s6-panel').querySelectorAll('.prov')
+          // 每家服务商的演示指标：首字延迟（毫秒）与输出速度（tok/s）
+          const stats = [
+            [312, 86],
+            [268, 74],
+            [405, 92],
+            [350, 68]
+          ]
+          cards.forEach((c, i) => {
+            const st = 26.3 + i * 0.18
+            const p = easeOut(prog(t, st, st + 0.5))
+            c.style.opacity = p
+            c.style.transform = `translateX(${(1 - p) * 60}px)`
+            const on = prog(t, 27.4 + i * 0.3, 27.6 + i * 0.3)
+            const tg = $('s6-tg' + i)
+            tg.style.background = on > 0.5 ? '#1a7f45' : '#d6d6dc'
+            tg.firstElementChild.style.transform = `translateX(${easeInOut(on) * 32}px)`
+            const sp = easeOut(prog(t, 27.6 + i * 0.3, 28.4 + i * 0.3))
+            const st$ = $('s6-st' + i)
+            st$.style.opacity = sp
+            st$.innerHTML = `首字 ${Math.round(stats[i][0] * sp)} ms<br/>${Math.round(stats[i][1] * sp)} tok/s`
+          })
+        }
+
+        // ---------- 场景 7：30 ~ 33s 结尾 ----------
+        {
+          $('s7').style.opacity = sceneVis(t, 30.0, 34, 0.5, 0.01)
+          const ip = backOut(prog(t, 30.1, 30.9))
+          const icon = $('s7-icon')
+          icon.style.opacity = prog(t, 30.1, 30.4)
+          icon.style.transform = `scale(${lerp(0.6, 1, ip)})`
+          rise($('s7-title'), t, 30.4, 0.6, 40)
+          rise($('s7-tag'), t, 30.8, 0.6, 30)
+          rise($('s7-keys'), t, 31.2, 0.6, 30)
+          rise($('s7-foot'), t, 31.6, 0.6, 20)
+        }
+      }
+
+      // 直接用浏览器打开时实时循环预览；渲染脚本会设置 ?capture 关闭此逻辑
+      if (!location.search.includes('capture')) {
+        const startAt = performance.now()
+        const loop = () => {
+          window.render(((performance.now() - startAt) / 1000) % window.DURATION)
+          requestAnimationFrame(loop)
+        }
+        requestAnimationFrame(loop)
+      } else {
+        window.render(0)
+      }
+    </script>
+  </body>
+</html>

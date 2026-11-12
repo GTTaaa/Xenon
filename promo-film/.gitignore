@@ -1,0 +1,4 @@
+# HyperFrames 本地缓存、预览缩略图与渲染产物，不进入仓库
+.hyperframes/
+.thumbnails/
+out/

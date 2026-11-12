@@ -1,0 +1,256 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #f2f1f6;
+    }
+
+    #s2-white {
+      position: absolute;
+      inset: 0;
+      background: #ffffff;
+      z-index: 20;
+    }
+
+    .win {
+      position: absolute;
+      left: 200px;
+      width: 800px;
+      border-radius: 20px;
+      overflow: hidden;
+      background: #f2f1f6;
+      box-shadow: 0 28px 60px rgba(20, 20, 24, 0.16);
+    }
+
+    .win img {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 800px;
+      height: auto;
+    }
+
+    #s2-ocr-window {
+      top: 266px;
+      height: 548px;
+    }
+
+    #s2-stream-window {
+      top: 220px;
+      height: 639px;
+    }
+
+    #s2-ocr-host {
+      z-index: 3;
+    }
+
+    #s2-stream-host {
+      z-index: 2;
+    }
+
+    #s2-mask {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      background: #f2f1f6;
+    }
+
+    #s2-mask::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 100%;
+      width: 100%;
+      height: 36px;
+      background: linear-gradient(to bottom, #f2f1f6, rgba(242, 241, 246, 0));
+    }
+
+    #s2-stream {
+      z-index: 1;
+    }
+
+    .stream-copy {
+      left: 1100px;
+      top: 402px;
+      width: 720px;
+    }
+
+    .brand-copy {
+      left: 1100px;
+      top: 322px;
+      width: 720px;
+    }
+
+    .brand-copy .brand {
+      font-family: var(--font-latin);
+      font-size: 80px;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: #141418;
+    }
+
+    .brand-copy .brand-sub {
+      margin-top: 18px;
+      font-size: 36px;
+      line-height: 1.4;
+      font-weight: 500;
+      color: #6f6f7a;
+    }
+
+    .stream-copy h2 {
+      font-size: 62px;
+      line-height: 1.22;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+      color: #141418;
+    }
+
+    .stream-copy p {
+      margin-top: 20px;
+      font-size: 32px;
+      line-height: 1.55;
+      font-weight: 500;
+      color: #6f6f7a;
+    }
+
+    .stream-copy p .accent-word {
+      color: #141418;
+      font-weight: 700;
+    }
+  </style>
+
+  <div id="root" data-composition-id="s2-stream" data-width="1920" data-height="1080">
+    <div id="s2-white"></div>
+
+    <div
+      id="s2-ocr-host"
+      class="clip"
+      data-start="0"
+      data-duration="2.5"
+      data-track-index="0"
+    >
+      <div id="s2-ocr-window" class="win">
+        <img
+          src="assets/window-ocr.png"
+          alt="真实 Xenon 窗口的本机识别状态"
+        />
+      </div>
+    </div>
+
+    <div
+      id="s2-stream-host"
+      class="clip"
+      data-start="2.2"
+      data-duration="5.6"
+      data-track-index="1"
+    >
+      <div id="s2-stream-window" class="win">
+        <img
+          id="s2-stream"
+          src="assets/window-streaming.png"
+          alt="真实 Xenon 窗口中逐行出现的译文"
+        />
+        <div id="s2-mask"></div>
+      </div>
+    </div>
+
+    <div
+      id="s2-title"
+      class="clip brand-copy"
+      data-start="0.3"
+      data-duration="2.5"
+      data-track-index="2"
+    >
+      <div id="s2-title-inner">
+        <div class="brand">Xenon</div>
+        <div class="brand-sub">截图翻译，语境不丢</div>
+      </div>
+    </div>
+
+    <div
+      id="s2-copy-b"
+      class="clip stream-copy"
+      data-start="2.55"
+      data-duration="2.15"
+      data-track-index="3"
+    >
+      <div id="s2-copy-b-inner">
+        <h2>译文逐行出现</h2>
+        <p>不用等整段结束。</p>
+      </div>
+    </div>
+
+    <div
+      id="s2-copy-c"
+      class="clip stream-copy"
+      data-start="5.2"
+      data-duration="2.6"
+      data-track-index="4"
+    >
+      <div id="s2-copy-c-inner">
+        <h2>读到哪，<br />跟到哪。</h2>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // 承接上一场的闪白，先露出纸白世界。
+    tl.to('#s2-white', { opacity: 0, duration: 0.22, ease: 'power2.out' }, 0.03);
+
+    // 识别态窗口从画面下方升起。
+    tl.fromTo(
+      '#s2-ocr-window',
+      { y: 560, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.6, ease: 'power3.out' },
+      0.12,
+    );
+
+    tl.fromTo(
+      '#s2-title-inner',
+      { opacity: 0, filter: 'blur(7px)' },
+      { opacity: 1, filter: 'blur(0px)', duration: 0.32, ease: 'power3.out' },
+      0.25,
+    );
+
+    // 识别完成：高窗从下方接替矮窗，译文遮罩从顶部逐行揭开。
+    tl.to(
+      '#s2-title-inner',
+      { opacity: 0, filter: 'blur(6px)', duration: 0.18, ease: 'power2.in' },
+      2.45,
+    );
+    tl.to('#s2-ocr-window', { y: -72, opacity: 0, duration: 0.28, ease: 'power2.in' }, 2.08);
+    tl.fromTo(
+      '#s2-stream-window',
+      { y: 90, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.32, ease: 'power3.out' },
+      2.08,
+    );
+    tl.fromTo('#s2-mask', { yPercent: 0 }, { yPercent: 100, duration: 3.2, ease: 'none' }, 2.24);
+
+    tl.fromTo(
+      '#s2-copy-b-inner',
+      { opacity: 0, filter: 'blur(7px)' },
+      { opacity: 1, filter: 'blur(0px)', duration: 0.32, ease: 'power3.out' },
+      2.57,
+    );
+    tl.to(
+      '#s2-copy-b-inner',
+      { opacity: 0, filter: 'blur(6px)', duration: 0.18, ease: 'power2.in' },
+      4.7,
+    );
+
+    tl.fromTo(
+      '#s2-copy-c-inner',
+      { opacity: 0, filter: 'blur(7px)' },
+      { opacity: 1, filter: 'blur(0px)', duration: 0.34, ease: 'power3.out' },
+      5.24,
+    );
+
+    window.__timelines['s2-stream'] = tl;
+  </script>
+</template>

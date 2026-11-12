@@ -1,0 +1,263 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #f2f1f6;
+    }
+
+    .select-wrap {
+      position: absolute;
+      left: 918px;
+      top: 452px;
+      width: 122px;
+      height: 140px;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    #s7-selection {
+      position: absolute;
+      inset: 0;
+      border: 2.5px solid #99f253;
+      transform-origin: left top;
+    }
+
+    .s7-handle {
+      position: absolute;
+      width: 15px;
+      height: 15px;
+      border: 3px solid #99f253;
+    }
+
+    .s7-handle.tl {
+      left: -3px;
+      top: -3px;
+      border-right: 0;
+      border-bottom: 0;
+    }
+
+    .s7-handle.tr {
+      right: -3px;
+      top: -3px;
+      border-left: 0;
+      border-bottom: 0;
+    }
+
+    .s7-handle.bl {
+      left: -3px;
+      bottom: -3px;
+      border-right: 0;
+      border-top: 0;
+    }
+
+    .s7-handle.br {
+      right: -3px;
+      bottom: -3px;
+      border-left: 0;
+      border-top: 0;
+    }
+
+    #s7-icon {
+      position: absolute;
+      left: 670px;
+      top: 340px;
+      width: 200px;
+      height: 200px;
+      border-radius: 45px;
+      overflow: hidden;
+      background: #99f253;
+      box-shadow: 0 18px 40px rgba(20, 20, 24, 0.18);
+      transform-origin: 50% 50%;
+    }
+
+    #s7-icon img {
+      position: absolute;
+      left: -25px;
+      top: -25px;
+      width: 250px;
+      height: 250px;
+    }
+
+    #s7-wordmark {
+      position: absolute;
+      left: 910px;
+      top: 380px;
+      font-family: var(--font-latin);
+      font-size: 104px;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: -0.045em;
+      color: #141418;
+    }
+
+    #s7-subline {
+      position: absolute;
+      left: 670px;
+      top: 598px;
+      font-size: 60px;
+      line-height: 1.4;
+      font-weight: 500;
+      color: #6f6f7a;
+      letter-spacing: 0.01em;
+    }
+
+    #s7-cta {
+      position: absolute;
+      left: 670px;
+      top: 742px;
+      display: flex;
+      align-items: center;
+      gap: 22px;
+    }
+
+    #s7-key-shell {
+      display: flex;
+      gap: 8px;
+    }
+
+    .s7-key {
+      width: 64px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 11px;
+      background: #99f253;
+      border: 1px solid #74c23a;
+      box-shadow: 0 5px 0 #6fbf38;
+      color: #141418;
+      font-family: var(--font-mono);
+      font-size: 34px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    #s7-cta .label {
+      font-size: 38px;
+      font-weight: 500;
+      color: #6f6f7a;
+      letter-spacing: 0.02em;
+    }
+
+    #s7-claim-carry {
+      position: absolute;
+      left: 380px;
+      top: 470px;
+      width: 1160px;
+      font-size: 110px;
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: -0.015em;
+      color: #141418;
+      white-space: nowrap;
+      z-index: 0;
+    }
+  </style>
+
+  <div id="root" data-composition-id="s7-end" data-width="1920" data-height="1080">
+    <div
+      id="s7-claim-carry"
+      class="clip"
+      data-start="0"
+      data-duration="2.3"
+      data-track-index="0"
+    >
+      截到哪里，译到哪里。
+    </div>
+
+    <div class="select-wrap" aria-hidden="true">
+      <div id="s7-selection"></div>
+      <span class="s7-handle tl"></span>
+      <span class="s7-handle tr"></span>
+      <span class="s7-handle bl"></span>
+      <span class="s7-handle br"></span>
+    </div>
+
+    <div id="s7-icon" class="clip" data-start="0.28" data-duration="3.22" data-track-index="1">
+      <img src="assets/app-icon.png" alt="Xenon 应用图标" />
+    </div>
+
+    <div
+      id="s7-wordmark"
+      class="clip"
+      data-start="0.5"
+      data-duration="3.0"
+      data-track-index="2"
+    >
+      Xenon
+    </div>
+
+    <div
+      id="s7-subline"
+      class="clip"
+      data-start="0.92"
+      data-duration="2.58"
+      data-track-index="3"
+    >
+      截图翻译，语境不丢
+    </div>
+
+    <div id="s7-cta" class="clip" data-start="1.22" data-duration="2.28" data-track-index="4">
+      <div id="s7-key-shell">
+        <span class="s7-key">⌥</span>
+        <span class="s7-key">S</span>
+      </div>
+      <span class="label">按下即译</span>
+    </div>
+  </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // 承接上一场的主张，让选区不是凭空出现。
+    tl.to(
+      '#s7-claim-carry',
+      { opacity: 0, filter: 'blur(6px)', duration: 0.26, ease: 'power2.in' },
+      0.1,
+    );
+
+    // 上一场框住「译」字的选区，移动并展开成应用图标的位置。
+    tl.fromTo(
+      '.select-wrap',
+      { x: 0, y: 0, scale: 0.96 },
+      { x: -248, y: -112, scale: 1, duration: 0.5, ease: 'power3.inOut' },
+      0.02,
+    );
+    tl.to('#s7-selection', { opacity: 0, duration: 0.24, ease: 'power2.in' }, 0.34);
+    tl.to('.s7-handle', { opacity: 0, duration: 0.2, stagger: 0.02, ease: 'power2.in' }, 0.32);
+
+    // 图标从选区里显影，落定时带一次很轻的过冲。
+    tl.fromTo(
+      '#s7-icon',
+      { opacity: 0, scale: 0.72 },
+      { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.4)' },
+      0.3,
+    );
+
+    // 字标擦入，副标随后出现，全部落定后保持静止。
+    tl.fromTo(
+      '#s7-wordmark',
+      { clipPath: 'inset(0 100% 0 0)' },
+      { clipPath: 'inset(0 0% 0 0)', duration: 0.46, ease: 'power2.out' },
+      0.5,
+    );
+    tl.fromTo(
+      '#s7-subline',
+      { opacity: 0, filter: 'blur(7px)' },
+      { opacity: 1, filter: 'blur(0px)', duration: 0.32, ease: 'power3.out' },
+      0.94,
+    );
+    tl.fromTo(
+      '#s7-cta',
+      { opacity: 0, y: -18 },
+      { opacity: 1, y: 0, duration: 0.36, ease: 'power3.out' },
+      1.24,
+    );
+    tl.to('#s7-key-shell', { y: 3, duration: 0.07, ease: 'power2.in' }, 1.62);
+    tl.to('#s7-key-shell', { y: 0, duration: 0.16, ease: 'back.out(1.7)' }, 1.69);
+
+    window.__timelines['s7-end'] = tl;
+  </script>
+</template>

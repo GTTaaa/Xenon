@@ -1,0 +1,123 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #12161f;
+    }
+
+    #s4-ide {
+      position: absolute;
+      width: 1975px;
+      height: 1080px;
+      left: -27px;
+      top: 0;
+      transform-origin: 50% 50%;
+    }
+
+    #s4-window {
+      position: absolute;
+      left: 1128px;
+      top: 64px;
+      width: 716px;
+      height: 490px;
+      border-radius: 24px;
+      overflow: hidden;
+      background: #f2f1f6;
+      box-shadow: 0 22px 54px rgba(0, 0, 0, 0.42);
+      transform-origin: 50% 50%;
+    }
+
+    #s4-window img {
+      width: 716px;
+      height: 490px;
+    }
+
+    .workspace-copy {
+      left: 110px;
+      top: 736px;
+      width: 980px;
+      color: #f4f6fa;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.4);
+    }
+
+    .workspace-copy h2 {
+      font-family: var(--font-latin);
+      font-size: 92px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      color: var(--accent);
+    }
+
+    .workspace-copy p {
+      margin-top: 24px;
+      font-size: 33px;
+      line-height: 1.55;
+      font-weight: 500;
+      color: rgba(244, 246, 250, 0.9);
+    }
+  </style>
+
+  <div id="root" data-composition-id="s4-workspace" data-width="1920" data-height="1080">
+    <img
+      id="s4-ide"
+      class="clip"
+      data-start="0"
+      data-duration="4.3"
+      data-track-index="0"
+      data-layout-allow-overflow
+      src="assets/ide-selected.png"
+      alt="真实 IDE 工作区全景"
+    />
+
+    <div
+      id="s4-window"
+      class="clip"
+      data-start="0"
+      data-duration="4.3"
+      data-track-index="1"
+    >
+      <img
+        src="assets/window-done.png"
+        alt="贴在 IDE 右上角的真实 Xenon 窗口，宽 358 逻辑像素"
+      />
+    </div>
+
+    <div
+      id="s4-copy"
+      class="clip workspace-copy"
+      data-start="0.6"
+      data-duration="3.7"
+      data-track-index="2"
+      data-hold
+    >
+      <div id="s4-copy-inner">
+        <h2>358 px</h2>
+        <p>留在工作旁边，不挡阅读。</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // 从上一场的窗口特写拉回整个工作区。
+    tl.fromTo('#s4-ide', { scale: 1.025 }, { scale: 1, duration: 0.8, ease: 'power2.inOut' }, 0);
+    tl.fromTo(
+      '#s4-window',
+      { scale: 1.045 },
+      { scale: 1, duration: 0.5, ease: 'power3.out' },
+      0.05,
+    );
+    tl.fromTo(
+      '#s4-copy-inner',
+      { opacity: 0, filter: 'blur(7px)' },
+      { opacity: 1, filter: 'blur(0px)', duration: 0.4, ease: 'power3.out' },
+      0.62,
+    );
+
+    window.__timelines['s4-workspace'] = tl;
+  </script>
+</template>

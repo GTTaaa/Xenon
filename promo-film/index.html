@@ -1,0 +1,171 @@
+<!doctype html>
+<html
+  lang="zh-CN"
+  data-resolution="landscape"
+  data-composition-variables='[
+    {"id":"color-ground","type":"color","label":"底色","default":"#F2F1F6"},
+    {"id":"color-ink","type":"color","label":"墨色","default":"#141418"},
+    {"id":"color-accent","type":"color","label":"强调绿","default":"#99F253"},
+    {"id":"font-cn","type":"string","label":"中文字体","default":"Noto Sans SC"}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Xenon · 截图翻译，语境不丢</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: 'Noto Sans SC';
+        src: url('assets/fonts/noto-sans-sc.woff2') format('woff2-variations');
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: block;
+      }
+
+      :root {
+        --ground: var(--color-ground, #f2f1f6);
+        --ink: var(--color-ink, #141418);
+        --muted: #6f6f7a;
+        --accent: var(--color-accent, #99f253);
+        --font-cn-family: var(--font-cn, 'Noto Sans SC'), sans-serif;
+        --font-latin: 'Inter', 'Helvetica Neue', sans-serif;
+        --font-mono: 'Space Mono', 'SF Mono', monospace;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--ground);
+        font-family: var(--font-cn-family);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        background: var(--ground);
+        overflow: hidden;
+      }
+
+      .clip {
+        position: absolute;
+      }
+
+      img {
+        display: block;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="32.5"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="s1-hook"
+        data-composition-id="s1-hook"
+        data-composition-src="compositions/s1-hook.html"
+        data-start="0"
+        data-duration="6.2"
+        data-track-index="1"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="s2-stream"
+        data-composition-id="s2-stream"
+        data-composition-src="compositions/s2-stream.html"
+        data-start="6.2"
+        data-duration="7.8"
+        data-track-index="2"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="s3-structure"
+        data-composition-id="s3-structure"
+        data-composition-src="compositions/s3-structure.html"
+        data-start="14"
+        data-duration="4.2"
+        data-track-index="3"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="s4-workspace"
+        data-composition-id="s4-workspace"
+        data-composition-src="compositions/s4-workspace.html"
+        data-start="18.2"
+        data-duration="4.3"
+        data-track-index="4"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="s5-models"
+        data-composition-id="s5-models"
+        data-composition-src="compositions/s5-models.html"
+        data-start="22.5"
+        data-duration="3.9"
+        data-track-index="5"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="s6-claim"
+        data-composition-id="s6-claim"
+        data-composition-src="compositions/s6-claim.html"
+        data-start="26.4"
+        data-duration="2.6"
+        data-track-index="6"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="s7-end"
+        data-composition-id="s7-end"
+        data-composition-src="compositions/s7-end.html"
+        data-start="29"
+        data-duration="3.5"
+        data-track-index="7"
+        data-track-kind="graphics"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+    </div>
+
+    <script>
+      // 根时间线只提供总时钟，具体场景各自注册自己的时间线。
+      window.__timelines = window.__timelines || {};
+      window.__timelines['main'] = gsap.timeline({ paused: true });
+    </script>
+  </body>
+</html>

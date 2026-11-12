@@ -1,0 +1,133 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #f2f1f6;
+    }
+
+    .win {
+      position: absolute;
+      left: 200px;
+      width: 800px;
+      border-radius: 20px;
+      overflow: hidden;
+      background: #f2f1f6;
+      box-shadow: 0 28px 60px rgba(20, 20, 24, 0.16);
+    }
+
+    .win img {
+      width: 800px;
+      height: auto;
+    }
+
+    #s3-stream-window {
+      top: 220px;
+      height: 639px;
+      z-index: 1;
+    }
+
+    #s3-structure-window {
+      top: 85px;
+      height: 909px;
+      z-index: 2;
+      transform-origin: 50% 60%;
+    }
+
+    .structure-copy {
+      left: 1100px;
+      top: 360px;
+      width: 720px;
+    }
+
+    .structure-copy h2 {
+      font-size: 62px;
+      line-height: 1.22;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+      color: #141418;
+    }
+
+    .structure-copy p {
+      margin-top: 22px;
+      font-size: 32px;
+      line-height: 1.65;
+      font-weight: 500;
+      color: #6f6f7a;
+    }
+  </style>
+
+  <div id="root" data-composition-id="s3-structure" data-width="1920" data-height="1080">
+    <div
+      id="s3-stream-host"
+      class="clip"
+      data-start="0"
+      data-duration="0.5"
+      data-track-index="0"
+    >
+      <div id="s3-stream-window" class="win">
+        <img
+          src="assets/window-streaming.png"
+          alt="上一场结束时的 Xenon 窗口"
+        />
+      </div>
+    </div>
+
+    <div
+      id="s3-structure-host"
+      class="clip"
+      data-start="0"
+      data-duration="4.2"
+      data-track-index="1"
+    >
+      <div id="s3-structure-window" class="win">
+        <img
+          src="assets/window-structure.png"
+          alt="真实 Xenon 窗口中保留标题、列表与链接的结构译文"
+        />
+      </div>
+    </div>
+
+    <div
+      id="s3-copy"
+      class="clip structure-copy"
+      data-start="0.45"
+      data-duration="3.75"
+      data-track-index="2"
+    >
+      <div id="s3-copy-inner">
+        <h2>结构，<br />原样留下。</h2>
+        <p>标题、列表、链接，<br />都还在原位。</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // 直接切到结构页，窗口落定时轻轻收紧，避免高度变化显得像跳帧。
+    tl.fromTo(
+      '#s3-structure-window',
+      { scale: 1.02 },
+      { scale: 1, duration: 0.4, ease: 'power2.out' },
+      0,
+    );
+
+    tl.fromTo(
+      '#s3-copy-inner',
+      { opacity: 0, filter: 'blur(7px)' },
+      { opacity: 1, filter: 'blur(0px)', duration: 0.36, ease: 'power3.out' },
+      0.5,
+    );
+
+    // 轻微推近，让真实列表与链接的对应关系更清楚。
+    tl.to(
+      '#s3-structure-window',
+      { scale: 1.04, x: -12, y: -16, duration: 0.8, ease: 'power2.inOut' },
+      1.55,
+    );
+
+    window.__timelines['s3-structure'] = tl;
+  </script>
+</template>
